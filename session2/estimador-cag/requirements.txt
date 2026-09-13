@@ -1,0 +1,5 @@
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic-settings==2.15.0
+litellm==1.100.0
+python-dotenv==1.2.3
