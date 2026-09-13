@@ -1,0 +1,4 @@
+dotenv==0.9.9
+litellm==1.100.0
+openai==2.54.0
+rich==15.0.0
