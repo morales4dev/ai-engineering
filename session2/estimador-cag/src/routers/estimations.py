@@ -1,30 +1,18 @@
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
 
-from src.config import settings
-from src.services import llm_service
+from ..config import get_settings
+from ..schemas.estimation import EstimationRequest, EstimationResponse
+from ..services.llm_service import generate_estimation
 
 
 router = APIRouter(prefix="/api/v1", tags=["estimations"])
-
-
-class EstimationRequest(BaseModel):
-	transcription: str = Field(
-		min_length=1,
-		description="Transcripcion de la reunion con el cliente",
-	)
-
-
-class EstimationResponse(BaseModel):
-	estimation: str
-	model: str
-	provider: str
+settings = get_settings()
 
 
 @router.post("/estimate", response_model=EstimationResponse)
-def estimate(request: EstimationRequest) -> EstimationResponse:
+async def create_estimation(request: EstimationRequest) -> EstimationResponse:
 	return EstimationResponse(
-		estimation=llm_service.estimate_meeting(request.transcription),
-		model=settings.llm_model,
-		provider=settings.llm_provider,
+		estimation=generate_estimation(request.transcription),
+		model=settings.LLM_MODEL,
+		provider=settings.LLM_PROVIDER,
 	)

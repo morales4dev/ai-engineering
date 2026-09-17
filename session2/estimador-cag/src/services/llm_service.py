@@ -1,9 +1,28 @@
 from typing import Any
-
+from dataclasses import dataclass
 import litellm
+from ..config import get_settings
+from ..context.examples import ESTIMATION_EXAMPLES
+from ..schemas.estimation import ExampleFormat, PreprocessingMode
 
-from src.config import settings
-from src.context.examples import ESTIMATION_EXAMPLES
+
+settings = get_settings()
+
+
+DEFAULT_MAX_TOKENS = 4000
+EXTRACTION_MAX_TOKENS = 1500
+
+@dataclass
+class GenerationOptions:
+    """Per-request knobs that drive prompt construction and the LLM call."""
+
+    preprocessing: PreprocessingMode = "none"
+    example_format: ExampleFormat = "markdown"
+    num_examples: int = 3
+    use_examples: bool = True
+    model: str | None = None
+    max_tokens: int = DEFAULT_MAX_TOKENS
+    thinking_budget: int | None = None
 
 
 def build_system_prompt(examples: list[dict[str, str]] = ESTIMATION_EXAMPLES) -> str:
@@ -31,14 +50,17 @@ y nivel de detalle:
 {examples_text}"""
 
 
-def estimate_meeting(transcription: str) -> str:
+def generate_estimation(
+    transcription: str,
+    opts: GenerationOptions | None = None,
+) -> dict:
 	"""Generate a software estimation from a meeting transcription."""
 	if not transcription.strip():
 		raise ValueError("La transcripcion de la reunion no puede estar vacia")
 
-	if settings.llm_provider.strip().lower() != "anthropic":
+	if settings.LLM_PROVIDER.strip().lower() != "anthropic":
 		raise NotImplementedError(
-			f"Proveedor no soportado: {settings.llm_provider}. Solo se ha implementado Anthropic."
+			f"Proveedor no soportado: {settings.LLM_PROVIDER}. Solo se ha implementado Anthropic."
 		)
 
 	messages = [
@@ -53,8 +75,8 @@ def estimate_meeting(transcription: str) -> str:
 	]
 
 	response: Any = litellm.completion(
-		model=settings.llm_model,
-		api_key=settings.anthropic_api_key,
+		model=settings.LLM_MODEL,
+		api_key=settings.ANTHROPIC_API_KEY,
 		messages=messages,
 		temperature=0.2,
 		max_tokens=2000,
