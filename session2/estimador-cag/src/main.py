@@ -1,18 +1,12 @@
 import structlog
 from contextlib import asynccontextmanager
-import sys
 from pathlib import Path
 
 from fastapi import FastAPI
 import uvicorn
 
-if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from src.config import get_settings
-    from src.routers.estimations import router as estimations_router
-else:
-    from .config import get_settings
-    from .routers.estimations import router as estimations_router
+from config import get_settings
+from routers.estimations import router as estimations_router
 
 
 def configure_logging() -> None:
@@ -87,4 +81,4 @@ async def health_check() -> dict:
 
 
 if __name__ == "__main__":
-    uvicorn.run("src.main:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
