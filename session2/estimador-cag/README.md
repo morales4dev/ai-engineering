@@ -76,7 +76,7 @@ curl -X POST http://localhost:8000/api/v1/estimate   -H "Content-Type: applicati
 jq -r '.estimation' salida.json > estimacion-limpia.md
 
 ### Chat
-uv run streamlit run chat.py
+uv run streamlit run streamlit_app.py
 
 ## Improvements
 

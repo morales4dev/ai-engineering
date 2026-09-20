@@ -122,13 +122,35 @@ def estimate(request: EstimationRequest) -> EstimationResponse:
 # ---------------------------------------------------------------------------
 # System prompt construction
 # ---------------------------------------------------------------------------
-def build_system_prompt(
-    example_format: ExampleFormat = "markdown",
-    num_examples: int = 3,
-    use_examples: bool = True,
-    inline_cleaning: bool = False,
-) -> str:
-    """Assemble the system prompt with role, rates, output spec and (optionally) examples."""
+@dataclass
+class CagContext:
+    """Static CAG pieces derived from generation options (no LLM call)."""
+
+    system_prompt: str
+    examples_text: str
+
+
+def build_cag_context(opts: GenerationOptions | None = None) -> CagContext:
+    """Assemble the system prompt and the injected examples from the same options."""
+    opts = opts or GenerationOptions()
+
+    examples_text = ""
+    if opts.use_examples and opts.num_examples > 0:
+        examples_text = format_examples_for_prompt(
+            select_examples(opts.num_examples),
+            opts.example_format,
+        )
+
+    examples_block = ""
+    if examples_text:
+        examples_block = (
+            "Below are reference estimations from previous projects. Use them as a guide "
+            "for structure, level of detail, and realistic pricing. Adapt the content to "
+            "match the specific project described in the transcription.\n\n"
+            + examples_text
+        )
+
+    cleaning_block = INLINE_CLEANING_BLOCK if opts.preprocessing == "inline_cleaning" else ""
     role = (
         "You are a senior software consultant with 15+ years of experience in project "
         "estimation. Your task is to produce a detailed software project estimation based "
@@ -139,29 +161,27 @@ def build_system_prompt(
         "rate of approximately 50 EUR/hour (400 EUR/day). Provide realistic, well-justified "
         "numbers."
     )
+    system_prompt = "\n\n".join(
+        s for s in (role, cleaning_block, rates, ACTIVE_OUTPUT_PROMPT, examples_block) if s
+    )
+    return CagContext(system_prompt=system_prompt, examples_text=examples_text)
 
-    examples_block = ""
-    if use_examples and num_examples > 0:
-        rendered = format_examples_for_prompt(select_examples(num_examples), example_format)
-        if rendered:
-            examples_block = (
-                "Below are reference estimations from previous projects. Use them as a guide "
-                "for structure, level of detail, and realistic pricing. Adapt the content to "
-                "match the specific project described in the transcription.\n\n"
-                + rendered
-            )
 
-    cleaning_block = INLINE_CLEANING_BLOCK if inline_cleaning else ""
-
-    sections = [role, cleaning_block, rates, ACTIVE_OUTPUT_PROMPT, examples_block]
-    system_prompt = "\n\n".join(s for s in sections if s)
-    ##
-    # file_name = f"{get_absolute_path()}/estimador-system_prompt.txt"
-    # with open(file_name, 'w', encoding='utf-8') as f:
-    #     f.write(system_prompt)
-    # print('written:', file_name)
-    ##
-    return system_prompt
+def build_system_prompt(
+    example_format: ExampleFormat = "markdown",
+    num_examples: int = 3,
+    use_examples: bool = True,
+    inline_cleaning: bool = False,
+) -> str:
+    """Assemble the system prompt with role, rates, output spec and (optionally) examples."""
+    return build_cag_context(
+        GenerationOptions(
+            preprocessing="inline_cleaning" if inline_cleaning else "none",
+            example_format=example_format,
+            num_examples=num_examples,
+            use_examples=use_examples,
+        )
+    ).system_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -233,12 +253,7 @@ def _prepare_generation(transcription: str, opts: GenerationOptions) -> _Prepare
         extracted_requirements, prep_usage = extract_requirements(transcription, opts)
         user_input = extracted_requirements
 
-    system_prompt = build_system_prompt(
-        example_format=opts.example_format,
-        num_examples=opts.num_examples,
-        use_examples=opts.use_examples,
-        inline_cleaning=(opts.preprocessing == "inline_cleaning"),
-    )
+    system_prompt = build_cag_context(opts).system_prompt
 
     model = opts.model or settings.LLM_MODEL
 
