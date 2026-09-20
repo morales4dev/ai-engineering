@@ -18,6 +18,26 @@ from services.llm_service import (
     options_from_request,
 )
 
+_STRUCTURE_CHECKS = (
+    ("Title", "has_title"),
+    ("Breakdown table", "has_breakdown_table"),
+    ("Totals section", "has_totals_section"),
+    ("Team section", "has_team_section"),
+    ("Duration section", "has_duration_section"),
+    ("Hours match", "hours_match"),
+    ("Cost match", "cost_match"),
+    ("Finish reason", "finish_reason_ok"),
+)
+
+
+def _status_icon(value: bool | None) -> str:
+    if value is True:
+        return ":green[:material/check_circle:]"
+    if value is False:
+        return ":red[:material/cancel:]"
+    return ":gray[:material/remove:]"
+
+
 st.set_page_config(
     page_title="Software estimation",
     page_icon=":material/calculate:",
@@ -26,6 +46,7 @@ st.set_page_config(
 
 st.session_state.setdefault("messages", [])
 st.session_state.setdefault("last_response", None)
+# st.session_state.setdefault("iteration", 0)
 
 try:
     get_settings()
@@ -50,16 +71,7 @@ with st.sidebar:
         else:
             st.caption("No CAG examples are injected for the current request defaults.")
 
-    st.subheader("Last call")
-    last_response = st.session_state.last_response
-    if last_response is None:
-        st.caption("No estimation yet.")
-    else:
-        usage = last_response["usage"]
-        st.metric("Model", last_response["model"])
-        st.metric("Input tokens", usage["input_tokens"])
-        st.metric("Output tokens", usage["output_tokens"])
-        st.metric("Response time", f"{last_response['latency_ms']} ms")
+    last_call_slot = st.empty()
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -82,6 +94,9 @@ if prompt := st.chat_input("Paste a meeting transcription", submit_mode="disable
                     options_from_request(request),
                 )
                 estimation_text = st.write_stream(token_stream)
+                # st.session_state.iteration+=1
+                # if st.session_state.iteration == 2:
+                #     raise Exception("y tiro porque me toca")
             except LLMServiceError as exc:
                 st.error(str(exc))
             else:
@@ -93,3 +108,48 @@ if prompt := st.chat_input("Paste a meeting transcription", submit_mode="disable
                     st.session_state.messages.append(
                         {"role": "assistant", "content": estimation_text}
                     )
+
+with last_call_slot.container():
+    last_response = st.session_state.last_response
+    validation = last_response.get("validation") if last_response else None
+
+    with st.expander("Validation", expanded=False):
+        if validation is None:
+            st.caption("No validation yet.")
+        else:
+            st.metric("Score", f"{validation['score']:.0%}")
+            st.markdown(
+                "\n".join(
+                    f"{_status_icon(validation[key])} {label}"
+                    for label, key in _STRUCTURE_CHECKS
+                )
+            )
+            declared_hours = validation["declared_total_hours"]
+            sum_hours = validation["sum_row_hours"]
+            declared_cost = validation["declared_total_cost"]
+            sum_cost = validation["sum_row_cost"]
+            st.caption(
+                "Hours: declared "
+                f"{declared_hours if declared_hours is not None else '—'}, "
+                f"sum {sum_hours if sum_hours is not None else '—'}"
+            )
+            st.caption(
+                "Cost: declared "
+                f"{declared_cost if declared_cost is not None else '—'}, "
+                f"sum {sum_cost if sum_cost is not None else '—'}"
+            )
+            issues = validation.get("issues") or []
+            if issues:
+                st.markdown("**Issues**")
+                for issue in issues:
+                    st.caption(f":red[:material/error:] {issue}")
+
+    st.subheader("Last call")
+    if last_response is None:
+        st.caption("No estimation yet.")
+    else:
+        usage = last_response["usage"]
+        st.metric("Model", last_response["model"])
+        st.metric("Input tokens", usage["input_tokens"])
+        st.metric("Output tokens", usage["output_tokens"])
+        st.metric("Response time", f"{last_response['latency_ms']} ms")
