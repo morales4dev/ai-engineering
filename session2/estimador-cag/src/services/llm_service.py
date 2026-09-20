@@ -1,11 +1,18 @@
 import time
+from collections.abc import Generator
 from dataclasses import dataclass
-import structlog
-from context.examples import format_examples_for_prompt, select_examples
-from config import get_settings
-from schemas.estimation import ExampleFormat, PreprocessingMode
-from utils import get_absolute_path
 
+import structlog
+
+from config import Settings, get_settings
+from context.examples import format_examples_for_prompt, select_examples
+from schemas.estimation import (
+    EstimationRequest,
+    EstimationResponse,
+    ExampleFormat,
+    PreprocessingMode,
+)
+from services.evaluation import evaluate_estimation_structure
 
 log = structlog.get_logger()
 
@@ -81,6 +88,35 @@ class GenerationOptions:
     model: str | None = None
     max_tokens: int = DEFAULT_MAX_TOKENS
     thinking_budget: int | None = None
+
+
+def options_from_request(request: EstimationRequest) -> GenerationOptions:
+    """Map the public request DTO to the internal generation knobs."""
+    return GenerationOptions(
+        preprocessing=request.preprocessing,
+        example_format=request.example_format,
+        num_examples=request.num_examples,
+        use_examples=request.use_examples,
+        model=request.model,
+        max_tokens=request.max_tokens,
+        thinking_budget=request.thinking_budget,
+    )
+
+
+def build_estimation_response(request: EstimationRequest, result: dict) -> EstimationResponse:
+    """Wrap a generate_estimation result dict as the public response DTO."""
+    validation = (
+        evaluate_estimation_structure(result["estimation"], result["finish_reason"])
+        if request.evaluate
+        else None
+    )
+    return EstimationResponse(**result, validation=validation)
+
+
+def estimate(request: EstimationRequest) -> EstimationResponse:
+    """Non-streaming estimation used by the FastAPI adapter."""
+    result = generate_estimation(request.transcription, options_from_request(request))
+    return build_estimation_response(request, result)
 
 
 # ---------------------------------------------------------------------------
@@ -172,18 +208,25 @@ def extract_requirements(
 # ---------------------------------------------------------------------------
 # Main entrypoint
 # ---------------------------------------------------------------------------
-def generate_estimation(
-    transcription: str,
-    opts: GenerationOptions | None = None,
-) -> dict:
-    """Generate a software estimation from a meeting transcription using the configured LLM."""
-    opts = opts or GenerationOptions()
-    settings = get_settings()
+@dataclass
+class _PreparedGeneration:
+    settings: Settings
+    t0: float
+    prep_usage: dict
+    extracted_requirements: str | None
+    user_input: str
+    system_prompt: str
+    model: str
+    opts: GenerationOptions
 
+
+def _prepare_generation(transcription: str, opts: GenerationOptions) -> _PreparedGeneration:
+    """Shared prompt/preprocessing setup for blocking and streaming generation."""
+    settings = get_settings()
     t0 = time.perf_counter()
 
     prep_usage = {"input": 0, "output": 0}
-    extracted_requirements: str | None = None    
+    extracted_requirements: str | None = None
     user_input = transcription
 
     if opts.preprocessing == "two_phase":
@@ -200,50 +243,113 @@ def generate_estimation(
     model = opts.model or settings.LLM_MODEL
 
     log.info(
-		"generating_estimation",
-		provider=settings.LLM_PROVIDER,
-		model=model,
-		preprocessing=opts.preprocessing,
-		example_format=opts.example_format,
-		num_examples=opts.num_examples,
-		use_examples=opts.use_examples,
-		max_tokens=opts.max_tokens,
-		thinking_budget=opts.thinking_budget,
-	)
+        "generating_estimation",
+        provider=settings.LLM_PROVIDER,
+        model=model,
+        preprocessing=opts.preprocessing,
+        example_format=opts.example_format,
+        num_examples=opts.num_examples,
+        use_examples=opts.use_examples,
+        max_tokens=opts.max_tokens,
+        thinking_budget=opts.thinking_budget,
+    )
+
+    return _PreparedGeneration(
+        settings=settings,
+        t0=t0,
+        prep_usage=prep_usage,
+        extracted_requirements=extracted_requirements,
+        user_input=user_input,
+        system_prompt=system_prompt,
+        model=model,
+        opts=opts,
+    )
+
+
+def _finalize_result(result: dict, prepared: _PreparedGeneration) -> dict:
+    result["usage"]["preprocessing_input_tokens"] = prepared.prep_usage["input"]
+    result["usage"]["preprocessing_output_tokens"] = prepared.prep_usage["output"]
+    result["preprocessing"] = prepared.opts.preprocessing
+    result["extracted_requirements"] = prepared.extracted_requirements
+    result["latency_ms"] = int((time.perf_counter() - prepared.t0) * 1000)
+    return result
+
+
+def generate_estimation(
+    transcription: str,
+    opts: GenerationOptions | None = None,
+) -> dict:
+    """Generate a software estimation from a meeting transcription using the configured LLM."""
+    opts = opts or GenerationOptions()
+    prepared = _prepare_generation(transcription, opts)
 
     try:
-        if settings.LLM_PROVIDER == "openai":
+        if prepared.settings.LLM_PROVIDER == "openai":
             if opts.thinking_budget is not None:
                 log.warning("thinking_budget_ignored_for_provider", provider="openai")
             result = _call_openai(
                 messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_input},
+                    {"role": "system", "content": prepared.system_prompt},
+                    {"role": "user", "content": prepared.user_input},
                 ],
-                model=model,
+                model=prepared.model,
                 max_tokens=opts.max_tokens,
             )
         else:
             result = _call_anthropic(
-                system=system_prompt,
-                user_message=user_input,
-                model=model,
+                system=prepared.system_prompt,
+                user_message=prepared.user_input,
+                model=prepared.model,
                 max_tokens=opts.max_tokens,
                 thinking_budget=opts.thinking_budget,
             )
     except LLMServiceError:
         raise
     except Exception as exc:
-        log.error("llm_call_failed", error=str(exc), provider=settings.LLM_PROVIDER)
+        log.error("llm_call_failed", error=str(exc), provider=prepared.settings.LLM_PROVIDER)
         raise LLMServiceError(f"LLM call failed: {exc}") from exc
 
-    result["usage"]["preprocessing_input_tokens"] = prep_usage["input"]
-    result["usage"]["preprocessing_output_tokens"] = prep_usage["output"]
-    result["preprocessing"] = opts.preprocessing
-    result["extracted_requirements"] = extracted_requirements
-    result["latency_ms"] = int((time.perf_counter() - t0) * 1000)
+    return _finalize_result(result, prepared)
 
-    return result
+
+class EstimationTokenStream:
+    """Iterable of estimation text deltas. `.result` is set after the iterator is consumed."""
+
+    def __init__(self, transcription: str, opts: GenerationOptions | None = None):
+        self._transcription = transcription
+        self._opts = opts or GenerationOptions()
+        self.result: dict | None = None
+
+    def __iter__(self) -> Generator[str, None, None]:
+        prepared = _prepare_generation(self._transcription, self._opts)
+
+        try:
+            if prepared.settings.LLM_PROVIDER == "openai":
+                if self._opts.thinking_budget is not None:
+                    log.warning("thinking_budget_ignored_for_provider", provider="openai")
+                result = yield from _stream_openai(
+                    messages=[
+                        {"role": "system", "content": prepared.system_prompt},
+                        {"role": "user", "content": prepared.user_input},
+                    ],
+                    model=prepared.model,
+                    max_tokens=self._opts.max_tokens,
+                )
+            else:
+                result = yield from _stream_anthropic(
+                    system=prepared.system_prompt,
+                    user_message=prepared.user_input,
+                    model=prepared.model,
+                    max_tokens=self._opts.max_tokens,
+                    thinking_budget=self._opts.thinking_budget,
+                )
+        except LLMServiceError:
+            raise
+        except Exception as exc:
+            log.error("llm_call_failed", error=str(exc), provider=prepared.settings.LLM_PROVIDER)
+            raise LLMServiceError(f"LLM call failed: {exc}") from exc
+
+        self.result = _finalize_result(result, prepared)
 
 
 
@@ -345,4 +451,122 @@ def _call_anthropic(
             "output_tokens": response.usage.output_tokens,
             "total_tokens": response.usage.input_tokens + response.usage.output_tokens,
         },
+    }
+
+
+def _stream_openai(
+    messages: list[dict],
+    model: str,
+    max_tokens: int,
+) -> Generator[str, None, dict]:
+    """Stream a chat completion from OpenAI and return the same result dict as `_call_openai`."""
+    from openai import OpenAI
+
+    settings = get_settings()
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+    stream = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        max_tokens=max_tokens,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+
+    pieces: list[str] = []
+    finish_reason = "stop"
+    response_model = model
+    usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+
+    for chunk in stream:
+        if chunk.model:
+            response_model = chunk.model
+        if chunk.usage is not None:
+            usage = {
+                "input_tokens": chunk.usage.prompt_tokens or 0,
+                "output_tokens": chunk.usage.completion_tokens or 0,
+                "total_tokens": chunk.usage.total_tokens or 0,
+            }
+        if not chunk.choices:
+            continue
+        choice = chunk.choices[0]
+        if choice.finish_reason:
+            finish_reason = choice.finish_reason
+        delta = choice.delta.content
+        if delta:
+            pieces.append(delta)
+            yield delta
+
+    log.info(
+        "llm_response_received",
+        provider="openai",
+        model=response_model,
+        finish_reason=finish_reason,
+        input_tokens=usage["input_tokens"],
+        output_tokens=usage["output_tokens"],
+    )
+
+    return {
+        "estimation": "".join(pieces),
+        "model": response_model,
+        "provider": "openai",
+        "finish_reason": finish_reason,
+        "usage": usage,
+    }
+
+
+def _stream_anthropic(
+    system: str,
+    user_message: str,
+    model: str,
+    max_tokens: int,
+    thinking_budget: int | None,
+) -> Generator[str, None, dict]:
+    """Stream a message from Anthropic and return the same result dict as `_call_anthropic`."""
+    from anthropic import Anthropic
+
+    settings = get_settings()
+    client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    anthropic_model = model.removeprefix("anthropic/")
+
+    kwargs: dict = {
+        "model": anthropic_model,
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": [{"role": "user", "content": user_message}],
+    }
+    if thinking_budget is not None:
+        kwargs["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
+        kwargs["max_tokens"] = max(max_tokens, thinking_budget + 1024)
+
+    pieces: list[str] = []
+    with client.messages.stream(**kwargs) as stream:
+        for text in stream.text_stream:
+            if text:
+                pieces.append(text)
+                yield text
+        final = stream.get_final_message()
+
+    finish_reason = final.stop_reason or "stop"
+    usage = {
+        "input_tokens": final.usage.input_tokens,
+        "output_tokens": final.usage.output_tokens,
+        "total_tokens": final.usage.input_tokens + final.usage.output_tokens,
+    }
+
+    log.info(
+        "llm_response_received",
+        provider="anthropic",
+        model=final.model,
+        finish_reason=finish_reason,
+        input_tokens=usage["input_tokens"],
+        output_tokens=usage["output_tokens"],
+    )
+
+    return {
+        "estimation": "".join(pieces),
+        "model": final.model,
+        "provider": "anthropic",
+        "finish_reason": finish_reason,
+        "usage": usage,
     }
