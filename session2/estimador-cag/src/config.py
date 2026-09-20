@@ -8,13 +8,13 @@ from utils import get_absolute_path
 
 
 ENV_FILE = f"{get_absolute_path()}/../.env"
-ENV_FILE = "/home/morales4dev/wsTakeoff/ai-engineering/session2/estimador-cag/.env"
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables and .env file."""
 
-    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8")	
-    
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8")
+
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
     LLM_PROVIDER: Literal["openai", "anthropic"] = "anthropic"
@@ -35,4 +35,5 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Return cached application settings (singleton)."""
-    return Settings()
+    settings = Settings()
+    return settings

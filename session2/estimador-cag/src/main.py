@@ -1,9 +1,8 @@
 import structlog
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
-import uvicorn
+from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
 from routers.estimations import router as estimations_router
@@ -44,13 +43,7 @@ async def lifespan(app: FastAPI):
     yield
     log.info("application_shutdown")
 
-# app = FastAPI(
-# 	title="Estimador CAG",
-# 	description=(
-# 		"API para generar estimaciones de proyectos de software a partir de "
-# 		"transcripciones de reuniones y ejemplos históricos."
-# 	),
-# )
+
 app = FastAPI(
     title="Estimation CAG Service",
     description="AI-powered software estimation service using Cache Augmented Generation architecture",
@@ -60,13 +53,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(estimations_router)
-
-
-# @app.get("/health", tags=["health"])
-# def health() -> dict[str, str]:
-# 	return {"status": "ok"}
 
 
 @app.get("/health")
@@ -80,5 +75,5 @@ async def health_check() -> dict:
     }
 
 
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
+# if __name__ == "__main__":
+#     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)

@@ -6,12 +6,6 @@ PreprocessingMode = Literal["none", "inline_cleaning", "two_phase"]
 ExampleFormat = Literal["markdown", "json", "narrative"]
 
 
-# class EstimationRequest(BaseModel):
-# 	transcription: str = Field(
-# 		min_length=1,
-# 		description="Transcripcion de la reunion con el cliente",
-# 	)
-
 class EstimationRequest(BaseModel):
     """Incoming request containing a meeting transcription to estimate."""
 
@@ -84,12 +78,6 @@ class StructureCheck(BaseModel):
     finish_reason_ok: bool
     score: float
     issues: list[str]
-
-
-# class EstimationResponse(BaseModel):
-# 	estimation: str
-# 	model: str
-# 	provider: str
 
 
 class EstimationResponse(BaseModel):

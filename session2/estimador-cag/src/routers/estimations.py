@@ -34,4 +34,6 @@ async def create_estimation(request: EstimationRequest) -> EstimationResponse:
         else None
     )
 
-    return EstimationResponse(**result, validation=validation)
+    estimation_response = EstimationResponse(**result, validation=validation)
+
+    return estimation_response

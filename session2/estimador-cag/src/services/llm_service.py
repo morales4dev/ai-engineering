@@ -1,10 +1,10 @@
 import time
-from typing import Any
 from dataclasses import dataclass
 import structlog
 from context.examples import format_examples_for_prompt, select_examples
 from config import get_settings
 from schemas.estimation import ExampleFormat, PreprocessingMode
+from utils import get_absolute_path
 
 
 log = structlog.get_logger()
@@ -49,7 +49,7 @@ Generate the estimation with this exact structure:
 """
 
 # >>> Block 3.4 live switch: change the right-hand side to PROMPT_OUTPUT_STRUCTURED
-ACTIVE_OUTPUT_PROMPT = PROMPT_OUTPUT_BASIC
+ACTIVE_OUTPUT_PROMPT = PROMPT_OUTPUT_STRUCTURED #PROMPT_OUTPUT_BASIC
 
 
 INLINE_CLEANING_BLOCK = """\
@@ -118,7 +118,14 @@ def build_system_prompt(
     cleaning_block = INLINE_CLEANING_BLOCK if inline_cleaning else ""
 
     sections = [role, cleaning_block, rates, ACTIVE_OUTPUT_PROMPT, examples_block]
-    return "\n\n".join(s for s in sections if s)
+    system_prompt = "\n\n".join(s for s in sections if s)
+    ##
+    # file_name = f"{get_absolute_path()}/estimador-system_prompt.txt"
+    # with open(file_name, 'w', encoding='utf-8') as f:
+    #     f.write(system_prompt)
+    # print('written:', file_name)
+    ##
+    return system_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -205,13 +212,25 @@ def generate_estimation(
 	)
 
     try:
-        result = _call_anthropic(
-            system=system_prompt,
-            user_message=user_input,
-            model=model,
-            max_tokens=opts.max_tokens,
-            thinking_budget=opts.thinking_budget,
-        )
+        if settings.LLM_PROVIDER == "openai":
+            if opts.thinking_budget is not None:
+                log.warning("thinking_budget_ignored_for_provider", provider="openai")
+            result = _call_openai(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_input},
+                ],
+                model=model,
+                max_tokens=opts.max_tokens,
+            )
+        else:
+            result = _call_anthropic(
+                system=system_prompt,
+                user_message=user_input,
+                model=model,
+                max_tokens=opts.max_tokens,
+                thinking_budget=opts.thinking_budget,
+            )
     except LLMServiceError:
         raise
     except Exception as exc:
