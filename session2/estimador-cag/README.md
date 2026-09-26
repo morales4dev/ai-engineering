@@ -20,7 +20,8 @@ Later modules of the Master are expected to evolve this kind of service toward *
 
 - Python **3.11+**
 - [uv](https://docs.astral.sh/uv/)
-- An **API key** for OpenAI or Anthropic (matching `LLM_PROVIDER` in `.env`)
+- An **API key** for OpenAI and/or Anthropic (at least one; both if you want provider fallback)
+- **Redis** if you want the exact-match cache (the API still answers if Redis is down)
 
 ## Local setup
 
@@ -41,17 +42,125 @@ uv run uvicorn main:app --reload
 Service: `http://localhost:8000`  
 Swagger: `http://localhost:8000/docs` · ReDoc: `http://localhost:8000/redoc` · Health: `GET /health`
 
+## Docker
+
+```bash
+cd estimador-cag
+cp .env.example .env   # if needed
+docker compose up --build
+```
+
+- API: [http://localhost:8000](http://localhost:8000)
+- Redis: `redis://localhost:6379`
+- SSE demo: [http://localhost:8000/static/sse_demo.html](http://localhost:8000/static/sse_demo.html)
+
+Compose sets `REDIS_URL=redis://redis:6379` for the API container. When you run uvicorn on the host, keep `redis://localhost:6379` in `.env`.
+
+Streamlit still runs on the host (not inside Compose):
+
+```bash
+uv run streamlit run streamlit_app.py          # HTTP SSE client — API must be up
+uv run streamlit run streamlit_inprocess.py    # in-process SDK stream — no FastAPI
+```
+
+## Two streaming paths
+
+They look similar. They are not the same pipe.
+
+| Path | Entry | Transport | LLM |
+|---|---|---|---|
+| HTTP SSE | `POST /api/v1/estimate/stream` | Server-Sent Events | `LLMWrapper.complete_stream` → LiteLLM |
+| Streamlit (HTTP) | `streamlit_app.py` | HTTP client of that SSE endpoint | same as above |
+| Streamlit (in-process) | `streamlit_inprocess.py` | in-process iterator | `EstimationTokenStream` → OpenAI/Anthropic SDKs |
+
+### HTTP SSE (`POST /api/v1/estimate/stream`)
+
+Default CAG prompt only. No two-phase, no validation, no final JSON metrics.
+Cache hit: one SSE token with the full text. Miss: live tokens, then store.
+
+Browser demo: [http://localhost:8000/static/sse_demo.html](http://localhost:8000/static/sse_demo.html)
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant API as FastAPI /estimate/stream
+    participant Prompt as build_system_prompt()
+    participant W as LLMWrapper.complete_stream
+    participant Cache as Redis
+    participant R as LiteLLM Router
+    participant LLM as PRIMARY / FALLBACK
+
+    Client->>API: POST JSON transcription
+    API->>Prompt: default CAG prompt
+    Prompt-->>API: system_prompt
+    API->>W: complete_stream()
+    W->>Cache: get
+
+    alt cache hit
+        Cache-->>W: estimation
+        W-->>API: one chunk
+        API-->>Client: SSE event token
+    else cache miss
+        alt model override
+            W->>LLM: litellm.completion stream
+            Note over W,LLM: no fallback
+        else no override
+            W->>R: router.completion stream
+            R->>LLM: PRIMARY_MODEL
+            alt PRIMARY fails
+                R->>LLM: FALLBACK_MODEL
+            end
+        end
+        loop each delta
+            LLM-->>W: chunk
+            W-->>API: yield text
+            API-->>Client: SSE event token
+        end
+        W->>Cache: set
+    end
+    API-->>Client: SSE event done
+```
+
+### Streamlit (HTTP SSE client)
+
+Needs the API running. Validation is local regex on the finished text (SSE has no JSON footer).
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as streamlit_app.py
+    participant API as FastAPI /estimate/stream
+    participant W as LLMWrapper.complete_stream
+
+    User->>UI: paste transcription
+    UI->>API: POST SSE
+    API->>W: complete_stream()
+    loop tokens
+        W-->>API: chunk
+        API-->>UI: event token
+        UI-->>User: st.write_stream
+    end
+    API-->>UI: event done
+    UI->>UI: evaluate_estimation_structure locally
+```
+
 ## Project layout
 
 ```
 estimador-cag/
 ├── src/
-│   ├── main.py                 # FastAPI app, logging, CORS, /health
+│   ├── main.py                 # FastAPI app, /health, /static
 │   ├── config.py               # Pydantic Settings
-│   ├── routers/estimations.py  # POST /api/v1/estimate
-│   ├── services/               # LLM + structural evaluation
-│   ├── schemas/estimation.py   # Request / response models
-│   └── context/examples.py     # CAG canonical examples
+│   ├── dependencies.py         # wrapper + Redis cache singletons
+│   ├── routers/estimations.py  # POST /estimate and /estimate/stream
+│   ├── services/               # LiteLLM wrapper, cache, CAG, evaluation
+│   ├── schemas/estimation.py
+│   ├── context/examples.py
+│   └── static/sse_demo.html
+├── streamlit_app.py            # HTTP SSE client
+├── streamlit_inprocess.py      # SDK stream, no FastAPI
+├── Dockerfile
+├── docker-compose.yml
 ├── pyproject.toml
 └── .env.example
 ```
@@ -67,7 +176,7 @@ uv pip install --python .venv/bin/python -r requirements.txt
 
 ## Test
 
-### FastAPI
+### FastAPI without streaming
 
 curl -X POST http://localhost:8000/api/v1/estimate   -H "Content-Type: application/json"   -d '{
     "transcription": "En la reunión con el equipo de marketing, el cliente explicó que necesita una landing page con formulario de contacto, integración con su CRM actual (HubSpot), y una sección de blog con editor WYSIWYG. El plazo ideal sería tenerlo listo en 4 semanas. El diseño ya existe en Figma."
@@ -75,10 +184,21 @@ curl -X POST http://localhost:8000/api/v1/estimate   -H "Content-Type: applicati
 
 jq -r '.estimation' salida.json > estimacion-limpia.md
 
-### Chat
-uv run streamlit run streamlit_app.py
+### FastAPI with streaming
 
-## Improvements
+curl -N -X POST http://localhost:8000/api/v1/estimate/stream \
+  -H 'Content-Type: application/json' \
+  -d '{"transcription": "We need a small CRM with auth, contacts and roles. MVP six weeks."}'
+
+### Chat HTTP SSE client (API must already be running)
+uv run streamlit run streamlit_app.py
+### Chat In-process (SDK stream — no FastAPI needed)
+uv run streamlit run streamlit_inprocess.py
+
+### Browser
+http://localhost:8000/static/sse_demo.html
+
+## Future improvements
 
 ### evaluation.py
 
