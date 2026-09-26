@@ -1,24 +1,27 @@
-"""HTTP client UI. Streams via POST /estimate/stream, not EstimationTokenStream."""
+"""In-process UI. Streams via EstimationTokenStream (SDKs), not POST /estimate/stream.
 
-from __future__ import annotations
+Kept next to streamlit_app.py so both paths can be compared.
+"""
 
 import sys
-import time
-from collections.abc import Iterator
 from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parent / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-import httpx
 import streamlit as st
 from pydantic import ValidationError
 
 from config import get_settings
 from schemas.estimation import EstimationRequest
-from services.evaluation import evaluate_estimation_structure
-from services.llm_service import build_cag_context
+from services.llm_service import (
+    EstimationTokenStream,
+    LLMServiceError,
+    build_cag_context,
+    build_estimation_response,
+    options_from_request,
+)
 
 _STRUCTURE_CHECKS = (
     ("Title", "has_title"),
@@ -46,71 +49,21 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+st.session_state.setdefault("messages", [])
+st.session_state.setdefault("last_response", None)
+
 try:
-    settings = get_settings()
+    get_settings()
 except ValueError as exc:
     st.error(str(exc))
     st.stop()
 
-API_BASE_URL = settings.ESTIMATOR_API_BASE_URL.rstrip("/")
-STREAM_ENDPOINT = f"{API_BASE_URL}/api/v1/estimate/stream"
-
-
-def stream_estimation(transcription: str) -> Iterator[str]:
-    """POST to the SSE endpoint and yield text chunks.
-
-    Multiple ``data:`` lines in one message are joined with ``\\n`` (SSE spec).
-    """
-    with httpx.stream(
-        "POST",
-        STREAM_ENDPOINT,
-        json={"transcription": transcription},
-        timeout=httpx.Timeout(120.0, connect=10.0),
-        headers={"Accept": "text/event-stream"},
-    ) as response:
-        response.raise_for_status()
-        current_event = "token"
-        data_lines: list[str] = []
-        for raw_line in response.iter_lines():
-            if raw_line == "":
-                if data_lines:
-                    payload_text = "\n".join(data_lines)
-                    data_lines = []
-                    if current_event == "token":
-                        yield payload_text
-                    elif current_event == "error":
-                        raise RuntimeError(payload_text)
-                    elif current_event == "done":
-                        return
-                current_event = "token"
-                continue
-            if raw_line.startswith("event:"):
-                current_event = raw_line[6:].strip()
-            elif raw_line.startswith("data:"):
-                data_lines.append(
-                    raw_line[6:] if raw_line.startswith("data: ") else raw_line[5:]
-                )
-
-
-st.session_state.setdefault("messages", [])
-st.session_state.setdefault("last_response", None)
-
 cag = build_cag_context()
 
 st.title("Software estimation")
-st.caption("Paste a meeting transcription. Tokens stream from FastAPI over SSE.")
+st.caption("Paste a meeting transcription to generate a CAG software estimation.")
 
 with st.sidebar:
-    st.header("Service")
-    st.code(STREAM_ENDPOINT, language="text")
-    st.markdown(f"**Primary model:** `{settings.PRIMARY_MODEL}`")
-    st.markdown(f"**Fallback model:** `{settings.FALLBACK_MODEL}`")
-    st.markdown(f"**Cache TTL:** `{settings.CACHE_TTL}s`")
-    if st.button("Clear chat history"):
-        st.session_state.messages = []
-        st.session_state.last_response = None
-        st.rerun()
-
     st.header("CAG context")
 
     with st.expander("Active system prompt", expanded=False):
@@ -140,22 +93,22 @@ if prompt := st.chat_input("Paste a meeting transcription", submit_mode="disable
     else:
         with st.chat_message("assistant"):
             try:
-                started = time.perf_counter()
-                estimation_text = st.write_stream(stream_estimation(request.transcription))
-                latency_ms = int((time.perf_counter() - started) * 1000)
-            except (httpx.HTTPError, RuntimeError) as exc:
-                st.error(f"Could not reach the estimator at `{STREAM_ENDPOINT}`: {exc}")
-            else:
-                validation = evaluate_estimation_structure(estimation_text, "stop")
-                st.session_state.last_response = {
-                    "model": settings.PRIMARY_MODEL,
-                    "usage": {"input_tokens": None, "output_tokens": None},
-                    "latency_ms": latency_ms,
-                    "validation": validation.model_dump(),
-                }
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": estimation_text}
+                token_stream = EstimationTokenStream(
+                    request.transcription,
+                    options_from_request(request),
                 )
+                estimation_text = st.write_stream(token_stream)
+            except LLMServiceError as exc:
+                st.error(str(exc))
+            else:
+                if token_stream.result is None:
+                    st.error("The estimation stream finished without a result.")
+                else:
+                    response = build_estimation_response(request, token_stream.result)
+                    st.session_state.last_response = response.model_dump()
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": estimation_text}
+                    )
 
 with last_call_slot.container():
     last_response = st.session_state.last_response
@@ -198,11 +151,6 @@ with last_call_slot.container():
     else:
         usage = last_response["usage"]
         st.metric("Model", last_response["model"])
-        st.caption("Primary model. SSE does not say if fallback ran.")
-        in_tok = usage["input_tokens"]
-        out_tok = usage["output_tokens"]
-        st.metric("Input tokens", in_tok if in_tok is not None else "—")
-        st.metric("Output tokens", out_tok if out_tok is not None else "—")
-        st.caption("SSE has no usage payload.")
+        st.metric("Input tokens", usage["input_tokens"])
+        st.metric("Output tokens", usage["output_tokens"])
         st.metric("Response time", f"{last_response['latency_ms']} ms")
-        st.caption("Client-side wait, not server latency_ms.")

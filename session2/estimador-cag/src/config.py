@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     FALLBACK_MODEL: str = "claude-haiku-4-5-20251001"
     REDIS_URL: str = "redis://localhost:6379"
     CACHE_TTL: int = 86400
+    ESTIMATOR_API_BASE_URL: str = "http://localhost:8000"
     APP_ENV: Literal["development", "staging", "production"] = "development"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"
 

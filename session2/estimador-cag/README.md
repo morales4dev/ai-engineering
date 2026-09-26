@@ -100,26 +100,27 @@ sequenceDiagram
     API-->>Client: SSE event done
 ```
 
-### Streamlit (in-process)
+### Streamlit (HTTP SSE client)
+
+Needs the API running. Validation is local regex on the finished text (SSE has no JSON footer).
 
 ```mermaid
 sequenceDiagram
     actor User
     participant UI as streamlit_app.py
-    participant S as EstimationTokenStream
-    participant SDK as OpenAI / Anthropic SDK
+    participant API as FastAPI /estimate/stream
+    participant W as LLMWrapper.complete_stream
 
     User->>UI: paste transcription
-    UI->>S: EstimationTokenStream()
-    S->>S: prepare CAG prompt
-    S->>SDK: stream=true
+    UI->>API: POST SSE
+    API->>W: complete_stream()
     loop tokens
-        SDK-->>S: delta
-        S-->>UI: yield
+        W-->>API: chunk
+        API-->>UI: event token
         UI-->>User: st.write_stream
     end
-    S-->>UI: .result
-    UI->>UI: validation sidebar
+    API-->>UI: event done
+    UI->>UI: evaluate_estimation_structure locally
 ```
 
 ## Project layout
@@ -163,7 +164,10 @@ curl -N -X POST http://localhost:8000/api/v1/estimate/stream \
   -d '{"transcription": "We need a small CRM with auth, contacts and roles. MVP six weeks."}'
 
 ### Chat
+# HTTP SSE client — API must already be running
 uv run streamlit run streamlit_app.py
+# In-process SDK stream — no FastAPI needed
+uv run streamlit run streamlit_inprocess.py
 
 ### Browser
 /static
