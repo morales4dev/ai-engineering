@@ -20,7 +20,8 @@ Later modules of the Master are expected to evolve this kind of service toward *
 
 - Python **3.11+**
 - [uv](https://docs.astral.sh/uv/)
-- An **API key** for OpenAI or Anthropic (matching `LLM_PROVIDER` in `.env`)
+- An **API key** for OpenAI and/or Anthropic (at least one; both if you want provider fallback)
+- **Redis** if you want the exact-match cache (the API still answers if Redis is down)
 
 ## Local setup
 
@@ -41,6 +42,27 @@ uv run uvicorn main:app --reload
 Service: `http://localhost:8000`  
 Swagger: `http://localhost:8000/docs` · ReDoc: `http://localhost:8000/redoc` · Health: `GET /health`
 
+## Docker
+
+```bash
+cd estimador-cag
+cp .env.example .env   # if needed
+docker compose up --build
+```
+
+- API: [http://localhost:8000](http://localhost:8000)
+- Redis: `redis://localhost:6379`
+- SSE demo: [http://localhost:8000/static/sse_demo.html](http://localhost:8000/static/sse_demo.html)
+
+Compose sets `REDIS_URL=redis://redis:6379` for the API container. When you run uvicorn on the host, keep `redis://localhost:6379` in `.env`.
+
+Streamlit still runs on the host (not inside Compose):
+
+```bash
+uv run streamlit run streamlit_app.py          # HTTP SSE client — API must be up
+uv run streamlit run streamlit_inprocess.py    # in-process SDK stream — no FastAPI
+```
+
 ## Two streaming paths
 
 They look similar. They are not the same pipe.
@@ -48,9 +70,8 @@ They look similar. They are not the same pipe.
 | Path | Entry | Transport | LLM |
 |---|---|---|---|
 | HTTP SSE | `POST /api/v1/estimate/stream` | Server-Sent Events | `LLMWrapper.complete_stream` → LiteLLM |
-| Streamlit | `streamlit_app.py` | in-process iterator | `EstimationTokenStream` → OpenAI/Anthropic SDKs |
-
-Streamlit does **not** call the SSE endpoint yet.
+| Streamlit (HTTP) | `streamlit_app.py` | HTTP client of that SSE endpoint | same as above |
+| Streamlit (in-process) | `streamlit_inprocess.py` | in-process iterator | `EstimationTokenStream` → OpenAI/Anthropic SDKs |
 
 ### HTTP SSE (`POST /api/v1/estimate/stream`)
 
@@ -128,12 +149,18 @@ sequenceDiagram
 ```
 estimador-cag/
 ├── src/
-│   ├── main.py                 # FastAPI app, logging, CORS, /health
+│   ├── main.py                 # FastAPI app, /health, /static
 │   ├── config.py               # Pydantic Settings
+│   ├── dependencies.py         # wrapper + Redis cache singletons
 │   ├── routers/estimations.py  # POST /estimate and /estimate/stream
-│   ├── services/               # LLM + structural evaluation
-│   ├── schemas/estimation.py   # Request / response models
-│   └── context/examples.py     # CAG canonical examples
+│   ├── services/               # LiteLLM wrapper, cache, CAG, evaluation
+│   ├── schemas/estimation.py
+│   ├── context/examples.py
+│   └── static/sse_demo.html
+├── streamlit_app.py            # HTTP SSE client
+├── streamlit_inprocess.py      # SDK stream, no FastAPI
+├── Dockerfile
+├── docker-compose.yml
 ├── pyproject.toml
 └── .env.example
 ```
@@ -149,7 +176,7 @@ uv pip install --python .venv/bin/python -r requirements.txt
 
 ## Test
 
-### FastAPI without streamming
+### FastAPI without streaming
 
 curl -X POST http://localhost:8000/api/v1/estimate   -H "Content-Type: application/json"   -d '{
     "transcription": "En la reunión con el equipo de marketing, el cliente explicó que necesita una landing page con formulario de contacto, integración con su CRM actual (HubSpot), y una sección de blog con editor WYSIWYG. El plazo ideal sería tenerlo listo en 4 semanas. El diseño ya existe en Figma."
@@ -157,22 +184,21 @@ curl -X POST http://localhost:8000/api/v1/estimate   -H "Content-Type: applicati
 
 jq -r '.estimation' salida.json > estimacion-limpia.md
 
-### FastAPI with streamming
+### FastAPI with streaming
 
 curl -N -X POST http://localhost:8000/api/v1/estimate/stream \
   -H 'Content-Type: application/json' \
   -d '{"transcription": "We need a small CRM with auth, contacts and roles. MVP six weeks."}'
 
-### Chat
-# HTTP SSE client — API must already be running
+### Chat HTTP SSE client (API must already be running)
 uv run streamlit run streamlit_app.py
-# In-process SDK stream — no FastAPI needed
+### Chat In-process (SDK stream — no FastAPI needed)
 uv run streamlit run streamlit_inprocess.py
 
 ### Browser
-/static
+http://localhost:8000/static/sse_demo.html
 
-## Improvements
+## Future improvements
 
 ### evaluation.py
 
