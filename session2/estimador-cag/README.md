@@ -54,7 +54,10 @@ Streamlit does **not** call the SSE endpoint yet.
 
 ### HTTP SSE (`POST /api/v1/estimate/stream`)
 
-Default CAG prompt only. No two-phase, no validation, no cache, no final JSON metrics.
+Default CAG prompt only. No two-phase, no validation, no final JSON metrics.
+Cache hit: one SSE token with the full text. Miss: live tokens, then store.
+
+Browser demo: [http://localhost:8000/static/sse_demo.html](http://localhost:8000/static/sse_demo.html)
 
 ```mermaid
 sequenceDiagram
@@ -62,6 +65,7 @@ sequenceDiagram
     participant API as FastAPI /estimate/stream
     participant Prompt as build_system_prompt()
     participant W as LLMWrapper.complete_stream
+    participant Cache as Redis
     participant R as LiteLLM Router
     participant LLM as PRIMARY / FALLBACK
 
@@ -69,22 +73,29 @@ sequenceDiagram
     API->>Prompt: default CAG prompt
     Prompt-->>API: system_prompt
     API->>W: complete_stream()
+    W->>Cache: get
 
-    alt model override
-        W->>LLM: litellm.completion stream
-        Note over W,LLM: no fallback
-    else no override
-        W->>R: router.completion stream
-        R->>LLM: PRIMARY_MODEL
-        alt PRIMARY fails
-            R->>LLM: FALLBACK_MODEL
-        end
-    end
-
-    loop each delta
-        LLM-->>W: chunk
-        W-->>API: yield text
+    alt cache hit
+        Cache-->>W: estimation
+        W-->>API: one chunk
         API-->>Client: SSE event token
+    else cache miss
+        alt model override
+            W->>LLM: litellm.completion stream
+            Note over W,LLM: no fallback
+        else no override
+            W->>R: router.completion stream
+            R->>LLM: PRIMARY_MODEL
+            alt PRIMARY fails
+                R->>LLM: FALLBACK_MODEL
+            end
+        end
+        loop each delta
+            LLM-->>W: chunk
+            W-->>API: yield text
+            API-->>Client: SSE event token
+        end
+        W->>Cache: set
     end
     API-->>Client: SSE event done
 ```
@@ -153,6 +164,9 @@ curl -N -X POST http://localhost:8000/api/v1/estimate/stream \
 
 ### Chat
 uv run streamlit run streamlit_app.py
+
+### Browser
+/static
 
 ## Improvements
 
