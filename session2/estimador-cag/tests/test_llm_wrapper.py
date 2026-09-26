@@ -160,3 +160,32 @@ def test_thinking_budget_pads_max_tokens_when_anthropic_override() -> None:
     kwargs = direct.call_args.kwargs
     assert kwargs["thinking"] == {"type": "enabled", "budget_tokens": 4096}
     assert kwargs["max_tokens"] == 4096 + 1024
+
+
+def test_complete_stream_yields_chunks_without_caching() -> None:
+    wrapper = _wrapper()
+    chunks = [
+        SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="Hello "))]),
+        SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="world"))]),
+        SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=None))]),
+    ]
+    with patch.object(wrapper.router, "completion", return_value=iter(chunks)) as mocked:
+        emitted = list(
+            wrapper.complete_stream(
+                system_prompt="sys",
+                user_message="usr",
+                model_override=None,
+                max_tokens=4000,
+            )
+        )
+    assert "".join(emitted) == "Hello world"
+    assert mocked.call_args.kwargs["stream"] is True
+    assert wrapper.cache.get(
+        EstimationCache.make_key(
+            system_prompt="sys",
+            user_message="usr",
+            model="gpt-4o-mini",
+            max_tokens=4000,
+            thinking_budget=None,
+        )
+    ) is None

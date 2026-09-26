@@ -1,14 +1,12 @@
-"""LiteLLM-backed wrapper that unifies provider calls behind one `complete()` API.
+"""LiteLLM client for blocking ``complete()`` and HTTP SSE ``complete_stream()``.
 
-Timeout and retries come from Settings (`LLM_TIMEOUT` / `LLM_RETRIES`).
-The Router tries PRIMARY_MODEL and falls back to FALLBACK_MODEL on failure.
-A per-request model override bypasses the Router (no fallback by design).
-Streaming comes in later bullets.
+Not used by Streamlit: that UI still streams via ``EstimationTokenStream`` + the SDKs.
 """
 
 from __future__ import annotations
 
 import time
+from collections.abc import Iterator
 from typing import Any
 
 import litellm
@@ -163,8 +161,53 @@ class LLMWrapper:
         self.cache.set(cache_key, result)
         return {**result, "cache_hit": False}
 
+    def complete_stream(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        model_override: str | None = None,
+        max_tokens: int = 4000,
+    ) -> Iterator[str]:
+        """Yield LiteLLM token deltas. Used by POST /estimate/stream. No cache, usage, or cost."""
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ]
+        kwargs = self._build_call_kwargs(
+            messages=messages,
+            max_tokens=max_tokens,
+            thinking_budget=None,
+            model=model_override or self.primary_model,
+            stream=True,
+        )
+
+        log.info(
+            "llm_stream_started",
+            model=model_override or self.primary_model,
+        )
+        t0 = time.perf_counter()
+        try:
+            response = self._dispatch(model_override=model_override, **kwargs)
+            for chunk in response:
+                delta = _extract_delta(chunk)
+                if delta:
+                    yield delta
+        except Exception as exc:
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            log.error(
+                "llm_stream_failed",
+                error_type=type(exc).__name__,
+                error=str(exc),
+                latency_ms=latency_ms,
+            )
+            raise
+
+        latency_ms = int((time.perf_counter() - t0) * 1000)
+        log.info("llm_stream_completed", latency_ms=latency_ms)
+
     def _dispatch(self, *, model_override: str | None, **kwargs: Any) -> Any:
-        """Router (with fallback) unless the caller asked for a specific model."""
+        """PRIMARY→FALLBACK via the Router. A model override skips the Router: no fallback."""
         if model_override:
             return litellm.completion(
                 model=model_override,
@@ -187,11 +230,14 @@ class LLMWrapper:
         max_tokens: int,
         thinking_budget: int | None,
         model: str,
+        stream: bool = False,
     ) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
             "messages": messages,
             "max_tokens": max_tokens,
         }
+        if stream:
+            kwargs["stream"] = True
         if thinking_budget is None:
             return kwargs
 
@@ -231,3 +277,14 @@ class LLMWrapper:
             "latency_ms": latency_ms,
             "cost_usd": _estimate_cost(model, input_tokens, output_tokens),
         }
+
+
+def _extract_delta(chunk: Any) -> str:
+    """Pull the text delta out of a LiteLLM streaming chunk."""
+    try:
+        delta = chunk.choices[0].delta
+    except (AttributeError, IndexError):
+        return ""
+    content = getattr(delta, "content", None)
+    return content or ""
+

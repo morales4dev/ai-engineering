@@ -1,3 +1,5 @@
+"""In-process UI. Streams via EstimationTokenStream (SDKs), not POST /estimate/stream."""
+
 import sys
 from pathlib import Path
 

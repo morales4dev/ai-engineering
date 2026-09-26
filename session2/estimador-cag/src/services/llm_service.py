@@ -321,7 +321,11 @@ def generate_estimation(
 
 
 class EstimationTokenStream:
-    """Iterable of estimation text deltas. `.result` is set after the iterator is consumed."""
+    """In-process token iterator for Streamlit (``st.write_stream``).
+
+    Talks to the OpenAI/Anthropic SDKs. This is not POST /estimate/stream
+    and does not use ``LLMWrapper``. ``.result`` is set after the iterator is consumed.
+    """
 
     def __init__(self, transcription: str, opts: GenerationOptions | None = None):
         self._transcription = transcription
@@ -365,7 +369,7 @@ def _stream_openai(
     model: str,
     max_tokens: int,
 ) -> Generator[str, None, dict]:
-    """Stream a chat completion from OpenAI and return the same result dict as `_call_openai`."""
+    """SDK stream for EstimationTokenStream only. Not POST /estimate/stream."""
     from openai import OpenAI
 
     settings = get_settings()
@@ -428,7 +432,7 @@ def _stream_anthropic(
     max_tokens: int,
     thinking_budget: int | None,
 ) -> Generator[str, None, dict]:
-    """Stream a message from Anthropic and return the same result dict as `_call_anthropic`."""
+    """SDK stream for EstimationTokenStream only. Not POST /estimate/stream."""
     from anthropic import Anthropic
 
     settings = get_settings()

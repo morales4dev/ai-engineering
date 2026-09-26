@@ -41,6 +41,76 @@ uv run uvicorn main:app --reload
 Service: `http://localhost:8000`  
 Swagger: `http://localhost:8000/docs` · ReDoc: `http://localhost:8000/redoc` · Health: `GET /health`
 
+## Two streaming paths
+
+They look similar. They are not the same pipe.
+
+| Path | Entry | Transport | LLM |
+|---|---|---|---|
+| HTTP SSE | `POST /api/v1/estimate/stream` | Server-Sent Events | `LLMWrapper.complete_stream` → LiteLLM |
+| Streamlit | `streamlit_app.py` | in-process iterator | `EstimationTokenStream` → OpenAI/Anthropic SDKs |
+
+Streamlit does **not** call the SSE endpoint yet.
+
+### HTTP SSE (`POST /api/v1/estimate/stream`)
+
+Default CAG prompt only. No two-phase, no validation, no cache, no final JSON metrics.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant API as FastAPI /estimate/stream
+    participant Prompt as build_system_prompt()
+    participant W as LLMWrapper.complete_stream
+    participant R as LiteLLM Router
+    participant LLM as PRIMARY / FALLBACK
+
+    Client->>API: POST JSON transcription
+    API->>Prompt: default CAG prompt
+    Prompt-->>API: system_prompt
+    API->>W: complete_stream()
+
+    alt model override
+        W->>LLM: litellm.completion stream
+        Note over W,LLM: no fallback
+    else no override
+        W->>R: router.completion stream
+        R->>LLM: PRIMARY_MODEL
+        alt PRIMARY fails
+            R->>LLM: FALLBACK_MODEL
+        end
+    end
+
+    loop each delta
+        LLM-->>W: chunk
+        W-->>API: yield text
+        API-->>Client: SSE event token
+    end
+    API-->>Client: SSE event done
+```
+
+### Streamlit (in-process)
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as streamlit_app.py
+    participant S as EstimationTokenStream
+    participant SDK as OpenAI / Anthropic SDK
+
+    User->>UI: paste transcription
+    UI->>S: EstimationTokenStream()
+    S->>S: prepare CAG prompt
+    S->>SDK: stream=true
+    loop tokens
+        SDK-->>S: delta
+        S-->>UI: yield
+        UI-->>User: st.write_stream
+    end
+    S-->>UI: .result
+    UI->>UI: validation sidebar
+```
+
 ## Project layout
 
 ```
@@ -48,7 +118,7 @@ estimador-cag/
 ├── src/
 │   ├── main.py                 # FastAPI app, logging, CORS, /health
 │   ├── config.py               # Pydantic Settings
-│   ├── routers/estimations.py  # POST /api/v1/estimate
+│   ├── routers/estimations.py  # POST /estimate and /estimate/stream
 │   ├── services/               # LLM + structural evaluation
 │   ├── schemas/estimation.py   # Request / response models
 │   └── context/examples.py     # CAG canonical examples
@@ -67,13 +137,19 @@ uv pip install --python .venv/bin/python -r requirements.txt
 
 ## Test
 
-### FastAPI
+### FastAPI without streamming
 
 curl -X POST http://localhost:8000/api/v1/estimate   -H "Content-Type: application/json"   -d '{
     "transcription": "En la reunión con el equipo de marketing, el cliente explicó que necesita una landing page con formulario de contacto, integración con su CRM actual (HubSpot), y una sección de blog con editor WYSIWYG. El plazo ideal sería tenerlo listo en 4 semanas. El diseño ya existe en Figma."
   }' -o salida.json
 
 jq -r '.estimation' salida.json > estimacion-limpia.md
+
+### FastAPI with streamming
+
+curl -N -X POST http://localhost:8000/api/v1/estimate/stream \
+  -H 'Content-Type: application/json' \
+  -d '{"transcription": "We need a small CRM with auth, contacts and roles. MVP six weeks."}'
 
 ### Chat
 uv run streamlit run streamlit_app.py
