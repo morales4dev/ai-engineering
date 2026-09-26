@@ -26,6 +26,8 @@ def _wrapper(default_model: str = "gpt-4o-mini") -> LLMWrapper:
         openai_api_key="fake-openai",
         anthropic_api_key="fake-anthropic",
         default_model=default_model,
+        timeout=30,
+        num_retries=2,
     )
 
 
@@ -43,6 +45,8 @@ def test_complete_returns_normalised_dict() -> None:
     assert mocked.call_count == 1
     assert mocked.call_args.kwargs["model"] == "gpt-4o-mini"
     assert mocked.call_args.kwargs["api_key"] == "fake-openai"
+    assert mocked.call_args.kwargs["timeout"] == 30
+    assert mocked.call_args.kwargs["num_retries"] == 2
     assert result["estimation"] == "hello world"
     assert result["model"] == "gpt-4o-mini"
     assert result["provider"] == "openai"
@@ -67,6 +71,21 @@ def test_complete_with_model_override_uses_that_model_and_key() -> None:
     assert mocked.call_args.kwargs["model"] == "claude-haiku-4-5"
     assert mocked.call_args.kwargs["api_key"] == "fake-anthropic"
     assert result["provider"] == "anthropic"
+
+
+def test_complete_forwards_custom_timeout_and_retries() -> None:
+    wrapper = LLMWrapper(
+        openai_api_key="fake-openai",
+        anthropic_api_key="fake-anthropic",
+        default_model="gpt-4o-mini",
+        timeout=12,
+        num_retries=4,
+    )
+    fake = _fake_completion(model="gpt-4o-mini", content="ok")
+    with patch("services.llm_wrapper.litellm.completion", return_value=fake) as mocked:
+        wrapper.complete(system_prompt="sys", user_message="usr")
+    assert mocked.call_args.kwargs["timeout"] == 12
+    assert mocked.call_args.kwargs["num_retries"] == 4
 
 
 def test_thinking_budget_ignored_for_openai() -> None:

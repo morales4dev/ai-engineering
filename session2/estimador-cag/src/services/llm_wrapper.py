@@ -1,8 +1,7 @@
 """LiteLLM-backed wrapper that unifies provider calls behind one `complete()` API.
 
-This first cut only replaces the blocking OpenAI/Anthropic SDK paths.
-Fallback, Redis cache, cost tracking, configurable timeout/retries and
-streaming come in later Session 3 bullets.
+Timeout and retries come from Settings (`LLM_TIMEOUT` / `LLM_RETRIES`).
+Fallback, Redis cache, cost tracking and streaming come in later bullets.
 """
 
 from __future__ import annotations
@@ -39,10 +38,14 @@ class LLMWrapper:
         openai_api_key: str | None,
         anthropic_api_key: str | None,
         default_model: str,
+        timeout: int,
+        num_retries: int,
     ):
         self.openai_api_key = openai_api_key
         self.anthropic_api_key = anthropic_api_key
         self.default_model = default_model
+        self.timeout = timeout
+        self.num_retries = num_retries
 
     def complete(
         self,
@@ -77,6 +80,8 @@ class LLMWrapper:
             response = litellm.completion(
                 model=model,
                 api_key=self._api_key_for(model),
+                timeout=self.timeout,
+                num_retries=self.num_retries,
                 **kwargs,
             )
         except Exception as exc:

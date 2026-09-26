@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str | None = None
     LLM_PROVIDER: Literal["openai", "anthropic"] = "anthropic"
     LLM_MODEL: str = "claude-haiku-4-5"
+    LLM_TIMEOUT: int = 30
+    LLM_RETRIES: int = 2
     APP_ENV: Literal["development", "staging", "production"] = "development"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"
 
