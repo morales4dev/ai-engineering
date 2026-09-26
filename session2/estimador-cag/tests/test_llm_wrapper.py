@@ -3,8 +3,10 @@ from unittest.mock import patch
 
 import fakeredis
 
+import pytest
+
 from services.cache import EstimationCache
-from services.llm_wrapper import LLMWrapper
+from services.llm_wrapper import LLMWrapper, _estimate_cost
 
 
 def _fake_completion(model: str, content: str = "the answer", input_tokens: int = 100, output_tokens: int = 50):
@@ -37,6 +39,11 @@ def _wrapper(primary_model: str = "gpt-4o-mini") -> LLMWrapper:
     )
 
 
+def test_estimate_cost_uses_pricing_table() -> None:
+    cost = _estimate_cost("gpt-4o-mini", 1_000_000, 1_000_000)
+    assert cost == pytest.approx(0.75)
+
+
 def test_complete_uses_router_and_returns_normalised_dict() -> None:
     wrapper = _wrapper()
     fake = _fake_completion(model="gpt-4o-mini", content="hello world")
@@ -57,7 +64,7 @@ def test_complete_uses_router_and_returns_normalised_dict() -> None:
     assert result["usage"]["input_tokens"] == 100
     assert result["usage"]["output_tokens"] == 50
     assert result["cache_hit"] is False
-    assert "cost_usd" not in result
+    assert result["cost_usd"] > 0
 
 
 def test_router_deployments_use_key_matching_each_model() -> None:

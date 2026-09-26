@@ -96,3 +96,4 @@ class EstimationResponse(BaseModel):
     latency_ms: int = Field(..., description="Server-side total latency in milliseconds")
     validation: StructureCheck | None = None
     cache_hit: bool = Field(default=False, description="True when the response came from Redis")
+    cost_usd: float = Field(default=0.0, description="Estimated USD cost based on token usage")

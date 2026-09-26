@@ -204,11 +204,10 @@ def _invoke_llm(
 def extract_requirements(
     transcription: str,
     opts: GenerationOptions,
-) -> tuple[str, dict]:
+) -> tuple[str, dict, float]:
     """Run the cheap phase-1 LLM call that turns a raw transcription into clean requirements.
 
-    Returns (requirements_text, usage_dict) where usage_dict has keys
-    'input' and 'output' (token counts) for downstream accounting.
+    Returns ``(requirements_text, usage_dict, cost_usd)``.
     """
     log.info("extracting_requirements", model_override=opts.model)
 
@@ -220,10 +219,14 @@ def extract_requirements(
         thinking_budget=None,
     )
 
-    return result["estimation"], {
-        "input": result["usage"]["input_tokens"],
-        "output": result["usage"]["output_tokens"],
-    }
+    return (
+        result["estimation"],
+        {
+            "input": result["usage"]["input_tokens"],
+            "output": result["usage"]["output_tokens"],
+        },
+        float(result.get("cost_usd", 0.0)),
+    )
 
 
 @dataclass
@@ -231,6 +234,7 @@ class _PreparedGeneration:
     settings: Settings
     t0: float
     prep_usage: dict
+    prep_cost: float
     extracted_requirements: str | None
     user_input: str
     system_prompt: str
@@ -244,11 +248,12 @@ def _prepare_generation(transcription: str, opts: GenerationOptions) -> _Prepare
     t0 = time.perf_counter()
 
     prep_usage = {"input": 0, "output": 0}
+    prep_cost = 0.0
     extracted_requirements: str | None = None
     user_input = transcription
 
     if opts.preprocessing == "two_phase":
-        extracted_requirements, prep_usage = extract_requirements(transcription, opts)
+        extracted_requirements, prep_usage, prep_cost = extract_requirements(transcription, opts)
         user_input = extracted_requirements
 
     system_prompt = build_cag_context(opts).system_prompt
@@ -271,6 +276,7 @@ def _prepare_generation(transcription: str, opts: GenerationOptions) -> _Prepare
         settings=settings,
         t0=t0,
         prep_usage=prep_usage,
+        prep_cost=prep_cost,
         extracted_requirements=extracted_requirements,
         user_input=user_input,
         system_prompt=system_prompt,
@@ -285,6 +291,7 @@ def _finalize_result(result: dict, prepared: _PreparedGeneration) -> dict:
     result["preprocessing"] = prepared.opts.preprocessing
     result["extracted_requirements"] = prepared.extracted_requirements
     result["latency_ms"] = int((time.perf_counter() - prepared.t0) * 1000)
+    result["cost_usd"] = round(float(result.get("cost_usd", 0.0)) + prepared.prep_cost, 6)
     return result
 
 

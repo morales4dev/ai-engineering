@@ -3,7 +3,7 @@
 Timeout and retries come from Settings (`LLM_TIMEOUT` / `LLM_RETRIES`).
 The Router tries PRIMARY_MODEL and falls back to FALLBACK_MODEL on failure.
 A per-request model override bypasses the Router (no fallback by design).
-Cost tracking and streaming come in later bullets.
+Streaming comes in later bullets.
 """
 
 from __future__ import annotations
@@ -32,6 +32,22 @@ def _provider_from_model(model: str) -> str:
     if name.startswith("gpt") or name.startswith("o1") or name.startswith("o3"):
         return "openai"
     return "unknown"
+
+
+# Cost per 1M tokens (USD). Update as pricing changes.
+MODEL_COSTS: dict[str, dict[str, float]] = {
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
+    "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
+    "claude-sonnet-4-5": {"input": 3.00, "output": 15.00},
+}
+
+
+def _estimate_cost(model: str, tokens_in: int, tokens_out: int) -> float:
+    base = _normalise_model_name(model)
+    costs = MODEL_COSTS.get(base) or MODEL_COSTS.get(model) or {"input": 0.0, "output": 0.0}
+    return round((tokens_in * costs["input"] + tokens_out * costs["output"]) / 1_000_000, 6)
 
 
 class LLMWrapper:
@@ -140,6 +156,7 @@ class LLMWrapper:
             provider=result["provider"],
             input_tokens=result["usage"]["input_tokens"],
             output_tokens=result["usage"]["output_tokens"],
+            cost_usd=result["cost_usd"],
             latency_ms=latency_ms,
             finish_reason=result["finish_reason"],
         )
@@ -212,4 +229,5 @@ class LLMWrapper:
                 "total_tokens": total_tokens,
             },
             "latency_ms": latency_ms,
+            "cost_usd": _estimate_cost(model, input_tokens, output_tokens),
         }
