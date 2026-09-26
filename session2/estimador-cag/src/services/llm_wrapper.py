@@ -169,7 +169,25 @@ class LLMWrapper:
         model_override: str | None = None,
         max_tokens: int = 4000,
     ) -> Iterator[str]:
-        """Yield LiteLLM token deltas. Used by POST /estimate/stream. No cache, usage, or cost."""
+        """Yield token deltas for POST /estimate/stream.
+
+        Cache hit: replay the full estimation as one chunk. Miss: stream live,
+        then store (cost_usd=0; LiteLLM rarely reports stream usage).
+        """
+        cache_key_model = model_override or self.primary_model
+        cache_key = EstimationCache.make_key(
+            system_prompt=system_prompt,
+            user_message=user_message,
+            model=cache_key_model,
+            max_tokens=max_tokens,
+            thinking_budget=None,
+        )
+        cached = self.cache.get(cache_key)
+        if cached:
+            log.info("stream_cache_hit", chars=len(cached.get("estimation", "")))
+            yield cached.get("estimation", "")
+            return
+
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
@@ -178,20 +196,19 @@ class LLMWrapper:
             messages=messages,
             max_tokens=max_tokens,
             thinking_budget=None,
-            model=model_override or self.primary_model,
+            model=cache_key_model,
             stream=True,
         )
 
-        log.info(
-            "llm_stream_started",
-            model=model_override or self.primary_model,
-        )
+        log.info("llm_stream_started", model=cache_key_model)
         t0 = time.perf_counter()
+        full_text: list[str] = []
         try:
             response = self._dispatch(model_override=model_override, **kwargs)
             for chunk in response:
                 delta = _extract_delta(chunk)
                 if delta:
+                    full_text.append(delta)
                     yield delta
         except Exception as exc:
             latency_ms = int((time.perf_counter() - t0) * 1000)
@@ -204,7 +221,20 @@ class LLMWrapper:
             raise
 
         latency_ms = int((time.perf_counter() - t0) * 1000)
-        log.info("llm_stream_completed", latency_ms=latency_ms)
+        rendered = "".join(full_text)
+        log.info("llm_stream_completed", latency_ms=latency_ms, chars=len(rendered))
+        self.cache.set(
+            cache_key,
+            {
+                "estimation": rendered,
+                "model": cache_key_model,
+                "provider": _provider_from_model(cache_key_model),
+                "finish_reason": "stop",
+                "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                "latency_ms": latency_ms,
+                "cost_usd": 0.0,
+            },
+        )
 
     def _dispatch(self, *, model_override: str | None, **kwargs: Any) -> Any:
         """PRIMARY→FALLBACK via the Router. A model override skips the Router: no fallback."""

@@ -35,9 +35,8 @@ async def create_estimation_stream(
 ) -> EventSourceResponse:
     """SSE endpoint. Tokens via LLMWrapper.complete_stream, then event ``done``.
 
-    Thinner than POST /estimate on purpose: default CAG prompt only, no two-phase
-    (phase-1 tokens would leak), no structural validation (needs the full text).
-    Streamlit does not call this yet.
+    Thinner than POST /estimate: default CAG prompt, no two-phase, no validation.
+    Cache hit arrives as one ``token`` event. Streamlit does not call this yet.
     """
     system_prompt = build_system_prompt()
 
