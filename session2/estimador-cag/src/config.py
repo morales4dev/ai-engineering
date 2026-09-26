@@ -21,16 +21,18 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "claude-haiku-4-5"
     LLM_TIMEOUT: int = 30
     LLM_RETRIES: int = 2
+    PRIMARY_MODEL: str = "gpt-4o-mini"
+    FALLBACK_MODEL: str = "claude-haiku-4-5-20251001"
     APP_ENV: Literal["development", "staging", "production"] = "development"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"
 
     @model_validator(mode="after")
-    def validate_api_key_for_provider(self) -> "Settings":
-        """Ensure the API key for the selected LLM provider is present."""
-        if self.LLM_PROVIDER == "openai" and not self.OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER is 'openai'")
-        if self.LLM_PROVIDER == "anthropic" and not self.ANTHROPIC_API_KEY:
-            raise ValueError("ANTHROPIC_API_KEY is required when LLM_PROVIDER is 'anthropic'")
+    def validate_at_least_one_api_key(self) -> "Settings":
+        """LiteLLM may try either provider via fallback, so we require at least one key."""
+        if not self.OPENAI_API_KEY and not self.ANTHROPIC_API_KEY:
+            raise ValueError(
+                "At least one of OPENAI_API_KEY or ANTHROPIC_API_KEY must be set"
+            )
         return self
     	
 

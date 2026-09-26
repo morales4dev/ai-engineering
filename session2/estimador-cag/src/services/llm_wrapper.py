@@ -1,7 +1,9 @@
 """LiteLLM-backed wrapper that unifies provider calls behind one `complete()` API.
 
 Timeout and retries come from Settings (`LLM_TIMEOUT` / `LLM_RETRIES`).
-Fallback, Redis cache, cost tracking and streaming come in later bullets.
+The Router tries PRIMARY_MODEL and falls back to FALLBACK_MODEL on failure.
+A per-request model override bypasses the Router (no fallback by design).
+Redis cache, cost tracking and streaming come in later bullets.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from typing import Any
 
 import litellm
 import structlog
+from litellm import Router
 
 log = structlog.get_logger()
 
@@ -37,15 +40,40 @@ class LLMWrapper:
         *,
         openai_api_key: str | None,
         anthropic_api_key: str | None,
-        default_model: str,
+        primary_model: str,
+        fallback_model: str,
         timeout: int,
         num_retries: int,
     ):
         self.openai_api_key = openai_api_key
         self.anthropic_api_key = anthropic_api_key
-        self.default_model = default_model
+        self.primary_model = primary_model
+        self.fallback_model = fallback_model
         self.timeout = timeout
         self.num_retries = num_retries
+
+        self.router = Router(
+            model_list=[
+                {
+                    "model_name": "estimator",
+                    "litellm_params": {
+                        "model": primary_model,
+                        "api_key": self._api_key_for(primary_model),
+                        "timeout": timeout,
+                    },
+                },
+                {
+                    "model_name": "estimator",
+                    "litellm_params": {
+                        "model": fallback_model,
+                        "api_key": self._api_key_for(fallback_model),
+                        "timeout": timeout,
+                    },
+                },
+            ],
+            fallbacks=[{"estimator": ["estimator"]}],
+            num_retries=num_retries,
+        )
 
     def complete(
         self,
@@ -56,8 +84,8 @@ class LLMWrapper:
         max_tokens: int = 4000,
         thinking_budget: int | None = None,
     ) -> dict[str, Any]:
-        """Single LLM call. Returns the same dict shape the old SDK helpers used."""
-        model = model_override or self.default_model
+        """Single LLM call with optional fallback. Same dict shape as before."""
+        model = model_override or self.primary_model
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
@@ -77,13 +105,7 @@ class LLMWrapper:
         )
         t0 = time.perf_counter()
         try:
-            response = litellm.completion(
-                model=model,
-                api_key=self._api_key_for(model),
-                timeout=self.timeout,
-                num_retries=self.num_retries,
-                **kwargs,
-            )
+            response = self._dispatch(model_override=model_override, **kwargs)
         except Exception as exc:
             latency_ms = int((time.perf_counter() - t0) * 1000)
             log.error(
@@ -106,6 +128,18 @@ class LLMWrapper:
             finish_reason=result["finish_reason"],
         )
         return result
+
+    def _dispatch(self, *, model_override: str | None, **kwargs: Any) -> Any:
+        """Router (with fallback) unless the caller asked for a specific model."""
+        if model_override:
+            return litellm.completion(
+                model=model_override,
+                api_key=self._api_key_for(model_override),
+                timeout=self.timeout,
+                num_retries=self.num_retries,
+                **kwargs,
+            )
+        return self.router.completion(model="estimator", **kwargs)
 
     def _api_key_for(self, model: str) -> str | None:
         if _provider_from_model(model) == "anthropic":
