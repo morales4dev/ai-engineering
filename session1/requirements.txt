@@ -1,4 +1,4 @@
-dotenv==0.9.9
+python-dotenv==1.2.3
 litellm==1.100.0
 openai==2.54.0
 rich==15.0.0

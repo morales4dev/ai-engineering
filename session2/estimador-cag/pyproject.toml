@@ -17,6 +17,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "streamlit==1.64.0",
     "structlog>=24.0",
+    "litellm>=1.50",
 ]
 
 [dependency-groups]
@@ -34,3 +35,4 @@ target-version = "py311"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["src"]
