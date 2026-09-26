@@ -3,8 +3,10 @@ from collections.abc import AsyncIterator
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
+from openai import APIConnectionError, APIStatusError, RateLimitError
 from sse_starlette.sse import EventSourceResponse
 
+from config import get_settings
 from dependencies import get_llm_wrapper
 from schemas.estimation import (
     EstimationRequest,
@@ -17,15 +19,28 @@ from services.llm_wrapper import LLMWrapper
 router = APIRouter(prefix="/api/v1", tags=["estimations"])
 log = structlog.get_logger()
 
+_CLIENT_LLM_FAILURE = "Could not generate the estimation."
+_PROVIDER_ERRORS = (RateLimitError, APIConnectionError, APIStatusError)
+
+
+def _ensure_llm_configured() -> None:
+    if get_settings().llm_configured:
+        return
+    raise HTTPException(
+        status_code=503,
+        detail="Missing OPENAI_API_KEY and ANTHROPIC_API_KEY",
+    )
+
 
 @router.post("/estimate", response_model=EstimationResponse)
-async def create_estimation(request: EstimationRequest) -> EstimationResponse:
+def create_estimation(request: EstimationRequest) -> EstimationResponse:
     """Receive a meeting transcription and return a software project estimation."""
+    _ensure_llm_configured()
     try:
         return estimate(request)
-    except LLMServiceError as exc:
-        log.error("estimation_endpoint_error", error=str(exc))
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except (*_PROVIDER_ERRORS, LLMServiceError) as exc:
+        log.exception("llm_provider_failed")
+        raise HTTPException(status_code=502, detail=_CLIENT_LLM_FAILURE) from exc
 
 
 @router.post("/estimate/stream")
@@ -36,8 +51,10 @@ async def create_estimation_stream(
     """SSE endpoint. Tokens via LLMWrapper.complete_stream, then event ``done``.
 
     Thinner than POST /estimate: default CAG prompt, no two-phase, no validation.
-    Cache hit arrives as one ``token`` event. Streamlit does not call this yet.
+    Cache hit arrives as one ``token`` event. ``streamlit_app.py`` calls this over HTTP;
+    ``streamlit_inprocess.py`` does not.
     """
+    _ensure_llm_configured()
     system_prompt = build_system_prompt()
 
     async def event_generator() -> AsyncIterator[dict]:
@@ -54,9 +71,6 @@ async def create_estimation_stream(
                 return next(chunks)
             except StopIteration:
                 return None
-            except Exception as exc:  # noqa: BLE001 — surface as SSE error event
-                log.error("estimate_stream_failed", error=str(exc), error_type=type(exc).__name__)
-                raise
 
         try:
             while True:
@@ -66,7 +80,8 @@ async def create_estimation_stream(
                 if chunk:
                     yield {"event": "token", "data": chunk}
             yield {"event": "done", "data": "[DONE]"}
-        except Exception as exc:  # noqa: BLE001
-            yield {"event": "error", "data": str(exc)}
+        except Exception:
+            log.exception("estimate_stream_failed")
+            yield {"event": "error", "data": _CLIENT_LLM_FAILURE}
 
     return EventSourceResponse(event_generator())

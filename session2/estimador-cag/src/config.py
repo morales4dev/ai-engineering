@@ -1,7 +1,6 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from utils import get_absolute_path
@@ -11,7 +10,10 @@ ENV_FILE = f"{get_absolute_path()}/../.env"
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables and .env file."""
+    """Application settings loaded from environment variables and .env file.
+
+    API keys may be missing. The process must still boot so /health can say so.
+    """
 
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8")
 
@@ -29,18 +31,12 @@ class Settings(BaseSettings):
     APP_ENV: Literal["development", "staging", "production"] = "development"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"
 
-    @model_validator(mode="after")
-    def validate_at_least_one_api_key(self) -> "Settings":
-        """LiteLLM may try either provider via fallback, so we require at least one key."""
-        if not self.OPENAI_API_KEY and not self.ANTHROPIC_API_KEY:
-            raise ValueError(
-                "At least one of OPENAI_API_KEY or ANTHROPIC_API_KEY must be set"
-            )
-        return self
-    	
+    @property
+    def llm_configured(self) -> bool:
+        return bool(self.OPENAI_API_KEY or self.ANTHROPIC_API_KEY)
+
 
 @lru_cache
 def get_settings() -> Settings:
     """Return cached application settings (singleton)."""
-    settings = Settings()
-    return settings
+    return Settings()

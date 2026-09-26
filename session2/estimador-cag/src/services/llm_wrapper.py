@@ -14,6 +14,7 @@ import structlog
 from litellm import Router
 
 from services.cache import EstimationCache
+from services.prompt_boundary import apply_untrusted_boundary
 
 log = structlog.get_logger()
 
@@ -42,9 +43,12 @@ MODEL_COSTS: dict[str, dict[str, float]] = {
 }
 
 
-def _estimate_cost(model: str, tokens_in: int, tokens_out: int) -> float:
+def _estimate_cost(model: str, tokens_in: int, tokens_out: int) -> float | None:
+    """USD cost from MODEL_COSTS, or None if the model is not in the table."""
     base = _normalise_model_name(model)
-    costs = MODEL_COSTS.get(base) or MODEL_COSTS.get(model) or {"input": 0.0, "output": 0.0}
+    costs = MODEL_COSTS.get(base) or MODEL_COSTS.get(model)
+    if costs is None:
+        return None
     return round((tokens_in * costs["input"] + tokens_out * costs["output"]) / 1_000_000, 6)
 
 
@@ -116,9 +120,10 @@ class LLMWrapper:
             return {**cached, "cache_hit": True}
 
         model = cache_key_model
+        bounded_system, bounded_user = apply_untrusted_boundary(system_prompt, user_message)
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message},
+            {"role": "system", "content": bounded_system},
+            {"role": "user", "content": bounded_user},
         ]
         kwargs = self._build_call_kwargs(
             messages=messages,
@@ -172,7 +177,7 @@ class LLMWrapper:
         """Yield token deltas for POST /estimate/stream.
 
         Cache hit: replay the full estimation as one chunk. Miss: stream live,
-        then store (cost_usd=0; LiteLLM rarely reports stream usage).
+        then store (cost_usd=None; LiteLLM rarely reports stream usage).
         """
         cache_key_model = model_override or self.primary_model
         cache_key = EstimationCache.make_key(
@@ -188,9 +193,10 @@ class LLMWrapper:
             yield cached.get("estimation", "")
             return
 
+        bounded_system, bounded_user = apply_untrusted_boundary(system_prompt, user_message)
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message},
+            {"role": "system", "content": bounded_system},
+            {"role": "user", "content": bounded_user},
         ]
         kwargs = self._build_call_kwargs(
             messages=messages,
@@ -232,7 +238,7 @@ class LLMWrapper:
                 "finish_reason": "stop",
                 "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 "latency_ms": latency_ms,
-                "cost_usd": 0.0,
+                "cost_usd": None,
             },
         )
 

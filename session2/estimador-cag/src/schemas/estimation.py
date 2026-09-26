@@ -9,7 +9,12 @@ ExampleFormat = Literal["markdown", "json", "narrative"]
 class EstimationRequest(BaseModel):
     """Incoming request containing a meeting transcription to estimate."""
 
-    transcription: str = Field(..., min_length=50, description="Meeting transcription text")
+    transcription: str = Field(
+        ...,
+        min_length=50,
+        max_length=50_000,
+        description="Meeting transcription text",
+    )
 
     preprocessing: PreprocessingMode = Field(
         default="none",
@@ -96,12 +101,20 @@ class EstimationResponse(BaseModel):
     latency_ms: int = Field(..., description="Server-side total latency in milliseconds")
     validation: StructureCheck | None = None
     cache_hit: bool = Field(default=False, description="True when the response came from Redis")
-    cost_usd: float = Field(default=0.0, description="Estimated USD cost based on token usage")
+    cost_usd: float | None = Field(
+        default=None,
+        description="Estimated USD cost from MODEL_COSTS; null if the model has no price",
+    )
 
 
 class StreamEstimationRequest(BaseModel):
     """Body for POST /estimate/stream. CAG knobs are omitted on purpose."""
 
-    transcription: str = Field(..., min_length=50, description="Meeting transcription text")
+    transcription: str = Field(
+        ...,
+        min_length=50,
+        max_length=50_000,
+        description="Meeting transcription text",
+    )
     model: str | None = Field(default=None, description="Override the default model")
     max_tokens: int = Field(default=4000, gt=0, le=16000)

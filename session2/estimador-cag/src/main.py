@@ -3,8 +3,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+# from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
 from routers.estimations import router as estimations_router
@@ -55,13 +55,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS is off on purpose. The HTML demo is same-origin; Streamlit calls from
+# Python, not a browser. Wildcard origins plus credentials is invalid CORS —
+# Starlette would echo any Origin. If a browser client appears, list its
+# origins explicitly and keep credentials off until you actually need cookies.
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["*"],
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 app.include_router(estimations_router)
 
@@ -72,12 +76,13 @@ if _STATIC_DIR.is_dir():
 
 @app.get("/health")
 async def health_check() -> dict:
-    """Return service health status."""
+    """Liveness probe. Survives a missing API key; reports it instead of dying."""
     settings = get_settings()
     return {
         "status": "healthy",
         "version": "0.1.0",
         "environment": settings.APP_ENV,
+        "llm_configured": settings.llm_configured,
     }
 
 
