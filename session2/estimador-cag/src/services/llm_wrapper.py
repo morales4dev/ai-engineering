@@ -3,7 +3,7 @@
 Timeout and retries come from Settings (`LLM_TIMEOUT` / `LLM_RETRIES`).
 The Router tries PRIMARY_MODEL and falls back to FALLBACK_MODEL on failure.
 A per-request model override bypasses the Router (no fallback by design).
-Redis cache, cost tracking and streaming come in later bullets.
+Cost tracking and streaming come in later bullets.
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ from typing import Any
 import litellm
 import structlog
 from litellm import Router
+
+from services.cache import EstimationCache
 
 log = structlog.get_logger()
 
@@ -44,6 +46,7 @@ class LLMWrapper:
         fallback_model: str,
         timeout: int,
         num_retries: int,
+        cache: EstimationCache,
     ):
         self.openai_api_key = openai_api_key
         self.anthropic_api_key = anthropic_api_key
@@ -51,6 +54,7 @@ class LLMWrapper:
         self.fallback_model = fallback_model
         self.timeout = timeout
         self.num_retries = num_retries
+        self.cache = cache
 
         self.router = Router(
             model_list=[
@@ -84,8 +88,20 @@ class LLMWrapper:
         max_tokens: int = 4000,
         thinking_budget: int | None = None,
     ) -> dict[str, Any]:
-        """Single LLM call with optional fallback. Same dict shape as before."""
-        model = model_override or self.primary_model
+        """Single LLM call with cache and optional fallback."""
+        cache_key_model = model_override or self.primary_model
+        cache_key = EstimationCache.make_key(
+            system_prompt=system_prompt,
+            user_message=user_message,
+            model=cache_key_model,
+            max_tokens=max_tokens,
+            thinking_budget=thinking_budget,
+        )
+        cached = self.cache.get(cache_key)
+        if cached:
+            return {**cached, "cache_hit": True}
+
+        model = cache_key_model
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
@@ -127,7 +143,8 @@ class LLMWrapper:
             latency_ms=latency_ms,
             finish_reason=result["finish_reason"],
         )
-        return result
+        self.cache.set(cache_key, result)
+        return {**result, "cache_hit": False}
 
     def _dispatch(self, *, model_override: str | None, **kwargs: Any) -> Any:
         """Router (with fallback) unless the caller asked for a specific model."""

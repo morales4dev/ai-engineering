@@ -1,6 +1,9 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import fakeredis
+
+from services.cache import EstimationCache
 from services.llm_wrapper import LLMWrapper
 
 
@@ -22,6 +25,7 @@ def _fake_completion(model: str, content: str = "the answer", input_tokens: int 
 
 
 def _wrapper(primary_model: str = "gpt-4o-mini") -> LLMWrapper:
+    cache = EstimationCache(fakeredis.FakeRedis(decode_responses=True), ttl=60)
     return LLMWrapper(
         openai_api_key="fake-openai",
         anthropic_api_key="fake-anthropic",
@@ -29,6 +33,7 @@ def _wrapper(primary_model: str = "gpt-4o-mini") -> LLMWrapper:
         fallback_model="claude-haiku-4-5-20251001",
         timeout=30,
         num_retries=2,
+        cache=cache,
     )
 
 
@@ -51,7 +56,7 @@ def test_complete_uses_router_and_returns_normalised_dict() -> None:
     assert result["finish_reason"] == "stop"
     assert result["usage"]["input_tokens"] == 100
     assert result["usage"]["output_tokens"] == 50
-    assert "cache_hit" not in result
+    assert result["cache_hit"] is False
     assert "cost_usd" not in result
 
 
@@ -88,6 +93,21 @@ def test_complete_with_model_override_bypasses_router() -> None:
     assert result["provider"] == "anthropic"
 
 
+def test_complete_second_call_hits_cache() -> None:
+    wrapper = _wrapper()
+    fake = _fake_completion(model="gpt-4o-mini", content="hello world")
+    with patch.object(wrapper.router, "completion", return_value=fake) as mocked:
+        first = wrapper.complete(system_prompt="sys", user_message="usr")
+    assert mocked.call_count == 1
+    assert first["cache_hit"] is False
+
+    with patch.object(wrapper.router, "completion") as mocked_again:
+        second = wrapper.complete(system_prompt="sys", user_message="usr")
+    assert mocked_again.call_count == 0
+    assert second["cache_hit"] is True
+    assert second["estimation"] == "hello world"
+
+
 def test_complete_forwards_custom_timeout_and_retries_on_override() -> None:
     wrapper = LLMWrapper(
         openai_api_key="fake-openai",
@@ -96,6 +116,7 @@ def test_complete_forwards_custom_timeout_and_retries_on_override() -> None:
         fallback_model="claude-haiku-4-5-20251001",
         timeout=12,
         num_retries=4,
+        cache=EstimationCache(fakeredis.FakeRedis(decode_responses=True), ttl=60),
     )
     fake = _fake_completion(model="gpt-4o-mini", content="ok")
     with patch("services.llm_wrapper.litellm.completion", return_value=fake) as mocked:

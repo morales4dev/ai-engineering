@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     LLM_RETRIES: int = 2
     PRIMARY_MODEL: str = "gpt-4o-mini"
     FALLBACK_MODEL: str = "claude-haiku-4-5-20251001"
+    REDIS_URL: str = "redis://localhost:6379"
+    CACHE_TTL: int = 86400
     APP_ENV: Literal["development", "staging", "production"] = "development"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"
 
