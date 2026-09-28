@@ -49,8 +49,8 @@ Aditivo. Si no mandas query, el formulario de arriba sigue igual.
 
 ## v2 y query param
 
-- [ ] `prompts/estimation/v2/` con una variación deliberada (tono o ejemplos).
-- [ ] `POST /estimate?prompt_version=v2`. Default `v1`.
+- [x] `prompts/estimation/v2/` con una variación deliberada (tono o ejemplos).
+- [x] `POST /estimate?prompt_version=v2`. Default `v1`.
 
 ---
 

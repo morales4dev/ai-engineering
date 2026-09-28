@@ -29,11 +29,26 @@ def _enum_value(raw: object) -> str:
     return str(value)
 
 
+def available_prompt_versions() -> tuple[str, ...]:
+    """Folder names under ``prompts/estimation/``."""
+    estimation_dir = _BASE_DIR / "estimation"
+    return tuple(sorted(path.name for path in estimation_dir.iterdir() if path.is_dir()))
+
+
+class UnknownPromptVersionError(ValueError):
+    """Raised when ``version`` does not match a template folder."""
+
+
 def render_estimation_prompt(
     request: EstimationRequest,
     version: str = "v1",
 ) -> tuple[str, str]:
     """Render `(system, user)` for `prompts/estimation/<version>/`."""
+    known = available_prompt_versions()
+    if version not in known:
+        raise UnknownPromptVersionError(
+            f"Unknown prompt version {version!r}. Available: {', '.join(known)}"
+        )
     context = {
         "description": request.description,
         "project_type": _enum_value(request.project_type),

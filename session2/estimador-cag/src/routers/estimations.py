@@ -2,12 +2,13 @@ import asyncio
 from collections.abc import AsyncIterator
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from openai import APIConnectionError, APIStatusError, RateLimitError
 from sse_starlette.sse import EventSourceResponse
 
 from config import get_settings
 from dependencies import get_llm_wrapper
+from prompts.loader import available_prompt_versions
 from schemas.estimation import (
     EstimationRequest,
     EstimationResponse,
@@ -33,11 +34,20 @@ def _ensure_llm_configured() -> None:
 
 
 @router.post("/estimate", response_model=EstimationResponse)
-def create_estimation(request: EstimationRequest) -> EstimationResponse:
+def create_estimation(
+    request: EstimationRequest,
+    prompt_version: str = Query("v1"),
+) -> EstimationResponse:
     """Render the versioned prompt pair and return a free-text estimation."""
+    known = available_prompt_versions()
+    if prompt_version not in known:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown prompt version {prompt_version!r}. Available: {', '.join(known)}",
+        )
     _ensure_llm_configured()
     try:
-        return estimate(request, version="v1")
+        return estimate(request, version=prompt_version)
     except (*_PROVIDER_ERRORS, LLMServiceError) as exc:
         log.exception("llm_provider_failed")
         raise HTTPException(status_code=502, detail=_CLIENT_LLM_FAILURE) from exc

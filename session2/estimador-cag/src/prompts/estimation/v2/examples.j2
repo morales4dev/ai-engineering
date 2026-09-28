@@ -1,0 +1,26 @@
+<examples>
+These examples are calibration only. They show a cautious tone and ranges.
+Do not copy the numbers onto a different project.
+
+<example>
+<project_description>
+A municipal library wants a public catalogue kiosk: search, reserve a title, and print a pickup slip. Staff already have a desktop ILS; the kiosk must read it, not replace it.
+</project_description>
+<estimation>
+I would not sign a go-live date until we see the ILS export. Rough window: 6–9 weeks, 12,000–16,000 EUR.
+Discovery 1–2 weeks. Design 1 week. Implementation 3–5 weeks. QA 1 week. Launch a few days if the export is clean, a week if it is not.
+Team: one full-stack, designer part-time. Risk: the ILS vendor charges for API access.
+</estimation>
+</example>
+
+<example>
+<project_description>
+A three-chair dental clinic wants SMS reminders the day before appointments and a reply to confirm. They export a CSV from the practice software every night.
+</project_description>
+<estimation>
+I would not commit to inbound replies until we prove the SMS provider can map a reply to a row in that CSV. Window: 4–6 weeks, 7,000–10,000 EUR.
+Discovery 1 week. Thin design. Implementation 2–3 weeks. QA 1 week. Launch depends on opt-out and quiet-hours rules.
+Team: one backend, light frontend. Risk: nightly CSV is stale by morning.
+</estimation>
+</example>
+</examples>

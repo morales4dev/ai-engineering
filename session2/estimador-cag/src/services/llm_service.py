@@ -1,19 +1,20 @@
 import time
 from collections.abc import Generator
 from dataclasses import dataclass
+from typing import Protocol
 
 import structlog
 
 from config import Settings, get_settings
 from context.examples import format_examples_for_prompt, select_examples
 from dependencies import get_llm_wrapper
+from prompts.loader import render_estimation_prompt
 from schemas.estimation import (
     EstimationRequest,
     EstimationResponse,
     ExampleFormat,
     PreprocessingMode,
 )
-from services.evaluation import evaluate_estimation_structure
 from services.llm_wrapper import _estimate_cost
 from services.prompt_boundary import apply_untrusted_boundary
 
@@ -100,8 +101,21 @@ class GenerationOptions:
     thinking_budget: int | None = None
 
 
-def options_from_request(request: EstimationRequest) -> GenerationOptions:
-    """Map the public request DTO to the internal generation knobs."""
+class CagRequestKnobs(Protocol):
+    """Session 03 knobs still read by the in-process Streamlit door."""
+
+    preprocessing: PreprocessingMode
+    example_format: ExampleFormat
+    num_examples: int
+    use_examples: bool
+    model: str | None
+    max_tokens: int
+    thinking_budget: int | None
+    evaluate: bool
+
+
+def options_from_request(request: CagRequestKnobs) -> GenerationOptions:
+    """Map session 03 CAG knobs to the internal generation options."""
     return GenerationOptions(
         preprocessing=request.preprocessing,
         example_format=request.example_format,
@@ -113,20 +127,14 @@ def options_from_request(request: EstimationRequest) -> GenerationOptions:
     )
 
 
-def build_estimation_response(request: EstimationRequest, result: dict) -> EstimationResponse:
-    """Wrap a generate_estimation result dict as the public response DTO."""
-    validation = (
-        evaluate_estimation_structure(result["estimation"], result["finish_reason"])
-        if request.evaluate
-        else None
+def estimate(request: EstimationRequest, version: str = "v1") -> EstimationResponse:
+    """Render the versioned prompt pair and call the session 03 wrapper."""
+    system_prompt, user_message = render_estimation_prompt(request, version=version)
+    result = get_llm_wrapper().complete(
+        system_prompt=system_prompt,
+        user_message=user_message,
     )
-    return EstimationResponse(**result, validation=validation)
-
-
-def estimate(request: EstimationRequest) -> EstimationResponse:
-    """Non-streaming estimation used by the FastAPI adapter."""
-    result = generate_estimation(request.transcription, options_from_request(request))
-    return build_estimation_response(request, result)
+    return EstimationResponse(text=result["estimation"], prompt_version=version)
 
 
 @dataclass

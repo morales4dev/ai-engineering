@@ -182,6 +182,8 @@ curl -X POST http://localhost:8000/api/v1/estimate \
     "output_format": "phases_table"
   }' -o salida.json
 
+# Optional: POST /api/v1/estimate?prompt_version=v2  (default is v1)
+
 jq -r '.text' salida.json > estimacion-limpia.md
 
 ### FastAPI with streaming
