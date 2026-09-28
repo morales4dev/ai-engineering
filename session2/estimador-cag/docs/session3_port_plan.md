@@ -1,6 +1,6 @@
-# Session 3 — Port plan (LiDR → ai-engineering)
+# Session 3 — Port plan (from the reference-repo)
 
-Traer las features de `ai-engineering-lidr` a `session2/estimador-cag`.
+Traer las features del reference-repo a `session2/estimador-cag`.
 Una feature por tanda. Tras cada una: revisión, y solo entonces la siguiente.
 
 Convención:

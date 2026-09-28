@@ -25,6 +25,8 @@ Later modules of the Master are expected to evolve this kind of service toward *
 
 ## Local setup
 
+Dependencies are declared in `pyproject.toml` and locked in `uv.lock`. `uv sync` installs that set into `.venv`.
+
 ```bash
 cd estimador-cag
 uv sync
@@ -162,17 +164,11 @@ estimador-cag/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── pyproject.toml
+├── uv.lock
 └── .env.example
 ```
 
 # Notes
-
-## (legacy-outdated) Install
-
-cd $WORKSPACE_HOME/ai-engineering/session2/estimador-cag
-uv venv .venv --python 3.12.12
-source .venv/bin/activate
-uv pip install --python .venv/bin/python -r requirements.txt
 
 ## Test
 
