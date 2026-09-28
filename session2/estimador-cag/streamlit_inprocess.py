@@ -19,7 +19,6 @@ from services.llm_service import (
     EstimationTokenStream,
     LLMServiceError,
     build_cag_context,
-    build_estimation_response,
     options_from_request,
 )
 
@@ -104,8 +103,6 @@ if prompt := st.chat_input("Paste a meeting transcription", submit_mode="disable
                 if token_stream.result is None:
                     st.error("The estimation stream finished without a result.")
                 else:
-                    response = build_estimation_response(request, token_stream.result)
-                    st.session_state.last_response = response.model_dump()
                     st.session_state.messages.append(
                         {"role": "assistant", "content": estimation_text}
                     )

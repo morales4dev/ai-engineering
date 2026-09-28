@@ -61,7 +61,7 @@ Compose sets `REDIS_URL=redis://redis:6379` for the API container. When you run 
 Streamlit still runs on the host (not inside Compose):
 
 ```bash
-uv run streamlit run streamlit_app.py          # HTTP SSE client — API must be up
+uv run streamlit run streamlit_app.py          # form → POST /estimate — API must be up
 uv run streamlit run streamlit_inprocess.py    # in-process SDK stream — no FastAPI
 ```
 
@@ -72,7 +72,7 @@ They look similar. They are not the same pipe.
 | Path | Entry | Transport | LLM |
 |---|---|---|---|
 | HTTP SSE | `POST /api/v1/estimate/stream` | Server-Sent Events | `LLMWrapper.complete_stream` → LiteLLM |
-| Streamlit (HTTP) | `streamlit_app.py` | HTTP client of that SSE endpoint | same as above |
+| Streamlit (HTTP) | `streamlit_app.py` | HTTP client of `POST /estimate` | `LLMWrapper.complete` |
 | Streamlit (in-process) | `streamlit_inprocess.py` | in-process iterator | `EstimationTokenStream` → OpenAI/Anthropic SDKs |
 
 ### HTTP SSE (`POST /api/v1/estimate/stream`)
@@ -123,27 +123,26 @@ sequenceDiagram
     API-->>Client: SSE event done
 ```
 
-### Streamlit (HTTP SSE client)
+### Streamlit (HTTP form)
 
-Needs the API running. Validation is local regex on the finished text (SSE has no JSON footer).
+Needs the API running. Submit sends `description` plus the three enums to `POST /estimate` and paints `text`.
 
 ```mermaid
 sequenceDiagram
     actor User
     participant UI as streamlit_app.py
-    participant API as FastAPI /estimate/stream
-    participant W as LLMWrapper.complete_stream
+    participant API as FastAPI /estimate
+    participant Loader as render_estimation_prompt
+    participant W as LLMWrapper.complete
 
-    User->>UI: paste transcription
-    UI->>API: POST SSE
-    API->>W: complete_stream()
-    loop tokens
-        W-->>API: chunk
-        API-->>UI: event token
-        UI-->>User: st.write_stream
-    end
-    API-->>UI: event done
-    UI->>UI: evaluate_estimation_structure locally
+    User->>UI: submit form
+    UI->>API: POST JSON description + enums
+    API->>Loader: request, version v1
+    Loader-->>API: system, user
+    API->>W: complete()
+    W-->>API: estimation
+    API-->>UI: text, prompt_version
+    UI-->>User: markdown text
 ```
 
 ## Project layout
@@ -159,7 +158,7 @@ estimador-cag/
 │   ├── schemas/estimation.py
 │   ├── context/examples.py
 │   └── static/sse_demo.html
-├── streamlit_app.py            # HTTP SSE client
+├── streamlit_app.py            # HTTP form → POST /estimate
 ├── streamlit_inprocess.py      # SDK stream, no FastAPI
 ├── Dockerfile
 ├── docker-compose.yml
@@ -174,11 +173,16 @@ estimador-cag/
 
 ### FastAPI without streaming
 
-curl -X POST http://localhost:8000/api/v1/estimate   -H "Content-Type: application/json"   -d '{
-    "transcription": "En la reunión con el equipo de marketing, el cliente explicó que necesita una landing page con formulario de contacto, integración con su CRM actual (HubSpot), y una sección de blog con editor WYSIWYG. El plazo ideal sería tenerlo listo en 4 semanas. El diseño ya existe en Figma."
+curl -X POST http://localhost:8000/api/v1/estimate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "En la reunión con el equipo de marketing, el cliente explicó que necesita una landing page con formulario de contacto, integración con su CRM actual (HubSpot), y una sección de blog con editor WYSIWYG. El plazo ideal sería tenerlo listo en 4 semanas. El diseño ya existe en Figma.",
+    "project_type": "web_saas",
+    "detail_level": "medium",
+    "output_format": "phases_table"
   }' -o salida.json
 
-jq -r '.estimation' salida.json > estimacion-limpia.md
+jq -r '.text' salida.json > estimacion-limpia.md
 
 ### FastAPI with streaming
 
@@ -186,7 +190,7 @@ curl -N -X POST http://localhost:8000/api/v1/estimate/stream \
   -H 'Content-Type: application/json' \
   -d '{"transcription": "We need a small CRM with auth, contacts and roles. MVP six weeks."}'
 
-### Chat HTTP SSE client (API must already be running)
+### Form HTTP client (API must already be running)
 uv run streamlit run streamlit_app.py
 ### Chat In-process (SDK stream — no FastAPI needed)
 uv run streamlit run streamlit_inprocess.py

@@ -6,13 +6,13 @@ Fuera de este plan: tests de template, `reference_projects`, log/hash del render
 
 # Templates y loader
 
-Nadie los llama todavía. Chat, `POST /estimate` y SSE siguen con el contrato de la sesión 03.
+El loader ya lo llama `POST /estimate`. SSE e in-process siguen con el contrato de la sesión 03 (`transcription`) hasta el último corte.
 
 ## Templates Jinja2 v1
 
 - [x] `prompts/estimation/v1/system.j2` — rol, `{% if %}` por `output_format` y `detail_level`, `{% include %}` de ejemplos.
-- [x] `prompts/estimation/v1/user.j2` — envuelve `description` (`<project_description>` o heading markdown).
-- [x] `prompts/estimation/v1/examples.j2` — dos o tres few-shot inventados, no copiados del enunciado.
+- [x] `prompts/estimation/v1/user.j2` — envuelve `description` en `<project_description>`.
+- [x] `prompts/estimation/v1/examples.j2` — few-shot de la rama `session_4` del repo de referencia (préstamos, meal-prep, assets).
 
 ## Loader
 
@@ -27,17 +27,17 @@ Los tres aterrizan juntos. Es el cambio de contrato: el servicio deja de aceptar
 
 ## Schemas
 
-- [ ] Entrada: `description` (20–2000), `project_type`, `detail_level`, `output_format` (enums; en JSON los strings `mobile_app`, no `MOBILE_APP`).
-- [ ] Salida: `{ text, prompt_version }`. Texto libre.
+- [x] Entrada: `description` (20–2000), `project_type`, `detail_level`, `output_format` (enums; en JSON los strings `mobile_app`, no `MOBILE_APP`).
+- [x] Salida: `{ text, prompt_version }`. Texto libre.
 
 ## POST /estimate
 
-- [ ] Body del schema nuevo. Llama al loader, manda `role: system` y `role: user` por separado al wrapper de la sesión 03.
-- [ ] Responde `prompt_version="v1"`. Modelo por defecto el que ya tengamos (`gpt-4o-mini` / Haiku).
+- [x] Body del schema nuevo. Llama al loader, manda `role: system` y `role: user` por separado al wrapper de la sesión 03.
+- [x] Responde `prompt_version="v1"`. Modelo por defecto el que ya tengamos (`gpt-4o-mini` / Haiku).
 
 ## Formulario Streamlit HTTP
 
-- [ ] En `streamlit_app.py`, `st.form` en lugar del chat. El submit arma el request y hace `POST /estimate`. Se pinta el `text`.
+- [x] En `streamlit_app.py`, `st.form` en lugar del chat. El submit arma el request y hace `POST /estimate`. Se pinta el `text`.
 
 Al parar aquí el formulario HTTP funciona. Quedan descolgadas las puertas que aún hablan `transcription` (siguiente corte no; el último).
 

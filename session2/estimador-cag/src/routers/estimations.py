@@ -34,10 +34,10 @@ def _ensure_llm_configured() -> None:
 
 @router.post("/estimate", response_model=EstimationResponse)
 def create_estimation(request: EstimationRequest) -> EstimationResponse:
-    """Receive a meeting transcription and return a software project estimation."""
+    """Render the versioned prompt pair and return a free-text estimation."""
     _ensure_llm_configured()
     try:
-        return estimate(request)
+        return estimate(request, version="v1")
     except (*_PROVIDER_ERRORS, LLMServiceError) as exc:
         log.exception("llm_provider_failed")
         raise HTTPException(status_code=502, detail=_CLIENT_LLM_FAILURE) from exc
@@ -51,8 +51,8 @@ async def create_estimation_stream(
     """SSE endpoint. Tokens via LLMWrapper.complete_stream, then event ``done``.
 
     Thinner than POST /estimate: default CAG prompt, no two-phase, no validation.
-    Cache hit arrives as one ``token`` event. ``streamlit_app.py`` calls this over HTTP;
-    ``streamlit_inprocess.py`` does not.
+    Cache hit arrives as one ``token`` event. Still the session 03 transcription
+    contract; ``streamlit_app.py`` no longer calls this.
     """
     _ensure_llm_configured()
     system_prompt = build_system_prompt()

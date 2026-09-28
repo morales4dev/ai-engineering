@@ -1,10 +1,8 @@
-"""HTTP client UI. Streams via POST /estimate/stream, not EstimationTokenStream."""
+"""HTTP client UI. Submits a typed form to POST /estimate."""
 
 from __future__ import annotations
 
 import sys
-import time
-from collections.abc import Iterator
 from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parent / "src"
@@ -13,32 +11,9 @@ if str(SRC_DIR) not in sys.path:
 
 import httpx
 import streamlit as st
-from pydantic import ValidationError
 
 from config import get_settings
-from schemas.estimation import EstimationRequest
-from services.evaluation import evaluate_estimation_structure
-from services.llm_service import build_cag_context
-
-_STRUCTURE_CHECKS = (
-    ("Title", "has_title"),
-    ("Breakdown table", "has_breakdown_table"),
-    ("Totals section", "has_totals_section"),
-    ("Team section", "has_team_section"),
-    ("Duration section", "has_duration_section"),
-    ("Hours match", "hours_match"),
-    ("Cost match", "cost_match"),
-    ("Finish reason", "finish_reason_ok"),
-)
-
-
-def _status_icon(value: bool | None) -> str:
-    if value is True:
-        return ":green[:material/check_circle:]"
-    if value is False:
-        return ":red[:material/cancel:]"
-    return ":gray[:material/remove:]"
-
+from schemas.estimation import DetailLevel, OutputFormat, ProjectType
 
 st.set_page_config(
     page_title="Software estimation",
@@ -53,156 +28,70 @@ except ValueError as exc:
     st.stop()
 
 API_BASE_URL = settings.ESTIMATOR_API_BASE_URL.rstrip("/")
-STREAM_ENDPOINT = f"{API_BASE_URL}/api/v1/estimate/stream"
-
-
-def stream_estimation(transcription: str) -> Iterator[str]:
-    """POST to the SSE endpoint and yield text chunks.
-
-    Multiple ``data:`` lines in one message are joined with ``\\n`` (SSE spec).
-    """
-    with httpx.stream(
-        "POST",
-        STREAM_ENDPOINT,
-        json={"transcription": transcription},
-        timeout=httpx.Timeout(120.0, connect=10.0),
-        headers={"Accept": "text/event-stream"},
-    ) as response:
-        response.raise_for_status()
-        current_event = "token"
-        data_lines: list[str] = []
-        for raw_line in response.iter_lines():
-            if raw_line == "":
-                if data_lines:
-                    payload_text = "\n".join(data_lines)
-                    data_lines = []
-                    if current_event == "token":
-                        yield payload_text
-                    elif current_event == "error":
-                        raise RuntimeError(payload_text)
-                    elif current_event == "done":
-                        return
-                current_event = "token"
-                continue
-            if raw_line.startswith("event:"):
-                current_event = raw_line[6:].strip()
-            elif raw_line.startswith("data:"):
-                data_lines.append(
-                    raw_line[6:] if raw_line.startswith("data: ") else raw_line[5:]
-                )
-
-
-st.session_state.setdefault("messages", [])
-st.session_state.setdefault("last_response", None)
-
-cag = build_cag_context()
+ESTIMATE_ENDPOINT = f"{API_BASE_URL}/api/v1/estimate"
 
 st.title("Software estimation")
-st.caption("Paste a meeting transcription. Tokens stream from FastAPI over SSE.")
+st.caption("Fill in the form. The service returns a free-text estimation.")
+
+with st.form("estimation_form", clear_on_submit=False):
+    description = st.text_area(
+        "Project description",
+        height=200,
+        placeholder="Describe the project: goals, key features, constraints…",
+        help="Between 20 and 2000 characters.",
+    )
+    project_type = st.selectbox(
+        "Project type",
+        options=[item.value for item in ProjectType],
+        index=1,
+    )
+    detail_level = st.radio(
+        "Detail level",
+        options=[item.value for item in DetailLevel],
+        index=1,
+        horizontal=True,
+    )
+    output_format = st.selectbox(
+        "Output format",
+        options=[item.value for item in OutputFormat],
+        index=0,
+    )
+    submitted = st.form_submit_button("Generate estimation", type="primary")
+
+if submitted:
+    if len(description.strip()) < 20:
+        st.error("The description must be at least 20 characters long.")
+    elif len(description) > 2000:
+        st.error("The description must be at most 2000 characters long.")
+    else:
+        payload = {
+            "description": description.strip(),
+            "project_type": project_type,
+            "detail_level": detail_level,
+            "output_format": output_format,
+        }
+        with st.spinner("Calling the estimator service…"):
+            try:
+                response = httpx.post(
+                    ESTIMATE_ENDPOINT,
+                    json=payload,
+                    timeout=httpx.Timeout(120.0, connect=10.0),
+                )
+                response.raise_for_status()
+                body = response.json()
+            except httpx.HTTPStatusError as exc:
+                st.error(
+                    f"Service returned {exc.response.status_code}: {exc.response.text}"
+                )
+            except httpx.HTTPError as exc:
+                st.error(f"Could not reach the estimator at `{ESTIMATE_ENDPOINT}`: {exc}")
+            else:
+                st.markdown(f"**Prompt version:** `{body.get('prompt_version', '?')}`")
+                st.markdown(body.get("text", ""))
 
 with st.sidebar:
     st.header("Service")
-    st.code(STREAM_ENDPOINT, language="text")
+    st.code(ESTIMATE_ENDPOINT, language="text")
     st.markdown(f"**Primary model:** `{settings.PRIMARY_MODEL}`")
     st.markdown(f"**Fallback model:** `{settings.FALLBACK_MODEL}`")
     st.markdown(f"**Cache TTL:** `{settings.CACHE_TTL}s`")
-    if st.button("Clear chat history"):
-        st.session_state.messages = []
-        st.session_state.last_response = None
-        st.rerun()
-
-    st.header("CAG context")
-
-    with st.expander("Active system prompt", expanded=False):
-        st.code(cag.system_prompt, language="markdown")
-
-    with st.expander("Injected CAG examples", expanded=False):
-        if cag.examples_text:
-            st.code(cag.examples_text, language="markdown")
-        else:
-            st.caption("No CAG examples are injected for the current request defaults.")
-
-    last_call_slot = st.empty()
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-if prompt := st.chat_input("Paste a meeting transcription", submit_mode="disable"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    try:
-        request = EstimationRequest(transcription=prompt)
-    except ValidationError as exc:
-        st.error(" ".join(err["msg"] for err in exc.errors()))
-    else:
-        with st.chat_message("assistant"):
-            try:
-                started = time.perf_counter()
-                estimation_text = st.write_stream(stream_estimation(request.transcription))
-                latency_ms = int((time.perf_counter() - started) * 1000)
-            except (httpx.HTTPError, RuntimeError) as exc:
-                st.error(f"Could not reach the estimator at `{STREAM_ENDPOINT}`: {exc}")
-            else:
-                validation = evaluate_estimation_structure(estimation_text, "stop")
-                st.session_state.last_response = {
-                    "model": settings.PRIMARY_MODEL,
-                    "usage": {"input_tokens": None, "output_tokens": None},
-                    "latency_ms": latency_ms,
-                    "validation": validation.model_dump(),
-                }
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": estimation_text}
-                )
-
-with last_call_slot.container():
-    last_response = st.session_state.last_response
-    validation = last_response.get("validation") if last_response else None
-
-    with st.expander("Validation", expanded=False):
-        if validation is None:
-            st.caption("No validation yet.")
-        else:
-            st.metric("Score", f"{validation['score']:.0%}")
-            st.markdown(
-                "\n".join(
-                    f"{_status_icon(validation[key])} {label}"
-                    for label, key in _STRUCTURE_CHECKS
-                )
-            )
-            declared_hours = validation["declared_total_hours"]
-            sum_hours = validation["sum_row_hours"]
-            declared_cost = validation["declared_total_cost"]
-            sum_cost = validation["sum_row_cost"]
-            st.caption(
-                "Hours: declared "
-                f"{declared_hours if declared_hours is not None else '—'}, "
-                f"sum {sum_hours if sum_hours is not None else '—'}"
-            )
-            st.caption(
-                "Cost: declared "
-                f"{declared_cost if declared_cost is not None else '—'}, "
-                f"sum {sum_cost if sum_cost is not None else '—'}"
-            )
-            issues = validation.get("issues") or []
-            if issues:
-                st.markdown("**Issues**")
-                for issue in issues:
-                    st.caption(f":red[:material/error:] {issue}")
-
-    st.subheader("Last call")
-    if last_response is None:
-        st.caption("No estimation yet.")
-    else:
-        usage = last_response["usage"]
-        st.metric("Model", last_response["model"])
-        st.caption("Primary model. SSE does not say if fallback ran.")
-        in_tok = usage["input_tokens"]
-        out_tok = usage["output_tokens"]
-        st.metric("Input tokens", in_tok if in_tok is not None else "—")
-        st.metric("Output tokens", out_tok if out_tok is not None else "—")
-        st.caption("SSE has no usage payload.")
-        st.metric("Response time", f"{last_response['latency_ms']} ms")
-        st.caption("Client-side wait, not server latency_ms.")

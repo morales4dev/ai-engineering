@@ -2,17 +2,15 @@
 
 On-disk layout: ``prompts/<use_case>/<version>/<role>.j2``. Switching version
 is a string at the call site, not a refactor.
-
-Nothing in the session 03 HTTP/SSE/chat path calls this yet. The request is
-duck-typed until the next cut lands the new schema.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
+
+from schemas.estimation import EstimationRequest
 
 _BASE_DIR = Path(__file__).resolve().parent
 
@@ -26,28 +24,13 @@ _env = Environment(
 )
 
 
-class PromptRequest(Protocol):
-    """Duck-typed request for `render_estimation_prompt`.
-
-    Expected string values:
-    - project_type: mobile_app | web_saas | internal_tool | data_pipeline
-    - detail_level: summary | medium | detailed
-    - output_format: phases_table | line_items | narrative
-    """
-
-    description: str
-    project_type: object
-    detail_level: object
-    output_format: object
-
-
 def _enum_value(raw: object) -> str:
     value = getattr(raw, "value", raw)
     return str(value)
 
 
 def render_estimation_prompt(
-    request: PromptRequest,
+    request: EstimationRequest,
     version: str = "v1",
 ) -> tuple[str, str]:
     """Render `(system, user)` for `prompts/estimation/<version>/`."""

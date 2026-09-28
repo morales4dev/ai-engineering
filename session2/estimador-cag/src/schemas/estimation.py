@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -6,64 +7,44 @@ PreprocessingMode = Literal["none", "inline_cleaning", "two_phase"]
 ExampleFormat = Literal["markdown", "json", "narrative"]
 
 
+class ProjectType(str, Enum):
+    MOBILE_APP = "mobile_app"
+    WEB_SAAS = "web_saas"
+    INTERNAL_TOOL = "internal_tool"
+    DATA_PIPELINE = "data_pipeline"
+
+
+class DetailLevel(str, Enum):
+    SUMMARY = "summary"
+    MEDIUM = "medium"
+    DETAILED = "detailed"
+
+
+class OutputFormat(str, Enum):
+    PHASES_TABLE = "phases_table"
+    LINE_ITEMS = "line_items"
+    NARRATIVE = "narrative"
+
+
 class EstimationRequest(BaseModel):
-    """Incoming request containing a meeting transcription to estimate."""
+    """Typed form payload for POST /estimate."""
 
-    transcription: str = Field(
+    description: str = Field(
         ...,
-        min_length=50,
-        max_length=50_000,
-        description="Meeting transcription text",
+        min_length=20,
+        max_length=2000,
+        description="Free-text description of the project to estimate.",
     )
-
-    preprocessing: PreprocessingMode = Field(
-        default="none",
-        description="Input preprocessing strategy: none | inline_cleaning | two_phase",
-    )
-    example_format: ExampleFormat = Field(
-        default="markdown",
-        description="Format used to render the CAG examples in the system prompt",
-    )
-    num_examples: int = Field(
-        default=3,
-        ge=0,
-        le=5,
-        description="Number of canonical examples to inject (0..N where N=len(CANONICAL_EXAMPLES))",
-    )
-    use_examples: bool = Field(
-        default=True,
-        description="Toggle the CAG examples block on/off (overrides num_examples when False)",
-    )
-    model: str | None = Field(
-        default=None,
-        description="Override the default LLM_MODEL for this request",
-    )
-    max_tokens: int = Field(
-        default=4000,
-        gt=0,
-        le=16000,
-        description="Maximum output tokens for the estimation call",
-    )
-    thinking_budget: int | None = Field(
-        default=None,
-        ge=0,
-        le=16000,
-        description="Extended thinking budget (Anthropic only). Ignored for OpenAI.",
-    )
-    evaluate: bool = Field(
-        default=True,
-        description="Run the structural evaluation on the generated estimation",
-    )
+    project_type: ProjectType = Field(description="Coarse-grained project category.")
+    detail_level: DetailLevel = Field(description="How deep the estimation should go.")
+    output_format: OutputFormat = Field(description="Shape of the rendered estimation.")
 
 
-class TokenUsage(BaseModel):
-    """Token consumption details from the LLM call(s)."""
+class EstimationResponse(BaseModel):
+    """Free-text estimation plus the prompt version that produced it."""
 
-    input_tokens: int
-    output_tokens: int
-    total_tokens: int
-    preprocessing_input_tokens: int = 0
-    preprocessing_output_tokens: int = 0
+    text: str = Field(description="Estimation rendered by the LLM as free text.")
+    prompt_version: str = Field(description="Identifier of the prompt template used.")
 
 
 class StructureCheck(BaseModel):
@@ -85,30 +66,8 @@ class StructureCheck(BaseModel):
     issues: list[str]
 
 
-class EstimationResponse(BaseModel):
-    """Response containing the generated estimation and metadata."""
-
-    estimation: str = Field(..., description="Generated software estimation in markdown")
-    model: str = Field(..., description="LLM model used")
-    provider: str = Field(..., description="LLM provider used")
-    usage: TokenUsage
-    finish_reason: str = Field(..., description="Stop reason reported by the provider")
-    preprocessing: PreprocessingMode = "none"
-    extracted_requirements: str | None = Field(
-        default=None,
-        description="Phase-1 output when preprocessing='two_phase'; null otherwise",
-    )
-    latency_ms: int = Field(..., description="Server-side total latency in milliseconds")
-    validation: StructureCheck | None = None
-    cache_hit: bool = Field(default=False, description="True when the response came from Redis")
-    cost_usd: float | None = Field(
-        default=None,
-        description="Estimated USD cost from MODEL_COSTS; null if the model has no price",
-    )
-
-
 class StreamEstimationRequest(BaseModel):
-    """Body for POST /estimate/stream. CAG knobs are omitted on purpose."""
+    """Body for POST /estimate/stream. Still the session 03 transcription contract."""
 
     transcription: str = Field(
         ...,
