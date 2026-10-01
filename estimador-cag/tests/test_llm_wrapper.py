@@ -160,35 +160,3 @@ def test_thinking_budget_pads_max_tokens_when_anthropic_override() -> None:
     kwargs = direct.call_args.kwargs
     assert kwargs["thinking"] == {"type": "enabled", "budget_tokens": 4096}
     assert kwargs["max_tokens"] == 4096 + 1024
-
-
-def test_complete_stream_yields_chunks_and_caches() -> None:
-    wrapper = _wrapper()
-    chunks = [
-        SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="Hello "))]),
-        SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="world"))]),
-        SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=None))]),
-    ]
-    with patch.object(wrapper.router, "completion", return_value=iter(chunks)) as mocked:
-        emitted = list(
-            wrapper.complete_stream(
-                system_prompt="sys",
-                user_message="usr",
-                model_override=None,
-                max_tokens=4000,
-            )
-        )
-    assert "".join(emitted) == "Hello world"
-    assert mocked.call_args.kwargs["stream"] is True
-
-    with patch.object(wrapper.router, "completion") as mocked_again:
-        replayed = list(
-            wrapper.complete_stream(
-                system_prompt="sys",
-                user_message="usr",
-                model_override=None,
-                max_tokens=4000,
-            )
-        )
-    assert mocked_again.call_count == 0
-    assert replayed == ["Hello world"]

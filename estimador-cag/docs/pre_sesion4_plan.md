@@ -60,13 +60,12 @@ Mismo schema y mismo loader. No se mantienen dos contratos.
 
 ## POST /estimate/stream
 
-- [ ] Body alineado al `EstimationRequest` nuevo. Loader → `complete_stream`.
+- [x] Eliminado (endpoint, `complete_stream`, `StreamEstimationRequest`, `sse-starlette`). En `session_4_live` tampoco está.
 
 ## HTML SSE
 
-- [ ] El demo estático manda `description` + enums (o defaults) en lugar de `{ transcription }`.
+- [x] Eliminada (`sse_demo.html` + mount `/static`). Lidr también la borra.
 
 ## Streamlit in-process
 
-- [ ] Mismo formulario que el HTTP. Estimación en bloque: `estimate(request)`.
-- [ ] Si se quiere seguir streameando tokens: `complete_stream` + loader, no `EstimationTokenStream` / CAG de la sesión 03.
+- [x] Eliminado (`streamlit_inprocess.py` + `EstimationTokenStream` / SDKs). Lidr no lo tenía.

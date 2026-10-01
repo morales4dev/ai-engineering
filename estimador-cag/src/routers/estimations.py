@@ -1,21 +1,11 @@
-import asyncio
-from collections.abc import AsyncIterator
-
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from openai import APIConnectionError, APIStatusError, RateLimitError
-from sse_starlette.sse import EventSourceResponse
 
 from config import get_settings
-from dependencies import get_llm_wrapper
 from prompts.loader import available_prompt_versions
-from schemas.estimation import (
-    EstimationRequest,
-    EstimationResponse,
-    StreamEstimationRequest,
-)
-from services.llm_service import LLMServiceError, build_system_prompt, estimate
-from services.llm_wrapper import LLMWrapper
+from schemas.estimation import EstimationRequest, EstimationResponse
+from services.llm_service import LLMServiceError, estimate
 
 router = APIRouter(prefix="/api/v1", tags=["estimations"])
 log = structlog.get_logger()
@@ -51,47 +41,3 @@ def create_estimation(
     except (*_PROVIDER_ERRORS, LLMServiceError) as exc:
         log.exception("llm_provider_failed")
         raise HTTPException(status_code=502, detail=_CLIENT_LLM_FAILURE) from exc
-
-
-@router.post("/estimate/stream")
-async def create_estimation_stream(
-    request: StreamEstimationRequest,
-    wrapper: LLMWrapper = Depends(get_llm_wrapper),
-) -> EventSourceResponse:
-    """SSE endpoint. Tokens via LLMWrapper.complete_stream, then event ``done``.
-
-    Thinner than POST /estimate: default CAG prompt, no two-phase, no validation.
-    Cache hit arrives as one ``token`` event. Still the session 03 transcription
-    contract; ``streamlit_app.py`` no longer calls this.
-    """
-    _ensure_llm_configured()
-    system_prompt = build_system_prompt()
-
-    async def event_generator() -> AsyncIterator[dict]:
-        loop = asyncio.get_running_loop()
-        chunks = wrapper.complete_stream(
-            system_prompt=system_prompt,
-            user_message=request.transcription,
-            model_override=request.model,
-            max_tokens=request.max_tokens,
-        )
-
-        def _next_chunk() -> str | None:
-            try:
-                return next(chunks)
-            except StopIteration:
-                return None
-
-        try:
-            while True:
-                chunk = await loop.run_in_executor(None, _next_chunk)
-                if chunk is None:
-                    break
-                if chunk:
-                    yield {"event": "token", "data": chunk}
-            yield {"event": "done", "data": "[DONE]"}
-        except Exception:
-            log.exception("estimate_stream_failed")
-            yield {"event": "error", "data": _CLIENT_LLM_FAILURE}
-
-    return EventSourceResponse(event_generator())

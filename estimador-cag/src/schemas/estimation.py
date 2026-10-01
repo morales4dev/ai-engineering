@@ -64,16 +64,3 @@ class StructureCheck(BaseModel):
     finish_reason_ok: bool
     score: float
     issues: list[str]
-
-
-class StreamEstimationRequest(BaseModel):
-    """Body for POST /estimate/stream. Still the session 03 transcription contract."""
-
-    transcription: str = Field(
-        ...,
-        min_length=50,
-        max_length=50_000,
-        description="Meeting transcription text",
-    )
-    model: str | None = Field(default=None, description="Override the default model")
-    max_tokens: int = Field(default=4000, gt=0, le=16000)

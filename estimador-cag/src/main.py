@@ -1,9 +1,7 @@
 import structlog
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 # from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
@@ -55,10 +53,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS is off on purpose. The HTML demo is same-origin; Streamlit calls from
-# Python, not a browser. Wildcard origins plus credentials is invalid CORS —
-# Starlette would echo any Origin. If a browser client appears, list its
-# origins explicitly and keep credentials off until you actually need cookies.
+# CORS is off on purpose. Streamlit calls from Python, not a browser.
+# Wildcard origins plus credentials is invalid CORS — Starlette would echo
+# any Origin. If a browser client appears, list its origins explicitly and
+# keep credentials off until you actually need cookies.
 # app.add_middleware(
 #     CORSMiddleware,
 #     allow_origins=["*"],
@@ -68,10 +66,6 @@ app = FastAPI(
 # )
 
 app.include_router(estimations_router)
-
-_STATIC_DIR = Path(__file__).resolve().parent / "static"
-if _STATIC_DIR.is_dir():
-    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 
 @app.get("/health")
