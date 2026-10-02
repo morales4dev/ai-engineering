@@ -1,4 +1,4 @@
-"""Untrusted-user boundary. Used by the LiteLLM wrapper and by EstimationTokenStream."""
+"""Untrusted-user boundary. Used by the LiteLLM wrapper."""
 
 from __future__ import annotations
 

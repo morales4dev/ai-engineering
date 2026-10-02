@@ -1,12 +1,8 @@
-"""LiteLLM client for blocking ``complete()`` and HTTP SSE ``complete_stream()``.
-
-Not used by Streamlit: that UI still streams via ``EstimationTokenStream`` + the SDKs.
-"""
+"""LiteLLM client for blocking ``complete()`` calls."""
 
 from __future__ import annotations
 
 import time
-from collections.abc import Iterator
 from typing import Any
 
 import litellm
@@ -166,82 +162,6 @@ class LLMWrapper:
         self.cache.set(cache_key, result)
         return {**result, "cache_hit": False}
 
-    def complete_stream(
-        self,
-        *,
-        system_prompt: str,
-        user_message: str,
-        model_override: str | None = None,
-        max_tokens: int = 4000,
-    ) -> Iterator[str]:
-        """Yield token deltas for POST /estimate/stream.
-
-        Cache hit: replay the full estimation as one chunk. Miss: stream live,
-        then store (cost_usd=None; LiteLLM rarely reports stream usage).
-        """
-        cache_key_model = model_override or self.primary_model
-        cache_key = EstimationCache.make_key(
-            system_prompt=system_prompt,
-            user_message=user_message,
-            model=cache_key_model,
-            max_tokens=max_tokens,
-            thinking_budget=None,
-        )
-        cached = self.cache.get(cache_key)
-        if cached:
-            log.info("stream_cache_hit", chars=len(cached.get("estimation", "")))
-            yield cached.get("estimation", "")
-            return
-
-        bounded_system, bounded_user = apply_untrusted_boundary(system_prompt, user_message)
-        messages = [
-            {"role": "system", "content": bounded_system},
-            {"role": "user", "content": bounded_user},
-        ]
-        kwargs = self._build_call_kwargs(
-            messages=messages,
-            max_tokens=max_tokens,
-            thinking_budget=None,
-            model=cache_key_model,
-            stream=True,
-        )
-
-        log.info("llm_stream_started", model=cache_key_model)
-        t0 = time.perf_counter()
-        full_text: list[str] = []
-        try:
-            response = self._dispatch(model_override=model_override, **kwargs)
-            for chunk in response:
-                delta = _extract_delta(chunk)
-                if delta:
-                    full_text.append(delta)
-                    yield delta
-        except Exception as exc:
-            latency_ms = int((time.perf_counter() - t0) * 1000)
-            log.error(
-                "llm_stream_failed",
-                error_type=type(exc).__name__,
-                error=str(exc),
-                latency_ms=latency_ms,
-            )
-            raise
-
-        latency_ms = int((time.perf_counter() - t0) * 1000)
-        rendered = "".join(full_text)
-        log.info("llm_stream_completed", latency_ms=latency_ms, chars=len(rendered))
-        self.cache.set(
-            cache_key,
-            {
-                "estimation": rendered,
-                "model": cache_key_model,
-                "provider": _provider_from_model(cache_key_model),
-                "finish_reason": "stop",
-                "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
-                "latency_ms": latency_ms,
-                "cost_usd": None,
-            },
-        )
-
     def _dispatch(self, *, model_override: str | None, **kwargs: Any) -> Any:
         """PRIMARY→FALLBACK via the Router. A model override skips the Router: no fallback."""
         if model_override:
@@ -266,14 +186,11 @@ class LLMWrapper:
         max_tokens: int,
         thinking_budget: int | None,
         model: str,
-        stream: bool = False,
     ) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
             "messages": messages,
             "max_tokens": max_tokens,
         }
-        if stream:
-            kwargs["stream"] = True
         if thinking_budget is None:
             return kwargs
 
@@ -313,14 +230,4 @@ class LLMWrapper:
             "latency_ms": latency_ms,
             "cost_usd": _estimate_cost(model, input_tokens, output_tokens),
         }
-
-
-def _extract_delta(chunk: Any) -> str:
-    """Pull the text delta out of a LiteLLM streaming chunk."""
-    try:
-        delta = chunk.choices[0].delta
-    except (AttributeError, IndexError):
-        return ""
-    content = getattr(delta, "content", None)
-    return content or ""
 
