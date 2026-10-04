@@ -15,6 +15,10 @@ WORKDIR /app
 # are only reinstalled when pyproject.toml or uv.lock actually change.
 COPY pyproject.toml uv.lock* ./
 
+# Keep the venv outside /app so a compose bind-mount of ./src:/app cannot
+# hide it (and so we do not need a named volume that goes stale on rebuild).
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+
 # Install production dependencies only (no dev tools like pytest/ruff).
 # --no-install-project skips installing our own package (we just need deps).
 # uv will generate the lockfile if it doesn't exist yet.
@@ -36,17 +40,17 @@ RUN groupadd --system appgroup && \
 WORKDIR /app
 
 # Bring in the pre-built virtual environment from the builder stage.
-COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /opt/venv /opt/venv
 
 # Copy application source code (FastAPI entrypoint: main:app under /app).
 COPY src/ /app/
 
 # Ensure the non-root user owns everything it needs to run.
-RUN chown -R appuser:appgroup /app
+RUN chown -R appuser:appgroup /app /opt/venv
 
 # Put the virtual environment's bin directory first on PATH so `python` and
 # `uvicorn` resolve to the versions installed inside the venv.
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH=/app
 # Print logs immediately instead of buffering — critical for container logging.
 ENV PYTHONUNBUFFERED=1
