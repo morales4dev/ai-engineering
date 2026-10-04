@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from config import get_settings
 from routers.estimations import router as estimations_router
+from services.history import init_db
 
 
 def configure_logging() -> None:
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):
     log = structlog.get_logger()
     settings = get_settings()
     log.info("application_started", environment=settings.APP_ENV)
+    init_db()
     yield
     log.info("application_shutdown")
 

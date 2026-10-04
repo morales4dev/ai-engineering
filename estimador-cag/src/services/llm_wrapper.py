@@ -1,16 +1,18 @@
-"""LiteLLM client for blocking ``complete()`` calls."""
+"""LiteLLM client for Instructor structured calls."""
 
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, TypeVar
 
+import instructor
 import litellm
 import structlog
-from litellm import Router
+from pydantic import BaseModel
 
-from services.cache import EstimationCache
 from services.prompt_boundary import apply_untrusted_boundary
+
+T = TypeVar("T", bound=BaseModel)
 
 log = structlog.get_logger()
 
@@ -29,27 +31,8 @@ def _provider_from_model(model: str) -> str:
     return "unknown"
 
 
-# Cost per 1M tokens (USD). Update as pricing changes.
-MODEL_COSTS: dict[str, dict[str, float]] = {
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
-    "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
-    "claude-sonnet-4-5": {"input": 3.00, "output": 15.00},
-}
-
-
-def _estimate_cost(model: str, tokens_in: int, tokens_out: int) -> float | None:
-    """USD cost from MODEL_COSTS, or None if the model is not in the table."""
-    base = _normalise_model_name(model)
-    costs = MODEL_COSTS.get(base) or MODEL_COSTS.get(model)
-    if costs is None:
-        return None
-    return round((tokens_in * costs["input"] + tokens_out * costs["output"]) / 1_000_000, 6)
-
-
 class LLMWrapper:
-    """Unified blocking LLM client. One seam for every non-streaming call."""
+    """Structured LLM client. Caches live in ``estimate()``, not here."""
 
     def __init__(
         self,
@@ -57,90 +40,56 @@ class LLMWrapper:
         openai_api_key: str | None,
         anthropic_api_key: str | None,
         primary_model: str,
-        fallback_model: str,
         timeout: int,
-        num_retries: int,
-        cache: EstimationCache,
     ):
         self.openai_api_key = openai_api_key
         self.anthropic_api_key = anthropic_api_key
         self.primary_model = primary_model
-        self.fallback_model = fallback_model
         self.timeout = timeout
-        self.num_retries = num_retries
-        self.cache = cache
+        self._instructor = instructor.from_litellm(litellm.completion)
 
-        self.router = Router(
-            model_list=[
-                {
-                    "model_name": "estimator",
-                    "litellm_params": {
-                        "model": primary_model,
-                        "api_key": self._api_key_for(primary_model),
-                        "timeout": timeout,
-                    },
-                },
-                {
-                    "model_name": "estimator",
-                    "litellm_params": {
-                        "model": fallback_model,
-                        "api_key": self._api_key_for(fallback_model),
-                        "timeout": timeout,
-                    },
-                },
-            ],
-            fallbacks=[{"estimator": ["estimator"]}],
-            num_retries=num_retries,
-        )
-
-    def complete(
+    def complete_structured(
         self,
         *,
         system_prompt: str,
         user_message: str,
+        response_model: type[T],
         model_override: str | None = None,
         max_tokens: int = 4000,
-        thinking_budget: int | None = None,
-    ) -> dict[str, Any]:
-        """Single LLM call with cache and optional fallback."""
-        cache_key_model = model_override or self.primary_model
-        cache_key = EstimationCache.make_key(
-            system_prompt=system_prompt,
-            user_message=user_message,
-            model=cache_key_model,
-            max_tokens=max_tokens,
-            thinking_budget=thinking_budget,
-        )
-        cached = self.cache.get(cache_key)
-        if cached:
-            return {**cached, "cache_hit": True}
+        max_retries: int = 6,
+    ) -> tuple[T, dict[str, Any]]:
+        """Call the LLM via Instructor and return ``(model_instance, meta)``.
 
-        model = cache_key_model
+        Instructor re-prompts up to ``max_retries`` when a Pydantic validator
+        raises. Exact/semantic cache get/set stay in ``estimate()``.
+        """
+        target_model = model_override or self.primary_model
         bounded_system, bounded_user = apply_untrusted_boundary(system_prompt, user_message)
         messages = [
             {"role": "system", "content": bounded_system},
             {"role": "user", "content": bounded_user},
         ]
-        kwargs = self._build_call_kwargs(
-            messages=messages,
-            max_tokens=max_tokens,
-            thinking_budget=thinking_budget,
-            model=model,
-        )
 
         log.info(
-            "llm_call_started",
-            mode="blocking",
-            model=model,
-            has_thinking=thinking_budget is not None,
+            "llm_structured_call_started",
+            model=target_model,
+            response_model=response_model.__name__,
         )
         t0 = time.perf_counter()
         try:
-            response = self._dispatch(model_override=model_override, **kwargs)
+            result = self._instructor.chat.completions.create(
+                model=target_model,
+                api_key=self._api_key_for(target_model),
+                timeout=self.timeout,
+                messages=messages,
+                response_model=response_model,
+                max_tokens=max_tokens,
+                max_retries=max_retries,
+            )
         except Exception as exc:
             latency_ms = int((time.perf_counter() - t0) * 1000)
             log.error(
-                "llm_call_failed",
+                "llm_structured_call_failed",
                 error_type=type(exc).__name__,
                 error=str(exc),
                 latency_ms=latency_ms,
@@ -148,86 +97,20 @@ class LLMWrapper:
             raise
 
         latency_ms = int((time.perf_counter() - t0) * 1000)
-        result = self._normalise_response(response, latency_ms=latency_ms)
+        meta = {
+            "model": _normalise_model_name(target_model),
+            "provider": _provider_from_model(target_model),
+            "latency_ms": latency_ms,
+        }
         log.info(
-            "llm_call_completed",
-            model=result["model"],
-            provider=result["provider"],
-            input_tokens=result["usage"]["input_tokens"],
-            output_tokens=result["usage"]["output_tokens"],
-            cost_usd=result["cost_usd"],
+            "llm_structured_call_completed",
+            model=meta["model"],
+            provider=meta["provider"],
             latency_ms=latency_ms,
-            finish_reason=result["finish_reason"],
         )
-        self.cache.set(cache_key, result)
-        return {**result, "cache_hit": False}
-
-    def _dispatch(self, *, model_override: str | None, **kwargs: Any) -> Any:
-        """PRIMARY→FALLBACK via the Router. A model override skips the Router: no fallback."""
-        if model_override:
-            return litellm.completion(
-                model=model_override,
-                api_key=self._api_key_for(model_override),
-                timeout=self.timeout,
-                num_retries=self.num_retries,
-                **kwargs,
-            )
-        return self.router.completion(model="estimator", **kwargs)
+        return result, meta
 
     def _api_key_for(self, model: str) -> str | None:
         if _provider_from_model(model) == "anthropic":
             return self.anthropic_api_key
         return self.openai_api_key
-
-    def _build_call_kwargs(
-        self,
-        *,
-        messages: list[dict],
-        max_tokens: int,
-        thinking_budget: int | None,
-        model: str,
-    ) -> dict[str, Any]:
-        kwargs: dict[str, Any] = {
-            "messages": messages,
-            "max_tokens": max_tokens,
-        }
-        if thinking_budget is None:
-            return kwargs
-
-        if _provider_from_model(model) == "anthropic":
-            kwargs["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
-            kwargs["max_tokens"] = max(max_tokens, thinking_budget + 1024)
-        else:
-            log.warning(
-                "thinking_budget_ignored_for_provider",
-                provider=_provider_from_model(model),
-                model=model,
-            )
-        return kwargs
-
-    @staticmethod
-    def _normalise_response(response: Any, *, latency_ms: int) -> dict[str, Any]:
-        choice = response.choices[0]
-        finish_reason = (choice.finish_reason or "stop").lower()
-        usage = response.usage
-        input_tokens = getattr(usage, "prompt_tokens", 0) or 0
-        output_tokens = getattr(usage, "completion_tokens", 0) or 0
-        total_tokens = getattr(usage, "total_tokens", input_tokens + output_tokens) or (
-            input_tokens + output_tokens
-        )
-
-        model = _normalise_model_name(response.model)
-        return {
-            "estimation": choice.message.content or "",
-            "model": model,
-            "provider": _provider_from_model(model),
-            "finish_reason": finish_reason,
-            "usage": {
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "total_tokens": total_tokens,
-            },
-            "latency_ms": latency_ms,
-            "cost_usd": _estimate_cost(model, input_tokens, output_tokens),
-        }
-
