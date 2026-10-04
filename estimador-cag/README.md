@@ -70,7 +70,7 @@ Streamlit is the HTTP client of `POST /estimate`.
 
 ### Streamlit (HTTP form)
 
-Needs the API running. Submit sends `description` plus the three enums to `POST /estimate` and paints `result` (summary, phases, totals, confidence). A 400 from input guardrails is shown as `reason` + `message`. The Recent tab lists the last 20 via `GET /api/v1/estimations` and reopens one via `GET /api/v1/estimations/{id}`. Streamlit does not talk to SQL, Redis, or the LLM.
+Needs the API running. Submit sends `description` plus the three enums to `POST /estimate` and paints `result` (summary, phases, totals, confidence). While the POST is in flight the UI rotates phase labels (Discovery, Design, Implementation, QA, Launch) — wait UX, not SSE. A 400 from input guardrails is shown as `reason` + `message`. The Recent tab lists the last 20 via `GET /api/v1/estimations` and reopens one via `GET /api/v1/estimations/{id}`. Streamlit does not talk to SQL, Redis, or the LLM.
 
 ```mermaid
 sequenceDiagram

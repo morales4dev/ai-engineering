@@ -13,7 +13,7 @@ Reference: Lidr `origin/session_4_live` on `ai-engineering-lidr`.
 | 3 | Exact-match cache | [x] |
 | 4 | Semantic cache | [x] |
 | 5 | Persistent history (FastAPI) | [x] |
-| 6 | Flashy Streamlit wait | [] |
+| 6 | Flashy Streamlit wait | [x] |
 | 7 | Clean-up | [] |
 
 ## Incorporation order (not runtime)

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sys
+import threading
+import time
 from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parent / "src"
@@ -35,6 +37,45 @@ except ValueError as exc:
 API_BASE_URL = settings.ESTIMATOR_API_BASE_URL.rstrip("/")
 ESTIMATE_ENDPOINT = f"{API_BASE_URL}/api/v1/estimate"
 HISTORY_ENDPOINT = f"{API_BASE_URL}/api/v1/estimations"
+
+WAIT_PHASES = ("Discovery", "Design", "Implementation", "QA", "Launch")
+WAIT_PHASE_SECONDS = 2
+
+
+def _post_estimate_with_phase_wait(payload: dict) -> httpx.Response:
+    """POST /estimate while rotating phase labels. Wait UX, not SSE."""
+    box: dict = {}
+
+    def _call() -> None:
+        try:
+            box["response"] = httpx.post(
+                ESTIMATE_ENDPOINT,
+                json=payload,
+                timeout=httpx.Timeout(120.0, connect=10.0),
+            )
+        except Exception as exc:  # noqa: BLE001 — re-raised in the UI thread
+            box["error"] = exc
+
+    worker = threading.Thread(target=_call, daemon=True)
+    worker.start()
+    started = time.monotonic()
+    with st.status("Discovery…", expanded=True) as status:
+        phase_line = st.empty()
+        while worker.is_alive():
+            elapsed = int(time.monotonic() - started)
+            phase = WAIT_PHASES[(elapsed // WAIT_PHASE_SECONDS) % len(WAIT_PHASES)]
+            minutes, seconds = divmod(elapsed, 60)
+            status.update(label=f"{phase}…")
+            phase_line.markdown(f"{phase} · `{minutes:02d}:{seconds:02d}`")
+            worker.join(timeout=0.4)
+        if "error" in box:
+            status.update(label="Could not generate the estimation", state="error")
+        else:
+            status.update(label="Estimation ready", state="complete", expanded=False)
+
+    if "error" in box:
+        raise box["error"]
+    return box["response"]
 
 
 def _show_http_error(exc: httpx.HTTPStatusError) -> None:
@@ -142,23 +183,18 @@ with new_tab:
                 "detail_level": detail_level,
                 "output_format": output_format,
             }
-            with st.spinner("Calling the estimator service…"):
-                try:
-                    response = httpx.post(
-                        ESTIMATE_ENDPOINT,
-                        json=payload,
-                        timeout=httpx.Timeout(120.0, connect=10.0),
-                    )
-                    response.raise_for_status()
-                    body = response.json()
-                except httpx.HTTPStatusError as exc:
-                    _show_http_error(exc)
-                except httpx.HTTPError as exc:
-                    st.error(
-                        f"Could not reach the estimator at `{ESTIMATE_ENDPOINT}`: {exc}"
-                    )
-                else:
-                    _render_result(body)
+            try:
+                response = _post_estimate_with_phase_wait(payload)
+                response.raise_for_status()
+                body = response.json()
+            except httpx.HTTPStatusError as exc:
+                _show_http_error(exc)
+            except httpx.HTTPError as exc:
+                st.error(
+                    f"Could not reach the estimator at `{ESTIMATE_ENDPOINT}`: {exc}"
+                )
+            else:
+                _render_result(body)
 
 with history_tab:
     st.subheader("Recent estimations")
