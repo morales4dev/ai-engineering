@@ -14,7 +14,7 @@ Reference: Lidr `origin/session_4_live` on `ai-engineering-lidr`.
 | 4 | Semantic cache | [x] |
 | 5 | Persistent history (FastAPI) | [x] |
 | 6 | Flashy Streamlit wait | [x] |
-| 7 | Clean-up | [] |
+| 7 | Clean-up | [x] |
 
 ## Incorporation order (not runtime)
 

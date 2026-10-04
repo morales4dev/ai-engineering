@@ -27,10 +27,7 @@ def get_llm_wrapper() -> LLMWrapper:
         openai_api_key=settings.OPENAI_API_KEY,
         anthropic_api_key=settings.ANTHROPIC_API_KEY,
         primary_model=settings.PRIMARY_MODEL,
-        fallback_model=settings.FALLBACK_MODEL,
         timeout=settings.LLM_TIMEOUT,
-        num_retries=settings.LLM_RETRIES,
-        cache=get_cache(),
     )
 
 

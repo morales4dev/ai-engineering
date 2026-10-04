@@ -6,7 +6,7 @@ The design and reference implementation this project follows come from the LiDR 
 
 ## What is CAG and why use it
 
-CAG (Cache Augmented Generation) injects relevant context directly into the LLM system prompt as static text. Here, reference estimations are inlined as examples — no vector database and no retrieval step.
+CAG (Cache Augmented Generation) injects relevant context directly into the LLM system prompt as static text. Live few-shot examples live in the Jinja templates (`prompts/estimation/v1|v2/examples.j2`) — no vector store and no retrieval step.
 
 That is a good first stage because:
 
@@ -130,9 +130,8 @@ estimador-cag/
 │   ├── routers/estimations.py  # POST /estimate + GET history
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
-│   ├── services/               # LiteLLM wrapper, caches, history, CAG
-│   ├── schemas/estimation.py
-│   └── context/examples.py
+│   ├── services/               # estimate(), wrapper, exact cache, history
+│   └── schemas/estimation.py
 ├── streamlit_app.py            # HTTP form + history GETs
 ├── Dockerfile
 ├── docker-compose.yml
@@ -162,13 +161,4 @@ jq '.result' salida.json
 
 ### Form HTTP client (API must already be running)
 uv run streamlit run streamlit_app.py
-
-## Future improvements
-
-### evaluation.py
-
-  • bool(hours_match) / bool(cost_match) treats None as fail. If the table does not parse, those two checks drag the score down even though hours_match/cost_match stay None and
-    no mismatch issue is logged. That is a harsh scorer, not a missing feature.
-  • Costs are parsed with _to_int (digits only) while the schema types them as float. 1.234,56 vs 1,234.56 can go wrong the same way in both.
-  • has_duration_section is true if the word week/weeks appears anywhere. Cheap heuristic. Same in both.
 

@@ -13,7 +13,7 @@ from schemas.estimation import (
     EstimationResponse,
 )
 from services.history import HistoryUnavailable, get_estimation, list_estimations
-from services.llm_service import LLMServiceError, estimate
+from services.llm_service import estimate
 
 router = APIRouter(prefix="/api/v1", tags=["estimations"])
 log = structlog.get_logger()
@@ -61,7 +61,7 @@ def create_estimation(
             status_code=400,
             detail={"reason": exc.reason, "message": exc.message},
         ) from exc
-    except (*_PROVIDER_ERRORS, LLMServiceError) as exc:
+    except _PROVIDER_ERRORS as exc:
         log.exception("llm_provider_failed")
         raise HTTPException(status_code=502, detail=_CLIENT_LLM_FAILURE) from exc
 

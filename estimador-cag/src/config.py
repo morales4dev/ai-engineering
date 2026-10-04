@@ -19,10 +19,7 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
-    LLM_PROVIDER: Literal["openai", "anthropic"] = "anthropic"
-    LLM_MODEL: str = "claude-haiku-4-5"
     LLM_TIMEOUT: int = 30
-    LLM_RETRIES: int = 2
     PRIMARY_MODEL: str = "gpt-4o-mini"
     FALLBACK_MODEL: str = "claude-haiku-4-5-20251001"
     REDIS_URL: str = "redis://localhost:6379"
