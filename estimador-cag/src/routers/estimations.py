@@ -1,5 +1,6 @@
 import structlog
 from fastapi import APIRouter, HTTPException, Query
+from instructor.core import InstructorRetryException
 from openai import APIConnectionError, APIStatusError, RateLimitError
 
 from config import get_settings
@@ -11,7 +12,12 @@ router = APIRouter(prefix="/api/v1", tags=["estimations"])
 log = structlog.get_logger()
 
 _CLIENT_LLM_FAILURE = "Could not generate the estimation."
-_PROVIDER_ERRORS = (RateLimitError, APIConnectionError, APIStatusError)
+_PROVIDER_ERRORS = (
+    RateLimitError,
+    APIConnectionError,
+    APIStatusError,
+    InstructorRetryException,
+)
 
 
 def _ensure_llm_configured() -> None:
@@ -28,7 +34,7 @@ def create_estimation(
     request: EstimationRequest,
     prompt_version: str = Query("v1"),
 ) -> EstimationResponse:
-    """Render the versioned prompt pair and return a free-text estimation."""
+    """Render the versioned prompt pair and return a structured estimation."""
     known = available_prompt_versions()
     if prompt_version not in known:
         raise HTTPException(

@@ -4,6 +4,18 @@ Bring `session_4_live` (Lidr) into `estimador-cag` without copying Rails. FastAP
 
 Reference: Lidr `origin/session_4_live` on `ai-engineering-lidr`.
 
+## Summary
+
+| # | Title | OK |
+|---|-------|----|
+| 1 | `EstimationResult` + Instructor | [x] |
+| 2 | Input + output guardrails | [] |
+| 3 | Exact-match cache | [] |
+| 4 | Semantic cache | [] |
+| 5 | Persistent history (FastAPI) | [] |
+| 6 | Flashy Streamlit wait | [] |
+| 7 | Clean-up | [] |
+
 ## Incorporation order (not runtime)
 
 1. **`EstimationResult` + Instructor** — response is no longer free-text `text`.

@@ -69,7 +69,7 @@ Streamlit is the HTTP client of `POST /estimate`.
 
 ### Streamlit (HTTP form)
 
-Needs the API running. Submit sends `description` plus the three enums to `POST /estimate` and paints `text`.
+Needs the API running. Submit sends `description` plus the three enums to `POST /estimate` and paints `result` (summary, phases, totals, confidence).
 
 ```mermaid
 sequenceDiagram
@@ -77,16 +77,16 @@ sequenceDiagram
     participant UI as streamlit_app.py
     participant API as FastAPI /estimate
     participant Loader as render_estimation_prompt
-    participant W as LLMWrapper.complete
+    participant W as LLMWrapper.complete_structured
 
     User->>UI: submit form
     UI->>API: POST JSON description + enums
     API->>Loader: request, version v1
     Loader-->>API: system, user
-    API->>W: complete()
-    W-->>API: estimation
-    API-->>UI: text, prompt_version
-    UI-->>User: markdown text
+    API->>W: complete_structured(EstimationResult)
+    W-->>API: result
+    API-->>UI: result, prompt_version, cached
+    UI-->>User: summary, phases, totals, confidence
 ```
 
 ## Project layout
@@ -126,7 +126,7 @@ curl -X POST http://localhost:8000/api/v1/estimate \
 
 # Optional: POST /api/v1/estimate?prompt_version=v2  (default is v1)
 
-jq -r '.text' salida.json > estimacion-limpia.md
+jq '.result' salida.json
 
 ### Form HTTP client (API must already be running)
 uv run streamlit run streamlit_app.py

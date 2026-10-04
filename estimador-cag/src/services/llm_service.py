@@ -10,6 +10,7 @@ from prompts.loader import render_estimation_prompt
 from schemas.estimation import (
     EstimationRequest,
     EstimationResponse,
+    EstimationResult,
     ExampleFormat,
     PreprocessingMode,
 )
@@ -99,13 +100,22 @@ class GenerationOptions:
 
 
 def estimate(request: EstimationRequest, version: str = "v1") -> EstimationResponse:
-    """Render the versioned prompt pair and call the session 03 wrapper."""
+    """Render the versioned prompt pair and return a validated EstimationResult."""
     system_prompt, user_message = render_estimation_prompt(request, version=version)
-    result = get_llm_wrapper().complete(
+    result, meta = get_llm_wrapper().complete_structured(
         system_prompt=system_prompt,
         user_message=user_message,
+        response_model=EstimationResult,
     )
-    return EstimationResponse(text=result["estimation"], prompt_version=version)
+    log.info(
+        "estimation_generated",
+        prompt_version=version,
+        confidence_pct=result.confidence_pct,
+        total_cost_eur=result.total_cost_eur,
+        phases=len(result.phases),
+        **meta,
+    )
+    return EstimationResponse(result=result, prompt_version=version, cached=False)
 
 
 @dataclass

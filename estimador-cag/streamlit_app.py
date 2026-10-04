@@ -13,7 +13,12 @@ import httpx
 import streamlit as st
 
 from config import get_settings
-from schemas.estimation import DetailLevel, OutputFormat, ProjectType
+from schemas.estimation import (
+    OUT_OF_SCOPE_PREFIX,
+    DetailLevel,
+    OutputFormat,
+    ProjectType,
+)
 
 st.set_page_config(
     page_title="Software estimation",
@@ -31,7 +36,7 @@ API_BASE_URL = settings.ESTIMATOR_API_BASE_URL.rstrip("/")
 ESTIMATE_ENDPOINT = f"{API_BASE_URL}/api/v1/estimate"
 
 st.title("Software estimation")
-st.caption("Fill in the form. The service returns a free-text estimation.")
+st.caption("Fill in the form. The service returns a structured estimation.")
 
 with st.form("estimation_form", clear_on_submit=False):
     description = st.text_area(
@@ -86,8 +91,50 @@ if submitted:
             except httpx.HTTPError as exc:
                 st.error(f"Could not reach the estimator at `{ESTIMATE_ENDPOINT}`: {exc}")
             else:
-                st.markdown(f"**Prompt version:** `{body.get('prompt_version', '?')}`")
-                st.markdown(body.get("text", ""))
+                result = body.get("result") or {}
+                prompt_version = body.get("prompt_version", "?")
+                st.badge(f"prompt {prompt_version}", icon=":material/description:")
+                if body.get("cached"):
+                    st.badge("cached", icon=":material/cached:", color="green")
+
+                summary = result.get("summary", "")
+                if summary.startswith(OUT_OF_SCOPE_PREFIX):
+                    st.warning(summary)
+                else:
+                    st.markdown(summary)
+
+                with st.container(horizontal=True):
+                    st.metric(
+                        "Duration",
+                        f"{result.get('total_duration_weeks', '?')} wk",
+                        border=True,
+                    )
+                    cost = result.get("total_cost_eur")
+                    st.metric(
+                        "Cost",
+                        f"{cost:,} €" if isinstance(cost, int) else "?",
+                        border=True,
+                    )
+                    confidence = result.get("confidence_pct")
+                    st.metric(
+                        "Confidence",
+                        f"{confidence}%" if isinstance(confidence, int) else "?",
+                        border=True,
+                    )
+
+                phases = result.get("phases") or []
+                st.subheader("Phases")
+                st.table(
+                    [
+                        {
+                            "Phase": phase.get("name", ""),
+                            "Weeks": phase.get("duration_weeks"),
+                            "Cost (EUR)": phase.get("cost_eur"),
+                            "Summary": phase.get("summary", ""),
+                        }
+                        for phase in phases
+                    ]
+                )
 
 with st.sidebar:
     st.header("Service")
