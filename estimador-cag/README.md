@@ -64,6 +64,18 @@ Streamlit still runs on the host (not inside Compose):
 uv run streamlit run streamlit_app.py          # form → POST /estimate — API must be up
 ```
 
+## Logs
+
+### Histórico
+```bash
+docker logs estimator
+```
+
+### En vivo, siguiente submit
+```bash
+docker logs -f estimator       
+```
+
 ## HTTP client
 
 Streamlit is the HTTP client of `POST /estimate`.
