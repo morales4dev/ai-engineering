@@ -1,3 +1,5 @@
+import hashlib
+import json
 import time
 from dataclasses import dataclass
 
@@ -5,7 +7,7 @@ import structlog
 
 from config import Settings, get_settings
 from context.examples import format_examples_for_prompt, select_examples
-from dependencies import get_llm_wrapper, get_openai_client
+from dependencies import get_cache, get_llm_wrapper, get_openai_client
 from guardrails.input import check_input
 from guardrails.output import enforce_scope_response
 from prompts.loader import render_estimation_prompt
@@ -101,16 +103,46 @@ class GenerationOptions:
     thinking_budget: int | None = None
 
 
+def _exact_cache_key(request: EstimationRequest, prompt_version: str, model: str) -> str:
+    """SHA-256 of the typed request + prompt version + model. Prefix is v2 on purpose
+    so session-3 prompt-hash keys (`estimation:{digest}`) miss instead of colliding.
+    """
+    payload = json.dumps(
+        {
+            "description": request.description,
+            "project_type": request.project_type.value,
+            "detail_level": request.detail_level.value,
+            "output_format": request.output_format.value,
+            "prompt_version": prompt_version,
+            "model": model,
+        },
+        sort_keys=True,
+    )
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"estimation:v2:{digest}"
+
+
 def estimate(request: EstimationRequest, version: str = "v1") -> EstimationResponse:
-    """check_input → LLM → enforce_scope_response. Cache hooks land in later steps."""
+    """check_input → exact get → LLM → filter → exact set."""
     check_input(request.description, openai_client=get_openai_client())
+
+    wrapper = get_llm_wrapper()
+    cache = get_cache()
+    cache_key = _exact_cache_key(request, version, wrapper.primary_model)
+    cached = cache.get(cache_key)
+    if cached:
+        log.info("estimation_cache_hit", kind="exact", key_prefix=cache_key[:24])
+        result = EstimationResult.model_validate(cached)
+        return EstimationResponse(result=result, prompt_version=version, cached=True)
+
     system_prompt, user_message = render_estimation_prompt(request, version=version)
-    result, meta = get_llm_wrapper().complete_structured(
+    result, meta = wrapper.complete_structured(
         system_prompt=system_prompt,
         user_message=user_message,
         response_model=EstimationResult,
     )
     result = enforce_scope_response(result)
+    cache.set(cache_key, result.model_dump(mode="json"))
     log.info(
         "estimation_generated",
         prompt_version=version,

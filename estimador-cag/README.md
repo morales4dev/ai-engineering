@@ -77,6 +77,7 @@ sequenceDiagram
     participant UI as streamlit_app.py
     participant API as FastAPI /estimate
     participant In as check_input
+    participant Exact as exact cache
     participant Loader as render_estimation_prompt
     participant W as LLMWrapper.complete_structured
     participant Out as enforce_scope_response
@@ -88,14 +89,21 @@ sequenceDiagram
         In-->>API: reason, message
         API-->>UI: 400
     else ok
-        API->>Loader: request, version v1
-        Loader-->>API: system, user
-        API->>W: complete_structured(EstimationResult)
-        W-->>API: result
-        API->>Out: filter
-        Out-->>API: result
-        API-->>UI: result, prompt_version, cached
-        UI-->>User: summary, phases, totals, confidence
+        API->>Exact: get estimation:v2
+        alt exact hit
+            Exact-->>API: result
+            API-->>UI: result, cached=true
+        else miss
+            API->>Loader: request, version v1
+            Loader-->>API: system, user
+            API->>W: complete_structured(EstimationResult)
+            W-->>API: result
+            API->>Out: filter
+            Out-->>API: result
+            API->>Exact: set EstimationResult
+            API-->>UI: result, prompt_version, cached=false
+            UI-->>User: summary, phases, totals, confidence
+        end
     end
 ```
 
