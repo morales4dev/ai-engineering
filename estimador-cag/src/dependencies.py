@@ -2,6 +2,8 @@
 
 from functools import lru_cache
 
+from openai import OpenAI
+
 from config import get_settings
 from services.cache import EstimationCache
 from services.llm_wrapper import LLMWrapper
@@ -25,3 +27,12 @@ def get_llm_wrapper() -> LLMWrapper:
         num_retries=settings.LLM_RETRIES,
         cache=get_cache(),
     )
+
+
+@lru_cache
+def get_openai_client() -> OpenAI | None:
+    """OpenAI client for moderation (step 2) and later embeddings. None without a key."""
+    settings = get_settings()
+    if not settings.OPENAI_API_KEY:
+        return None
+    return OpenAI(api_key=settings.OPENAI_API_KEY)

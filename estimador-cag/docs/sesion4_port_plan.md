@@ -9,7 +9,7 @@ Reference: Lidr `origin/session_4_live` on `ai-engineering-lidr`.
 | # | Title | OK |
 |---|-------|----|
 | 1 | `EstimationResult` + Instructor | [x] |
-| 2 | Input + output guardrails | [] |
+| 2 | Input + output guardrails | [x] |
 | 3 | Exact-match cache | [] |
 | 4 | Semantic cache | [] |
 | 5 | Persistent history (FastAPI) | [] |

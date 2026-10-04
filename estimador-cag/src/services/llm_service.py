@@ -5,7 +5,9 @@ import structlog
 
 from config import Settings, get_settings
 from context.examples import format_examples_for_prompt, select_examples
-from dependencies import get_llm_wrapper
+from dependencies import get_llm_wrapper, get_openai_client
+from guardrails.input import check_input
+from guardrails.output import enforce_scope_response
 from prompts.loader import render_estimation_prompt
 from schemas.estimation import (
     EstimationRequest,
@@ -100,13 +102,15 @@ class GenerationOptions:
 
 
 def estimate(request: EstimationRequest, version: str = "v1") -> EstimationResponse:
-    """Render the versioned prompt pair and return a validated EstimationResult."""
+    """check_input → LLM → enforce_scope_response. Cache hooks land in later steps."""
+    check_input(request.description, openai_client=get_openai_client())
     system_prompt, user_message = render_estimation_prompt(request, version=version)
     result, meta = get_llm_wrapper().complete_structured(
         system_prompt=system_prompt,
         user_message=user_message,
         response_model=EstimationResult,
     )
+    result = enforce_scope_response(result)
     log.info(
         "estimation_generated",
         prompt_version=version,

@@ -4,6 +4,7 @@ from instructor.core import InstructorRetryException
 from openai import APIConnectionError, APIStatusError, RateLimitError
 
 from config import get_settings
+from guardrails.input import InputGuardrailViolation
 from prompts.loader import available_prompt_versions
 from schemas.estimation import EstimationRequest, EstimationResponse
 from services.llm_service import LLMServiceError, estimate
@@ -44,6 +45,16 @@ def create_estimation(
     _ensure_llm_configured()
     try:
         return estimate(request, version=prompt_version)
+    except InputGuardrailViolation as exc:
+        log.info(
+            "estimation_blocked_by_input_guardrail",
+            reason=exc.reason,
+            message=exc.message,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={"reason": exc.reason, "message": exc.message},
+        ) from exc
     except (*_PROVIDER_ERRORS, LLMServiceError) as exc:
         log.exception("llm_provider_failed")
         raise HTTPException(status_code=502, detail=_CLIENT_LLM_FAILURE) from exc

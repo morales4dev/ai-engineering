@@ -69,24 +69,34 @@ Streamlit is the HTTP client of `POST /estimate`.
 
 ### Streamlit (HTTP form)
 
-Needs the API running. Submit sends `description` plus the three enums to `POST /estimate` and paints `result` (summary, phases, totals, confidence).
+Needs the API running. Submit sends `description` plus the three enums to `POST /estimate` and paints `result` (summary, phases, totals, confidence). A 400 from input guardrails is shown as `reason` + `message`.
 
 ```mermaid
 sequenceDiagram
     actor User
     participant UI as streamlit_app.py
     participant API as FastAPI /estimate
+    participant In as check_input
     participant Loader as render_estimation_prompt
     participant W as LLMWrapper.complete_structured
+    participant Out as enforce_scope_response
 
     User->>UI: submit form
     UI->>API: POST JSON description + enums
-    API->>Loader: request, version v1
-    Loader-->>API: system, user
-    API->>W: complete_structured(EstimationResult)
-    W-->>API: result
-    API-->>UI: result, prompt_version, cached
-    UI-->>User: summary, phases, totals, confidence
+    API->>In: description
+    alt InputGuardrailViolation
+        In-->>API: reason, message
+        API-->>UI: 400
+    else ok
+        API->>Loader: request, version v1
+        Loader-->>API: system, user
+        API->>W: complete_structured(EstimationResult)
+        W-->>API: result
+        API->>Out: filter
+        Out-->>API: result
+        API-->>UI: result, prompt_version, cached
+        UI-->>User: summary, phases, totals, confidence
+    end
 ```
 
 ## Project layout
@@ -98,6 +108,7 @@ estimador-cag/
 │   ├── config.py               # Pydantic Settings
 │   ├── dependencies.py         # wrapper + Redis cache singletons
 │   ├── routers/estimations.py  # POST /estimate
+│   ├── guardrails/             # input check (exception) + output filter
 │   ├── services/               # LiteLLM wrapper, cache, CAG, evaluation
 │   ├── schemas/estimation.py
 │   └── context/examples.py

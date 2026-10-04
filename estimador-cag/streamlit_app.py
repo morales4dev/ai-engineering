@@ -35,6 +35,22 @@ except ValueError as exc:
 API_BASE_URL = settings.ESTIMATOR_API_BASE_URL.rstrip("/")
 ESTIMATE_ENDPOINT = f"{API_BASE_URL}/api/v1/estimate"
 
+
+def _show_http_error(exc: httpx.HTTPStatusError) -> None:
+    """Render a 400 guardrail payload as reason + message; fall back to the raw body."""
+    if exc.response.status_code == 400:
+        try:
+            detail = exc.response.json().get("detail")
+        except ValueError:
+            detail = None
+        if isinstance(detail, dict) and detail.get("message"):
+            reason = detail.get("reason") or "blocked"
+            st.badge(str(reason), icon=":material/block:", color="orange")
+            st.error(detail["message"])
+            return
+    st.error(f"Service returned {exc.response.status_code}: {exc.response.text}")
+
+
 st.title("Software estimation")
 st.caption("Fill in the form. The service returns a structured estimation.")
 
@@ -85,9 +101,7 @@ if submitted:
                 response.raise_for_status()
                 body = response.json()
             except httpx.HTTPStatusError as exc:
-                st.error(
-                    f"Service returned {exc.response.status_code}: {exc.response.text}"
-                )
+                _show_http_error(exc)
             except httpx.HTTPError as exc:
                 st.error(f"Could not reach the estimator at `{ESTIMATE_ENDPOINT}`: {exc}")
             else:
