@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     SEMANTIC_CACHE_THRESHOLD: float = 0.85
     SEMANTIC_CACHE_TTL: int = 86400
     SEMANTIC_CACHE_LOG_ONLY: bool = False
+    DATABASE_URL: str | None = None
     ESTIMATOR_API_BASE_URL: str = "http://localhost:8000"
     APP_ENV: Literal["development", "staging", "production"] = "development"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"

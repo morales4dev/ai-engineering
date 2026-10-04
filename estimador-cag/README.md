@@ -54,6 +54,7 @@ docker compose up --build
 
 - API: [http://localhost:8000](http://localhost:8000)
 - Redis Stack: `redis://localhost:6379` · RedisInsight: [http://localhost:8001](http://localhost:8001)
+- Postgres: `localhost:5432` (user/password/db `postgres` / `postgres` / `estimator`)
 
 Compose sets `REDIS_URL=redis://redis:6379` for the API container. When you run uvicorn on the host, keep `redis://localhost:6379` in `.env`.
 
@@ -69,7 +70,7 @@ Streamlit is the HTTP client of `POST /estimate`.
 
 ### Streamlit (HTTP form)
 
-Needs the API running. Submit sends `description` plus the three enums to `POST /estimate` and paints `result` (summary, phases, totals, confidence). A 400 from input guardrails is shown as `reason` + `message`.
+Needs the API running. Submit sends `description` plus the three enums to `POST /estimate` and paints `result` (summary, phases, totals, confidence). A 400 from input guardrails is shown as `reason` + `message`. The Recent tab lists the last 20 via `GET /api/v1/estimations` and reopens one via `GET /api/v1/estimations/{id}`. Streamlit does not talk to SQL, Redis, or the LLM.
 
 ```mermaid
 sequenceDiagram
@@ -93,11 +94,13 @@ sequenceDiagram
         API->>Exact: get estimation:v2
         alt exact hit
             Exact-->>API: result
+            API->>API: persist row
             API-->>UI: result, cached=true
         else exact miss
             API->>Sem: lookup bucket + cosine
             alt semantic hit
                 Sem-->>API: result
+                API->>API: persist row
                 API-->>UI: result, cached=true
             else miss
                 API->>Loader: request, version v1
@@ -108,6 +111,7 @@ sequenceDiagram
                 Out-->>API: result
                 API->>Exact: set EstimationResult
                 API->>Sem: store result_json
+                API->>API: persist row
                 API-->>UI: result, prompt_version, cached=false
                 UI-->>User: summary, phases, totals, confidence
             end
@@ -123,13 +127,13 @@ estimador-cag/
 │   ├── main.py                 # FastAPI app, /health
 │   ├── config.py               # Pydantic Settings
 │   ├── dependencies.py         # wrapper + Redis cache singletons
-│   ├── routers/estimations.py  # POST /estimate
+│   ├── routers/estimations.py  # POST /estimate + GET history
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
-│   ├── services/               # LiteLLM wrapper, exact cache, CAG, evaluation
+│   ├── services/               # LiteLLM wrapper, caches, history, CAG
 │   ├── schemas/estimation.py
 │   └── context/examples.py
-├── streamlit_app.py            # HTTP form → POST /estimate
+├── streamlit_app.py            # HTTP form + history GETs
 ├── Dockerfile
 ├── docker-compose.yml
 ├── pyproject.toml

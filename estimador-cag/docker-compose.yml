@@ -16,9 +16,12 @@ services:
     # (redis://localhost:6379) is meant for running uvicorn outside Docker.
     environment:
       REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/estimator
 
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
 
     # Bind-mount src/ so code changes are reflected immediately inside the
@@ -58,6 +61,25 @@ services:
       retries: 3
     restart: unless-stopped
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: estimator-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: estimator
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d estimator"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   redis_data:
+  postgres_data:
   estimator_venv:

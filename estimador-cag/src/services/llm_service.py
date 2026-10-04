@@ -11,6 +11,7 @@ from dependencies import get_cache, get_llm_wrapper, get_openai_client, get_sema
 from guardrails.input import check_input
 from guardrails.output import enforce_scope_response
 from prompts.loader import render_estimation_prompt
+from services.history import persist_estimation
 from schemas.estimation import (
     EstimationRequest,
     EstimationResponse,
@@ -122,8 +123,20 @@ def _exact_cache_key(request: EstimationRequest, prompt_version: str, model: str
     return f"estimation:v2:{digest}"
 
 
+def _persist_and_return(
+    request: EstimationRequest,
+    result: EstimationResult,
+    version: str,
+    *,
+    cached: bool,
+) -> EstimationResponse:
+    response = EstimationResponse(result=result, prompt_version=version, cached=cached)
+    persist_estimation(request, response)
+    return response
+
+
 def estimate(request: EstimationRequest, version: str = "v1") -> EstimationResponse:
-    """check_input → exact get → semantic get → LLM → filter → cache writes."""
+    """check_input → exact get → semantic get → LLM → filter → cache writes → persist."""
     check_input(request.description, openai_client=get_openai_client())
 
     wrapper = get_llm_wrapper()
@@ -134,15 +147,13 @@ def estimate(request: EstimationRequest, version: str = "v1") -> EstimationRespo
     if cached:
         log.info("estimation_cache_hit", kind="exact", key_prefix=cache_key[:24])
         result = EstimationResult.model_validate(cached)
-        return EstimationResponse(result=result, prompt_version=version, cached=True)
+        return _persist_and_return(request, result, version, cached=True)
 
     if semantic is not None:
         semantic_hit = semantic.lookup(request, version)
         if semantic_hit is not None:
             log.info("estimation_cache_hit", kind="semantic")
-            return EstimationResponse(
-                result=semantic_hit, prompt_version=version, cached=True
-            )
+            return _persist_and_return(request, semantic_hit, version, cached=True)
 
     system_prompt, user_message = render_estimation_prompt(request, version=version)
     result, meta = wrapper.complete_structured(
@@ -162,7 +173,7 @@ def estimate(request: EstimationRequest, version: str = "v1") -> EstimationRespo
         phases=len(result.phases),
         **meta,
     )
-    return EstimationResponse(result=result, prompt_version=version, cached=False)
+    return _persist_and_return(request, result, version, cached=False)
 
 
 @dataclass

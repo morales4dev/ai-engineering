@@ -12,7 +12,7 @@ Reference: Lidr `origin/session_4_live` on `ai-engineering-lidr`.
 | 2 | Input + output guardrails | [x] |
 | 3 | Exact-match cache | [x] |
 | 4 | Semantic cache | [x] |
-| 5 | Persistent history (FastAPI) | [] |
+| 5 | Persistent history (FastAPI) | [x] |
 | 6 | Flashy Streamlit wait | [] |
 | 7 | Clean-up | [] |
 

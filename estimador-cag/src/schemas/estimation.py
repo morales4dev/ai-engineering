@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 from typing import Literal
 
@@ -95,6 +96,30 @@ class EstimationResponse(BaseModel):
     result: EstimationResult
     prompt_version: str = Field(description="Identifier of the prompt template used.")
     cached: bool = False
+
+
+class EstimationListItem(BaseModel):
+    """One row in GET /estimations. No result payload."""
+
+    id: int
+    description_preview: str
+    project_type: ProjectType
+    detail_level: DetailLevel
+    output_format: OutputFormat
+    prompt_version: str | None
+    cached: bool
+    created_at: datetime
+
+
+class EstimationListResponse(BaseModel):
+    items: list[EstimationListItem]
+
+
+class EstimationDetail(EstimationListItem):
+    """GET /estimations/{id}. Same list fields plus full description and result."""
+
+    description: str
+    result: EstimationResult
 
 
 class StructureCheck(BaseModel):
