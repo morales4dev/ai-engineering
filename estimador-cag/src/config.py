@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     FALLBACK_MODEL: str = "claude-haiku-4-5-20251001"
     REDIS_URL: str = "redis://localhost:6379"
     CACHE_TTL: int = 86400
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    SEMANTIC_CACHE_THRESHOLD: float = 0.85
+    SEMANTIC_CACHE_TTL: int = 86400
+    SEMANTIC_CACHE_LOG_ONLY: bool = False
     ESTIMATOR_API_BASE_URL: str = "http://localhost:8000"
     APP_ENV: Literal["development", "staging", "production"] = "development"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"

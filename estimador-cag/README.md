@@ -21,7 +21,7 @@ Later modules of the Master are expected to evolve this kind of service toward *
 - Python **3.11+**
 - [uv](https://docs.astral.sh/uv/)
 - An **API key** for OpenAI and/or Anthropic (at least one; both if you want provider fallback)
-- **Redis** if you want the exact-match cache (the API still answers if Redis is down)
+- **Redis Stack** if you want exact-match and semantic cache (the API still answers if Redis is down; semantic cache also needs an OpenAI key)
 
 ## Local setup
 
@@ -53,7 +53,7 @@ docker compose up --build
 ```
 
 - API: [http://localhost:8000](http://localhost:8000)
-- Redis: `redis://localhost:6379`
+- Redis Stack: `redis://localhost:6379` · RedisInsight: [http://localhost:8001](http://localhost:8001)
 
 Compose sets `REDIS_URL=redis://redis:6379` for the API container. When you run uvicorn on the host, keep `redis://localhost:6379` in `.env`.
 
@@ -78,6 +78,7 @@ sequenceDiagram
     participant API as FastAPI /estimate
     participant In as check_input
     participant Exact as exact cache
+    participant Sem as semantic cache
     participant Loader as render_estimation_prompt
     participant W as LLMWrapper.complete_structured
     participant Out as enforce_scope_response
@@ -93,16 +94,23 @@ sequenceDiagram
         alt exact hit
             Exact-->>API: result
             API-->>UI: result, cached=true
-        else miss
-            API->>Loader: request, version v1
-            Loader-->>API: system, user
-            API->>W: complete_structured(EstimationResult)
-            W-->>API: result
-            API->>Out: filter
-            Out-->>API: result
-            API->>Exact: set EstimationResult
-            API-->>UI: result, prompt_version, cached=false
-            UI-->>User: summary, phases, totals, confidence
+        else exact miss
+            API->>Sem: lookup bucket + cosine
+            alt semantic hit
+                Sem-->>API: result
+                API-->>UI: result, cached=true
+            else miss
+                API->>Loader: request, version v1
+                Loader-->>API: system, user
+                API->>W: complete_structured(EstimationResult)
+                W-->>API: result
+                API->>Out: filter
+                Out-->>API: result
+                API->>Exact: set EstimationResult
+                API->>Sem: store result_json
+                API-->>UI: result, prompt_version, cached=false
+                UI-->>User: summary, phases, totals, confidence
+            end
         end
     end
 ```
@@ -117,7 +125,8 @@ estimador-cag/
 │   ├── dependencies.py         # wrapper + Redis cache singletons
 │   ├── routers/estimations.py  # POST /estimate
 │   ├── guardrails/             # input check (exception) + output filter
-│   ├── services/               # LiteLLM wrapper, cache, CAG, evaluation
+│   ├── cache/                  # semantic cache (bucket + cosine)
+│   ├── services/               # LiteLLM wrapper, exact cache, CAG, evaluation
 │   ├── schemas/estimation.py
 │   └── context/examples.py
 ├── streamlit_app.py            # HTTP form → POST /estimate

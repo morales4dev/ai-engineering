@@ -7,7 +7,7 @@ import structlog
 
 from config import Settings, get_settings
 from context.examples import format_examples_for_prompt, select_examples
-from dependencies import get_cache, get_llm_wrapper, get_openai_client
+from dependencies import get_cache, get_llm_wrapper, get_openai_client, get_semantic_cache
 from guardrails.input import check_input
 from guardrails.output import enforce_scope_response
 from prompts.loader import render_estimation_prompt
@@ -123,17 +123,26 @@ def _exact_cache_key(request: EstimationRequest, prompt_version: str, model: str
 
 
 def estimate(request: EstimationRequest, version: str = "v1") -> EstimationResponse:
-    """check_input → exact get → LLM → filter → exact set."""
+    """check_input → exact get → semantic get → LLM → filter → cache writes."""
     check_input(request.description, openai_client=get_openai_client())
 
     wrapper = get_llm_wrapper()
     cache = get_cache()
+    semantic = get_semantic_cache()
     cache_key = _exact_cache_key(request, version, wrapper.primary_model)
     cached = cache.get(cache_key)
     if cached:
         log.info("estimation_cache_hit", kind="exact", key_prefix=cache_key[:24])
         result = EstimationResult.model_validate(cached)
         return EstimationResponse(result=result, prompt_version=version, cached=True)
+
+    if semantic is not None:
+        semantic_hit = semantic.lookup(request, version)
+        if semantic_hit is not None:
+            log.info("estimation_cache_hit", kind="semantic")
+            return EstimationResponse(
+                result=semantic_hit, prompt_version=version, cached=True
+            )
 
     system_prompt, user_message = render_estimation_prompt(request, version=version)
     result, meta = wrapper.complete_structured(
@@ -143,6 +152,8 @@ def estimate(request: EstimationRequest, version: str = "v1") -> EstimationRespo
     )
     result = enforce_scope_response(result)
     cache.set(cache_key, result.model_dump(mode="json"))
+    if semantic is not None:
+        semantic.store(request, result, version)
     log.info(
         "estimation_generated",
         prompt_version=version,
