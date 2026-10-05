@@ -10,7 +10,10 @@ import litellm
 import structlog
 from pydantic import BaseModel
 
-from services.prompt_boundary import apply_untrusted_boundary
+from services.prompt_boundary import (
+    apply_untrusted_boundary,
+    apply_untrusted_boundary_to_latest_user,
+)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -104,6 +107,64 @@ class LLMWrapper:
         }
         log.info(
             "llm_structured_call_completed",
+            model=meta["model"],
+            provider=meta["provider"],
+            latency_ms=latency_ms,
+        )
+        return result, meta
+
+    def complete_structured_chat(
+        self,
+        *,
+        messages: list[dict[str, str]],
+        response_model: type[T],
+        model_override: str | None = None,
+        max_tokens: int = 4000,
+        max_retries: int = 6,
+    ) -> tuple[T, dict[str, Any]]:
+        """Instructor call over a pre-built ``messages`` list.
+
+        ``prompt_boundary`` wraps only the latest user message. Older turns
+        are sent as stored. ``complete_structured`` (one-shot) is unchanged.
+        """
+        target_model = model_override or self.primary_model
+        bounded = apply_untrusted_boundary_to_latest_user(messages)
+
+        log.info(
+            "llm_structured_chat_started",
+            model=target_model,
+            response_model=response_model.__name__,
+            messages=len(bounded),
+        )
+        t0 = time.perf_counter()
+        try:
+            result = self._instructor.chat.completions.create(
+                model=target_model,
+                api_key=self._api_key_for(target_model),
+                timeout=self.timeout,
+                messages=bounded,
+                response_model=response_model,
+                max_tokens=max_tokens,
+                max_retries=max_retries,
+            )
+        except Exception as exc:
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            log.error(
+                "llm_structured_chat_failed",
+                error_type=type(exc).__name__,
+                error=str(exc),
+                latency_ms=latency_ms,
+            )
+            raise
+
+        latency_ms = int((time.perf_counter() - t0) * 1000)
+        meta = {
+            "model": _normalise_model_name(target_model),
+            "provider": _provider_from_model(target_model),
+            "latency_ms": latency_ms,
+        }
+        log.info(
+            "llm_structured_chat_completed",
             model=meta["model"],
             provider=meta["provider"],
             latency_ms=latency_ms,

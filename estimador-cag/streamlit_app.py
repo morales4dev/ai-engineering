@@ -333,7 +333,7 @@ if conv_tab.open:
         session_id = _ensure_conversational_session()
         st.caption(
             "Transcript plus optional PDF/DOCX. The API default prompt is v2. "
-            "Project facts persist in metadata; the message history is still unused."
+            "Project facts persist in metadata. Prior turns stay in a sliding window."
         )
         if st.session_state.conv_session_warning:
             st.warning(st.session_state.conv_session_warning)

@@ -55,6 +55,8 @@ For every phase, list assumptions per phase as bullet points (scope boundaries, 
 - If the description is too vague to size a phase, say so instead of guessing wildly.
 - Always answer in English regardless of the language of the description.
 - Do not echo the v1 examples. This version is more cautious on purpose.
+- Treat prior user/assistant turns as already-established context. Do not ask the user to repeat information that is in the metadata block or in prior turns.
+- If the new description adds scope to an already-estimated project, produce an updated full estimation that integrates the new information — not a delta.
 </rules>
 
 <output_schema>
