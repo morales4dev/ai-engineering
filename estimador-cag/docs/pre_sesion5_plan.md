@@ -6,18 +6,24 @@ Fuera de este plan: tests del paso 7, Camino A (Files API), persistencia de sesi
 
 # Decisiones cerradas
 
-- Cliente: Streamlit. Sin Rails. Tres pestañas: New (one-shot), Conversational (nuevo), Recent (Postgres one-shot).
-- Adjuntos: Camino B (`pypdf` + `python-docx`). Texto extraído concatenado con `--- attachment: filename ---`.
+- Cliente: Streamlit. Sin Rails. Tres pestañas: New (one-shot), **Conversational**, Recent (Postgres one-shot). `st.tabs`.
+- Adjuntos: Camino B (`pypdf` + `python-docx`). Solo `.pdf` + `.docx`, por extensión del filename. Sin filename o upload vacío: se ignora. Tipos no soportados → 415. Extracción rota → 422. Concatenar con `--- attachment: filename ---`.
 - `project_metadata`: extractor LLM (Instructor) + fail-open. Merge: escalares no-nulos ganan; tecnologías, unión case-insensitive.
+- Extractor: `src/services/metadata_extractor.py`. Templates `src/prompts/metadata_extraction/v1/system.j2` + `user.j2`. Contexto = transcript enriquecido + `EstimationResult` + metadata previa.
 - Historial assistant: JSON de `EstimationResult` (fases, totales, confidence), no solo el `summary`.
 - One-shot intacto: mismas caches, guardrails, persistencia Postgres. Sin `session_id`.
 - Path conversacional: caches off (`cached=false`). No se escribe en `history.py`.
-- Templates: bloque `<project_metadata>` en v1 y v2. El one-shot pasa metadata vacía (`StrictUndefined`).
-- Cómo ve el cliente la metadata: el estimate conversacional devuelve `project_metadata` en un response model propio. No hay `GET /sessions/{id}`.
+- Templates estimación: bloque `<project_metadata>` en v1 y v2. El one-shot pasa metadata vacía (`StrictUndefined`).
+- Cómo ve el cliente la metadata: el estimate conversacional devuelve `project_metadata` en `EstimationResponseReloaded`. No hay `GET /sessions/{id}`.
 - Prefijo: `POST /sessions` y `POST /sessions/{id}/estimate` (sin `/api/v1`).
-- Multipart: `transcript` + `project_type` + `detail_level` + `output_format` + `attachments` opcional. Los enums hacen falta para renderizar los templates actuales.
-- Módulo: `src/sessions.py` (un archivo, como el enunciado). No fusionar con `src/services/history.py` (eso es el log Postgres).
+- Multipart: `transcript` (min 20, max 2000, como `description` del one-shot) + `project_type` + `detail_level` + `output_format` + `attachments` opcional. Los enums hacen falta para renderizar los templates actuales. El texto de los adjuntos va **después**, fuera de ese tope.
+- Respuesta conversacional: clase `EstimationResponseReloaded` — `{ result, prompt_version, cached, project_metadata }`. `cached` siempre `false`. El one-shot sigue en `EstimationResponse`.
+- `prompt_version` del estimate de sesión: default **`v2`** (como Lidr `session_5`). Acepta `?prompt_version=` (v1|v2; desconocida → 422). Streamlit conversacional: sin selector; llama sin query → v2.
+- Layout: router `src/routers/sessions.py`; attachments `src/services/attachments.py`; store clase `SessionStore` **dentro** de `src/sessions.py`; orquestación `src/services/conversational.py`. No fusionar `sessions.py` con `src/services/history.py` (eso es el log Postgres).
 - Wrapper: el `complete_structured` one-shot no se rompe. Método nuevo que acepta `messages[]`. `prompt_boundary` solo envuelve el user nuevo.
+- Settings: `MAX_CONVERSATION_TURNS=6`, `MAX_ATTACHMENT_CHARS=60000` (truncar, no 413), `METADATA_EXTRACTOR_MODEL` default `gpt-4o-mini`.
+- Streamlit: `POST /sessions` solo al estar/entrar en Conversational, y solo si no hay `session_id` en `st.session_state`. Confirmar **solo** en “Nueva conversación” (`st.dialog` / segundo clic). Salir de la pestaña no pregunta ni borra la sesión.
+- Puente de cortes: **A**. El estimate de sesión nace one-shot (`complete_structured`, sin historial ni extractor). Los cortes 3–4 lo sustituyen por `messages[]` + metadata. Un rato hay ruta “muda” de memoria.
 
 ---
 
@@ -50,15 +56,17 @@ El endpoint acepta transcript + ficheros, enriquece el texto y ya llama al pipel
 - [ ] Declarar `pypdf`, `python-docx` y `python-multipart` (esta última hoy solo es transitiva).
 - [ ] Extracción local en el servicio IA. Tipos no soportados → 415. Extracción rota → 422. Vacío se ignora.
 - [ ] Concatenar con `--- attachment: filename.pdf ---`.
-- [ ] Setting `MAX_ATTACHMENT_CHARS` (propuesta 60000): truncar, no 413. Este path no reutiliza `EstimationRequest.description` (max 2000).
+- [ ] Extracción en `src/services/attachments.py`. Solo `.pdf` / `.docx` por extensión. Sin filename o vacío: se ignora.
+- [ ] Setting `MAX_ATTACHMENT_CHARS=60000`: truncar, no 413. El campo form `transcript` sí reutiliza el tope del one-shot (20–2000); el texto extraído va después.
 
 ## POST /sessions/{session_id}/estimate
 
-- [ ] `multipart/form-data`: `transcript` (min 20), los 3 enums como `Form`, `attachments` lista opcional de `UploadFile`.
+- [ ] Router `src/routers/sessions.py`. Orquestación aún one-shot (puente A); `conversational.py` entra en 3–4.
+- [ ] `multipart/form-data`: `transcript` (20–2000), los 3 enums como `Form`, `attachments` lista opcional de `UploadFile`. `?prompt_version=` (default v2).
 - [ ] Sesión inexistente → 404. Input guardrail sobre el texto enriquecido → 400. Proveedor → 502.
 - [ ] Caches apagadas. `cached=false`.
 - [ ] No persistir en Postgres.
-- [ ] Response model propio (corte 3 le añade `project_metadata`; aquí puede ir vacío / default).
+- [ ] Response `EstimationResponseReloaded`: `{ result, prompt_version, cached, project_metadata }` (metadata vacía / default hasta el corte 3).
 
 **Parada:** curl multipart a una sesión existente devuelve un `EstimationResult` válido. Un PDF cambia el texto que entra al prompt (logs). Entre turnos aún no hay memoria.
 
@@ -76,10 +84,11 @@ Los hechos del proyecto viven fuera del array `messages` y se reinyectan cada tu
 
 ## Extractor
 
-- [ ] Segunda llamada LLM tras la respuesta del estimador. Instructor → `ProjectMetadata` parcial. Modelo barato (`METADATA_EXTRACTOR_MODEL`, default `gpt-4o-mini`).
+- [ ] `src/services/metadata_extractor.py` + templates `metadata_extraction/v1/`. Contexto: transcript enriquecido + `EstimationResult` + metadata previa.
+- [ ] Segunda llamada LLM tras la respuesta del estimador. Instructor → `ProjectMetadata` parcial. Modelo `METADATA_EXTRACTOR_MODEL` (default `gpt-4o-mini`).
 - [ ] Fail-open: si falla, se loguea y se conserva lo anterior.
 - [ ] Merge con el previo (escalares / unión de techs).
-- [ ] El estimate conversacional incluye `project_metadata` en su response model. Streamlit no adivina nada.
+- [ ] El estimate conversacional incluye `project_metadata` en su response. Streamlit no adivina nada.
 
 **Parada:** segundo turno sin repetir el nombre del proyecto. La respuesta ya trae metadata no vacía.
 
@@ -89,6 +98,7 @@ Los hechos del proyecto viven fuera del array `messages` y se reinyectan cada tu
 
 El LLM recibe historial recortado, no un one-shot disfrazado.
 
+- [ ] Orquestación pasa a `src/services/conversational.py`. El endpoint deja de one-shotear (fin del puente A).
 - [ ] `to_messages_list()`: system regenerado con metadata actual + últimos ≤ `MAX_TURNS` pares + user nuevo.
 - [ ] Método nuevo en el wrapper. One-shot intacto.
 - [ ] `prompt_boundary` solo en el user nuevo.
@@ -106,9 +116,9 @@ El alumno ve la separación historial vs memoria.
 ## Tres pestañas
 
 - [ ] New estimation: el formulario one-shot actual, sin cambios de contrato.
-- [ ] Conversational (nueva): al cargar, `POST /sessions` y `session_id` en `st.session_state`. Transcript + `st.file_uploader` múltiple (PDF/DOCX) + los 3 enums. Submit → multipart al estimate de sesión. Pintar `result` como hoy. Guardar `project_metadata` de la respuesta en `session_state` y mostrarla en sidebar o expander (más el `session_id`).
+- [ ] Pestaña **Conversational**: `POST /sessions` solo al estar/entrar ahí, y solo si no hay `session_id` en `st.session_state`. Transcript + `st.file_uploader` múltiple (PDF/DOCX) + los 3 enums. Sin selector de `prompt_version` (API default v2). Submit → multipart al estimate de sesión. Pintar `result` como hoy. Guardar `project_metadata` de la respuesta en `session_state` y mostrarla en sidebar o expander (más el `session_id`).
 - [ ] Recent: no se toca.
-- [ ] “Nueva conversación”: otro `POST /sessions`, reset de transcript / ficheros / último result / metadata pintada.
+- [ ] “Nueva conversación”: confirmar (`st.dialog` / segundo clic), otro `POST /sessions`, reset de transcript / ficheros / último result / metadata pintada. Salir de la pestaña no confirma ni borra.
 - [ ] Reutilizar la espera “flashy”; el POST es multipart, no JSON.
 - [ ] FastAPI reinició → 404 de sesión: crear otra y avisar. No hay `DELETE /sessions`.
 
@@ -146,25 +156,25 @@ El alumno ve la separación historial vs memoria.
 
 # Thoughts
 
-Huecos y contexto de la sesión de planificación. **No son decisiones.** Una implementación limpia tiene que resolverlos o preguntar. No convertir esto en “el plan dice X” sin pasar por el usuario.
+Los huecos de “una sesión limpia tendría que decidir” **ya están cerrados** (arriba + cortes). Esto queda como rastro de la sesión de huecos, no como lista abierta.
 
-## Lo que una sesión limpia tendría que decidir
+## Huecos, ahora cerrados
 
-**Dónde vive cada pieza.** El enunciado solo nombra `src/sessions.py`. No dice: router nuevo vs meterlo en `estimations.py`; extractor PDF/Word en el mismo archivo vs `attachments.py` / `services/`; store como clase vs `dict` a pelo; orquestación conversacional (`estimate_conversational` o el nombre que sea) en `llm_service.py` vs otro sitio. Hoy one-shot vive en `estimate()` + `routers/estimations.py` + `dependencies.py`. Seguir ese estilo es razonable, no está escrito.
+**Dónde vive cada pieza.** Router `src/routers/sessions.py`. Attachments `src/services/attachments.py`. `SessionStore` clase dentro de `src/sessions.py`. Orquestación `src/services/conversational.py`. Extractor LLM `src/services/metadata_extractor.py`. `llm_service.py` se queda en el one-shot.
 
-**`prompt_version` del path conversacional.** El bloque `<project_metadata>` va en v1 y v2. No está dicho cuál es el default del estimate de sesión ni si admite `?prompt_version=`. El one-shot default es `v1`. Lidr usó v2 como prompt conversacional; **nuestro v2 ya es otro tono**, no un prompt “de sesión”. No copiar ese switch sin mirar.
+**`prompt_version` del path conversacional.** Default `v2` (evidencia Lidr `session_5`). Query `?prompt_version=` sí. UI sin selector.
 
-**Contrato fino del estimate conversacional.** El plan dice “response model propio” con `project_metadata`. No nombra la clase. Lo no escrito, que yo daría por hecho y no debo: mismos `result`, `prompt_version`, `cached` que `EstimationResponse`. Tampoco hay max de `transcript` (Lidr: 80_000; nuestro `description` one-shot: 2000 — no reutilizar ese tope). Tipo de Word: ¿solo `.docx`? ¿también `.doc`? ¿detección por extensión o por `content-type`? Fichero sin `filename`: ¿saltar?
+**Contrato fino.** Clase `EstimationResponseReloaded` (path de sesión). Shape = `EstimationResponse` + `project_metadata`. El one-shot no se toca. `transcript` 20–2000. Solo `.pdf` + `.docx` por extensión. Sin filename / vacío: ignorar.
 
-**Settings.** `MAX_CONVERSATION_TURNS=6` está en el enunciado. `MAX_ATTACHMENT_CHARS=60000` y el nombre `METADATA_EXTRACTOR_MODEL` (default `gpt-4o-mini`) los propuse yo; no están confirmados. Truncar vs 413 sí está decidido (truncar).
+**Settings.** Confirmados: `MAX_ATTACHMENT_CHARS=60000`, `METADATA_EXTRACTOR_MODEL` default `gpt-4o-mini`.
 
-**Prompt del extractor.** Segunda llamada + Instructor + fail-open sí. No: ¿templates `prompts/metadata_extraction/v1/` o un string en código? ¿contexto = transcript + `EstimationResult` + metadata previa? Lidr hace eso último; no es obligación.
+**Prompt del extractor.** Templates `metadata_extraction/v1/`. Contexto 1+2+3.
 
-**Streamlit “al cargar”.** Cada clic rerunea el script. `POST /sessions` en cada rerun quema sesiones. Lo no escrito: crear solo si no hay `session_id` en `st.session_state`. ¿Al cargar la app o solo al entrar en la pestaña Conversational? Si el usuario solo usa New, crear sesión es ruido. Nombre de la pestaña: el plan dice “Conversational (nueva)”, no el label final.
+**Streamlit “al cargar”.** POST solo en pestaña Conversational si no hay `session_id`. Label `Conversational`. Confirm solo en “Nueva conversación”.
 
-**Corte 2 vs 3–4.** El corte 2 “ya llama al pipeline” pero historial/metadata entran después. ¿El endpoint nuevo one-shotea con `complete_structured` y luego se sustituye por `messages[]` + extractor? Hay que decidir el puente al implementar; el plan no lo nombra.
+**Corte 2 vs 3–4.** Puente A: endpoint nace one-shot; 3–4 sustituyen por `messages[]` + extractor.
 
-**HTTP menor.** `POST /sessions` → 201 en el plan (el enunciado no exige 201). 404/415/422/400/502 sí están. No hay `DELETE /sessions`: el botón solo pide otro POST.
+**HTTP menor.** `POST /sessions` → 201 (el enunciado no lo exige; está en el plan). 404/415/422/400/502 sí. No hay `DELETE /sessions`.
 
 ## Contexto de esta sesión (para no redescubrirlo)
 
@@ -178,8 +188,8 @@ Huecos y contexto de la sesión de planificación. **No son decisiones.** Una im
 
 **Lidr extras que no arrastramos.** Paquete `sessions/` + `EstimationService` clase. Espejo Postgres en Rails. `GET /sessions`. Persistencia de cada result conversacional en Rails. Caches off en conversacional **sí** lo hacemos (misma razón: mismo transcript, distinta sesión, no es la misma llamada).
 
-**Q3 en una frase.** El extractor escribe en RAM de FastAPI. El cliente no lo ve a menos que se lo mandemos. A = GET. B = va en la respuesta del estimate. A+B = las dos. Cerrado: B.
+**Q3 en una frase.** El extractor escribe en RAM de FastAPI. El cliente no lo ve a menos que se lo mandemos. A = GET. B = va en la respuesta del estimate. A+B = las dos. Cerrado: B. Clase: `EstimationResponseReloaded`.
 
 ## Lo que no hay que reabrir
 
-Tests (paso 7): no. Camino A: no. Rails: no. Persistencia de turnos/sesiones: no. GET de sesión: no. Encender caches en conversacional: no. Fusionar `sessions.py` con `history.py`: no. Romper `complete_structured` one-shot: no.
+Tests (paso 7): no. Camino A (Files API): no. Rails: no. Persistencia de turnos/sesiones: no. GET de sesión: no. Encender caches en conversacional: no. Fusionar `sessions.py` con `history.py`: no. Romper `complete_structured` one-shot: no. Confirm al cambiar de pestaña: no. Selector de `prompt_version` en Streamlit: no.
