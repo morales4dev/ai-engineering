@@ -99,8 +99,9 @@ class EstimationResponse(BaseModel):
 class EstimationResponseReloaded(BaseModel):
     """Session-path response. Same shape as ``EstimationResponse`` plus metadata.
 
-    ``cached`` is always false on this path. ``project_metadata`` stays empty
-    until the extractor lands in a later cut.
+    ``cached`` is always false on this path. ``project_metadata`` is the
+    session facts after the post-estimate extractor (or the previous value
+    if extraction failed open).
     """
 
     result: EstimationResult

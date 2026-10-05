@@ -9,6 +9,7 @@ from guardrails.output import enforce_scope_response
 from prompts.loader import render_estimation_prompt
 from schemas.estimation import EstimationRequest, EstimationResponse, EstimationResult
 from services.history import persist_estimation
+from sessions import ProjectMetadata
 
 log = structlog.get_logger()
 
@@ -90,18 +91,20 @@ def estimate_session_bridge(
     version: str = "v1",
     *,
     description: str | None = None,
+    metadata: ProjectMetadata | None = None,
 ) -> EstimationResult:
     """Temporary session path until conversational.py exists.
 
     Same LLM shape as ``estimate_oneshot`` (system + one user), without cache
     or persist. ``description`` is the enriched transcript for guardrails and
     the prompt; ``request.description`` stays the form field (20–2000).
+    ``metadata`` is the current session facts injected into the system prompt.
     """
     text = description if description is not None else request.description
     check_input(text, openai_client=get_openai_client())
     wrapper = get_llm_wrapper()
     system_prompt, user_message = render_estimation_prompt(
-        request, version=version, description=text
+        request, version=version, description=text, metadata=metadata
     )
     result, meta = wrapper.complete_structured(
         system_prompt=system_prompt,

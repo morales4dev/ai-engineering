@@ -65,10 +65,10 @@ class ProjectMetadata(BaseModel):
     Empty on turn 0. Scalars stay optional so a missing fact is valid state.
     """
 
-    project_name: str | None = None
-    assumed_team_size: int | None = None
+    project_name: str | None = Field(default=None, max_length=120)
+    assumed_team_size: int | None = Field(default=None, ge=1, le=50)
     mentioned_technologies: list[str] = Field(default_factory=list)
-    agreed_scope: str | None = None
+    agreed_scope: str | None = Field(default=None, max_length=2000)
 
     def is_empty(self) -> bool:
         return (

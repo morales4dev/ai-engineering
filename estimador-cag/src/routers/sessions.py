@@ -5,7 +5,7 @@ from openai import APIConnectionError, APIStatusError, RateLimitError
 from pydantic import BaseModel, Field
 
 from config import get_settings
-from dependencies import get_session_store
+from dependencies import get_llm_wrapper, get_session_store
 from guardrails.input import InputGuardrailViolation
 from prompts.loader import available_prompt_versions
 from schemas.estimation import (
@@ -22,7 +22,8 @@ from services.attachments import (
     extract_text,
 )
 from services.llm_service import estimate_session_bridge
-from sessions import ProjectMetadata, SessionNotFoundError
+from services.metadata_extractor import update_metadata
+from sessions import SessionNotFoundError
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 log = structlog.get_logger()
@@ -67,7 +68,7 @@ async def estimate_in_session(
     attachments: list[UploadFile] = File(default_factory=list),
     prompt_version: str = Query("v2"),
 ) -> EstimationResponseReloaded:
-    """One-shot estimate for a session. History and metadata updates come later."""
+    """Session estimate. Still one-shot LLM (bridge A); metadata is refreshed after."""
     known = available_prompt_versions()
     if prompt_version not in known:
         raise HTTPException(
@@ -76,7 +77,7 @@ async def estimate_in_session(
         )
 
     try:
-        get_session_store().get(session_id)
+        session = get_session_store().get(session_id)
     except SessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Session not found") from exc
 
@@ -129,7 +130,12 @@ async def estimate_in_session(
         output_format=output_format,
     )
     try:
-        result = estimate_session_bridge(request, version=prompt_version, description=enriched)
+        result = estimate_session_bridge(
+            request,
+            version=prompt_version,
+            description=enriched,
+            metadata=session.metadata,
+        )
     except InputGuardrailViolation as exc:
         log.info(
             "session_estimate_blocked_by_input_guardrail",
@@ -144,9 +150,16 @@ async def estimate_in_session(
         log.exception("session_llm_provider_failed")
         raise HTTPException(status_code=502, detail=_CLIENT_LLM_FAILURE) from exc
 
+    session.metadata = update_metadata(
+        previous=session.metadata,
+        transcript=enriched,
+        result=result,
+        llm_wrapper=get_llm_wrapper(),
+        model=settings.METADATA_EXTRACTOR_MODEL,
+    )
     return EstimationResponseReloaded(
         result=result,
         prompt_version=prompt_version,
         cached=False,
-        project_metadata=ProjectMetadata(),
+        project_metadata=session.metadata,
     )

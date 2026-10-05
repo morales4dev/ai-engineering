@@ -85,7 +85,7 @@ Streamlit is the HTTP client of the estimator API. It never talks to SQL, Redis,
 Needs the API running. Three tabs:
 
 - **New estimation** — one-shot. Submit sends `description` plus the three enums as JSON to `POST /api/v1/estimate` and paints `result` (summary, phases, totals, confidence). A 400 from input guardrails is shown as `reason` + `message`.
-- **Conversational** — brought forward so the session API can be used without Swagger. Entering the tab calls `POST /sessions` once and keeps `session_id` in `st.session_state`. Submit sends multipart (`transcript`, the three enums, optional PDF/DOCX) to `POST /sessions/{id}/estimate`. The API extracts attachment text locally (pypdf / python-docx). Caches stay off and nothing is written to Postgres. **Turns do not share memory yet**: each submit is still a one-shot LLM call; `project_metadata` comes back empty. Leaving the tab does not drop the session. **New conversation** confirms and creates another `session_id`.
+- **Conversational** — brought forward so the session API can be used without Swagger. Entering the tab calls `POST /sessions` once and keeps `session_id` in `st.session_state`. Submit sends multipart (`transcript`, the three enums, optional PDF/DOCX) to `POST /sessions/{id}/estimate`. The API extracts attachment text locally (pypdf / python-docx). Caches stay off and nothing is written to Postgres. Each submit is still a one-shot LLM call (no sliding-window history yet); `project_metadata` is extracted after the estimate and returned in the response. Leaving the tab does not drop the session. **New conversation** confirms and creates another `session_id`.
 - **Recent** — last 20 rows via `GET /api/v1/estimations`; reopen via `GET /api/v1/estimations/{id}` (one-shot history only).
 
 While a POST is in flight the UI rotates phase labels (Discovery, Design, Implementation, QA, Launch) — wait UX, not SSE.
@@ -155,6 +155,7 @@ estimador-cag/
 │   ├── services/
 │   │   ├── llm_service.py      # estimate_oneshot() + estimate_session_bridge()
 │   │   ├── attachments.py      # Camino B: local PDF/DOCX text extraction
+│   │   ├── metadata_extractor.py  # second-pass ProjectMetadata, fail-open
 │   │   ├── llm_wrapper.py
 │   │   ├── cache.py            # exact-match Redis
 │   │   └── history.py          # Postgres log of one-shot /estimate rows

@@ -216,7 +216,7 @@ def _render_project_metadata(session_id: str, metadata: dict | None) -> None:
         st.caption(f"session_id `{session_id}`")
         st.json(metadata or {})
         st.caption(
-            "Empty until cut 3 extracts facts. Leaving this tab does not clear the session."
+            "Filled from the API after each turn. Leaving this tab does not clear the session."
         )
 
 
@@ -333,7 +333,7 @@ if conv_tab.open:
         session_id = _ensure_conversational_session()
         st.caption(
             "Transcript plus optional PDF/DOCX. The API default prompt is v2. "
-            "Turns do not share memory yet."
+            "Project facts persist in metadata; the message history is still unused."
         )
         if st.session_state.conv_session_warning:
             st.warning(st.session_state.conv_session_warning)
