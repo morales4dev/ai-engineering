@@ -90,7 +90,7 @@ Needs the API running. Three tabs:
 
 While a POST is in flight the UI rotates phase labels (Discovery, Design, Implementation, QA, Launch) — wait UX, not SSE.
 
-The sequence below is the New tab / `POST /estimate` path. The Conversational tab skips the cache and persist steps.
+Two sequences. The first is New / `POST /estimate`. The second is Conversational / `POST /sessions` + multipart estimate.
 
 ```mermaid
 sequenceDiagram
@@ -139,6 +139,37 @@ sequenceDiagram
     end
 ```
 
+Conversational tab (no cache, no Postgres persist). Source: `docs/conversational-sequence.mmd`.
+
+![Conversational sequence](docs/conversational-sequence.svg)
+
+## Conversational sessions
+
+`POST /sessions` and `POST /sessions/{id}/estimate` are additive. `POST /api/v1/estimate` is unchanged.
+
+Two memories, on purpose:
+
+- **Conversational history** — last ≤ 6 user+assistant pairs in a process-local `SessionStore` dict. The assistant turn is `EstimationResult.model_dump_json()`. The system prompt is not stored; it is rebuilt each turn from the current `project_metadata`. Restarting uvicorn empties the dict. This is not `services/history.py` (that table is the one-shot Postgres log, what the Recent tab reads).
+- **Project metadata** — durable facts (`project_name`, team size, technologies, scope) kept *outside* the message array and re-injected into `<project_metadata>` every turn. When the window drops turn 1, the name should still be in the system block.
+
+Caches stay off on this path (`cached` is always `false`). The same transcript in two sessions is not the same call: history and metadata differ. A cache hit would be a silent wrong answer. Nothing is written to Postgres.
+
+There is no `GET /sessions/{id}` and no `DELETE /sessions`. The estimate response carries `project_metadata`. If FastAPI restarted and the id is gone, Streamlit creates a new session and warns.
+
+### Camino B (local PDF/DOCX)
+
+Attachments are extracted **in the API** with `pypdf` and `python-docx` (`src/services/attachments.py`). Dispatch is by filename extension: only `.pdf` and `.docx`. No filename or empty upload: ignored. Unsupported type → 415. Broken file → 422. Text is appended after the form `transcript` as `--- attachment: filename ---`. `transcript` stays 20–2000 characters; extracted text is extra, truncated per file at `MAX_ATTACHMENT_CHARS` (60000), not rejected with 413.
+
+Camino A (provider Files API) is out of scope. Local extract keeps the same text path for OpenAI and Anthropic, and we own the truncation. Chunking / retrieval is module 3.
+
+### Metadata extractor
+
+After a successful estimate, a second Instructor call (`METADATA_EXTRACTOR_MODEL`, default `gpt-4o-mini`) reads the enriched transcript + `EstimationResult` + previous metadata and returns a partial `ProjectMetadata`. Scalars: non-null wins. Technologies: case-insensitive union.
+
+Fail-open: if that call fails, it is logged and the previous metadata is kept. The estimate already succeeded; a facts refresh must not 502 the user.
+
+Why a second call instead of asking the estimator to also maintain the object: the window will forget turn 1. Facts have to live in a slot that is re-injected every turn, not only in the dropped messages.
+
 ## Project layout
 
 ```
@@ -150,6 +181,7 @@ estimador-cag/
 │   ├── sessions.py             # in-process Session + ConversationHistory + metadata
 │   ├── routers/estimations.py  # POST /api/v1/estimate + GET history
 │   ├── routers/sessions.py     # POST /sessions + multipart /sessions/{id}/estimate
+│   ├── prompts/                # estimation/v1|v2 + metadata_extraction/v1
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
 │   ├── services/
@@ -187,6 +219,32 @@ curl -X POST http://localhost:8000/api/v1/estimate \
 # Optional: POST /api/v1/estimate?prompt_version=v2  (default is v1)
 
 jq '.result' salida.json
+
+### Conversational — two turns (API must already be running)
+
+Default prompt on this path is **v2** (`?prompt_version=` still accepts v1|v2).
+
+```bash
+SESSION_ID=$(curl -s -X POST http://localhost:8000/sessions | jq -r .session_id)
+echo "$SESSION_ID"
+
+curl -s -X POST "http://localhost:8000/sessions/${SESSION_ID}/estimate" \
+  -F "transcript=We will call the project Nimbus. Sales team needs a CRM with contacts, a deal pipeline, and HubSpot import. Team of 3. React + Postgres." \
+  -F "project_type=web_saas" \
+  -F "detail_level=medium" \
+  -F "output_format=phases_table" \
+  | jq '{prompt_version, cached, project_metadata, summary: .result.summary}'
+
+# Second turn: do not repeat the project name. Optional file: -F "attachments=@brief.pdf"
+curl -s -X POST "http://localhost:8000/sessions/${SESSION_ID}/estimate" \
+  -F "transcript=Add a reporting dashboard with weekly pipeline charts for the same team." \
+  -F "project_type=web_saas" \
+  -F "detail_level=medium" \
+  -F "output_format=phases_table" \
+  | jq '{prompt_version, cached, project_metadata, summary: .result.summary}'
+```
+
+Restarting the API drops the in-memory session; the next estimate returns 404.
 
 ### Form HTTP client (API must already be running)
 uv run streamlit run streamlit_app.py          # New / Conversational / Recent
