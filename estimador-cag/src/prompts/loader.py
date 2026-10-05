@@ -42,15 +42,22 @@ class UnknownPromptVersionError(ValueError):
 def render_estimation_prompt(
     request: EstimationRequest,
     version: str = "v1",
+    *,
+    description: str | None = None,
 ) -> tuple[str, str]:
-    """Render `(system, user)` for `prompts/estimation/<version>/`."""
+    """Render `(system, user)` for `prompts/estimation/<version>/`.
+
+    ``description`` overrides ``request.description`` so the session path can
+    send transcript + extracted attachments, which exceed the 2000-char form
+    cap on ``EstimationRequest.description``.
+    """
     known = available_prompt_versions()
     if version not in known:
         raise UnknownPromptVersionError(
             f"Unknown prompt version {version!r}. Available: {', '.join(known)}"
         )
     context = {
-        "description": request.description,
+        "description": description if description is not None else request.description,
         "project_type": _enum_value(request.project_type),
         "detail_level": _enum_value(request.detail_level),
         "output_format": _enum_value(request.output_format),

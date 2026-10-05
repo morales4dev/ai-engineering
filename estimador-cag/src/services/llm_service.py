@@ -44,8 +44,8 @@ def _persist_and_return(
     return response
 
 
-def estimate(request: EstimationRequest, version: str = "v1") -> EstimationResponse:
-    """check_input → exact get → semantic get → LLM → filter → cache writes → persist."""
+def estimate_oneshot(request: EstimationRequest, version: str = "v1") -> EstimationResponse:
+    """One-shot product path: check_input → caches → LLM → filter → persist."""
     check_input(request.description, openai_client=get_openai_client())
 
     wrapper = get_llm_wrapper()
@@ -83,3 +83,40 @@ def estimate(request: EstimationRequest, version: str = "v1") -> EstimationRespo
         **meta,
     )
     return _persist_and_return(request, result, version, cached=False)
+
+
+def estimate_session_bridge(
+    request: EstimationRequest,
+    version: str = "v1",
+    *,
+    description: str | None = None,
+) -> EstimationResult:
+    """Temporary session path until conversational.py exists.
+
+    Same LLM shape as ``estimate_oneshot`` (system + one user), without cache
+    or persist. ``description`` is the enriched transcript for guardrails and
+    the prompt; ``request.description`` stays the form field (20–2000).
+    """
+    text = description if description is not None else request.description
+    check_input(text, openai_client=get_openai_client())
+    wrapper = get_llm_wrapper()
+    system_prompt, user_message = render_estimation_prompt(
+        request, version=version, description=text
+    )
+    result, meta = wrapper.complete_structured(
+        system_prompt=system_prompt,
+        user_message=user_message,
+        response_model=EstimationResult,
+    )
+    result = enforce_scope_response(result)
+    log.info(
+        "session_estimation_generated",
+        prompt_version=version,
+        transcript_chars=len(request.description),
+        prompt_description_chars=len(text),
+        confidence_pct=result.confidence_pct,
+        total_cost_eur=result.total_cost_eur,
+        phases=len(result.phases),
+        **meta,
+    )
+    return result

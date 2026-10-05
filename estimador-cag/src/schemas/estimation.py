@@ -3,6 +3,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field, model_validator
 
+from sessions import ProjectMetadata
+
 
 class ProjectType(str, Enum):
     MOBILE_APP = "mobile_app"
@@ -92,6 +94,19 @@ class EstimationResponse(BaseModel):
     result: EstimationResult
     prompt_version: str = Field(description="Identifier of the prompt template used.")
     cached: bool = False
+
+
+class EstimationResponseReloaded(BaseModel):
+    """Session-path response. Same shape as ``EstimationResponse`` plus metadata.
+
+    ``cached`` is always false on this path. ``project_metadata`` stays empty
+    until the extractor lands in a later cut.
+    """
+
+    result: EstimationResult
+    prompt_version: str = Field(description="Identifier of the prompt template used.")
+    cached: bool = False
+    project_metadata: ProjectMetadata = Field(default_factory=ProjectMetadata)
 
 
 class EstimationListItem(BaseModel):

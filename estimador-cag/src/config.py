@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str | None = None
     ESTIMATOR_API_BASE_URL: str = "http://localhost:8000"
     MAX_CONVERSATION_TURNS: int = 6
+    MAX_ATTACHMENT_CHARS: int = 60000
     APP_ENV: Literal["development", "staging", "production"] = "development"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"
 

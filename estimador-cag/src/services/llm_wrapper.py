@@ -32,7 +32,7 @@ def _provider_from_model(model: str) -> str:
 
 
 class LLMWrapper:
-    """Structured LLM client. Caches live in ``estimate()``, not here."""
+    """Structured LLM client. Caches live in ``estimate_oneshot()``, not here."""
 
     def __init__(
         self,
@@ -61,7 +61,7 @@ class LLMWrapper:
         """Call the LLM via Instructor and return ``(model_instance, meta)``.
 
         Instructor re-prompts up to ``max_retries`` when a Pydantic validator
-        raises. Exact/semantic cache get/set stay in ``estimate()``.
+        raises. Exact/semantic cache get/set stay in ``estimate_oneshot()``.
         """
         target_model = model_override or self.primary_model
         bounded_system, bounded_user = apply_untrusted_boundary(system_prompt, user_message)

@@ -1,4 +1,4 @@
-"""Exact-match Redis get/set. Keys are built in ``estimate()`` (``estimation:v2:…``)."""
+"""Exact-match Redis get/set. Keys are built in ``estimate_oneshot()`` (``estimation:v2:…``)."""
 
 from __future__ import annotations
 
