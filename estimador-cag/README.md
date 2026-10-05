@@ -61,7 +61,7 @@ Compose sets `REDIS_URL=redis://redis:6379` for the API container. When you run 
 Streamlit still runs on the host (not inside Compose):
 
 ```bash
-uv run streamlit run streamlit_app.py          # form → POST /estimate — API must be up
+uv run streamlit run streamlit_app.py          # New / Conversational / Recent — API must be up
 ```
 
 ## Logs
@@ -78,11 +78,19 @@ docker logs -f estimator
 
 ## HTTP client
 
-Streamlit is the HTTP client of `POST /estimate`.
+Streamlit is the HTTP client of the estimator API. It never talks to SQL, Redis, or the LLM.
 
 ### Streamlit (HTTP form)
 
-Needs the API running. Submit sends `description` plus the three enums to `POST /estimate` and paints `result` (summary, phases, totals, confidence). While the POST is in flight the UI rotates phase labels (Discovery, Design, Implementation, QA, Launch) — wait UX, not SSE. A 400 from input guardrails is shown as `reason` + `message`. The Recent tab lists the last 20 via `GET /api/v1/estimations` and reopens one via `GET /api/v1/estimations/{id}`. Streamlit does not talk to SQL, Redis, or the LLM.
+Needs the API running. Three tabs:
+
+- **New estimation** — one-shot. Submit sends `description` plus the three enums as JSON to `POST /api/v1/estimate` and paints `result` (summary, phases, totals, confidence). A 400 from input guardrails is shown as `reason` + `message`.
+- **Conversational** — brought forward so the session API can be used without Swagger. Entering the tab calls `POST /sessions` once and keeps `session_id` in `st.session_state`. Submit sends multipart (`transcript`, the three enums, optional PDF/DOCX) to `POST /sessions/{id}/estimate`. The API extracts attachment text locally (pypdf / python-docx). Caches stay off and nothing is written to Postgres. **Turns do not share memory yet**: each submit is still a one-shot LLM call; `project_metadata` comes back empty. Leaving the tab does not drop the session. **New conversation** confirms and creates another `session_id`.
+- **Recent** — last 20 rows via `GET /api/v1/estimations`; reopen via `GET /api/v1/estimations/{id}` (one-shot history only).
+
+While a POST is in flight the UI rotates phase labels (Discovery, Design, Implementation, QA, Launch) — wait UX, not SSE.
+
+The sequence below is the New tab / `POST /estimate` path. The Conversational tab skips the cache and persist steps.
 
 ```mermaid
 sequenceDiagram
@@ -138,13 +146,20 @@ estimador-cag/
 ├── src/
 │   ├── main.py                 # FastAPI app, /health
 │   ├── config.py               # Pydantic Settings
-│   ├── dependencies.py         # wrapper + Redis cache singletons
-│   ├── routers/estimations.py  # POST /estimate + GET history
+│   ├── dependencies.py         # wrapper, caches, SessionStore singleton
+│   ├── sessions.py             # in-process Session + ConversationHistory + metadata
+│   ├── routers/estimations.py  # POST /api/v1/estimate + GET history
+│   ├── routers/sessions.py     # POST /sessions + multipart /sessions/{id}/estimate
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
-│   ├── services/               # estimate(), wrapper, exact cache, history
+│   ├── services/
+│   │   ├── llm_service.py      # estimate_oneshot() + estimate_session_bridge()
+│   │   ├── attachments.py      # Camino B: local PDF/DOCX text extraction
+│   │   ├── llm_wrapper.py
+│   │   ├── cache.py            # exact-match Redis
+│   │   └── history.py          # Postgres log of one-shot /estimate rows
 │   └── schemas/estimation.py
-├── streamlit_app.py            # HTTP form + history GETs
+├── streamlit_app.py            # New + Conversational + Recent
 ├── Dockerfile
 ├── docker-compose.yml
 ├── pyproject.toml
@@ -172,5 +187,5 @@ curl -X POST http://localhost:8000/api/v1/estimate \
 jq '.result' salida.json
 
 ### Form HTTP client (API must already be running)
-uv run streamlit run streamlit_app.py
+uv run streamlit run streamlit_app.py          # New / Conversational / Recent
 
