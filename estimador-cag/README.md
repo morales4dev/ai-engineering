@@ -149,7 +149,7 @@ Conversational tab (no cache, no Postgres persist). Source: `docs/conversational
 
 Two memories, on purpose:
 
-- **Conversational history** — last ≤ 6 user+assistant pairs in a process-local `SessionStore` dict. The assistant turn is `EstimationResult.model_dump_json()`. The system prompt is not stored; it is rebuilt each turn from the current `project_metadata`. Restarting uvicorn empties the dict. This is not `services/history.py` (that table is the one-shot Postgres log, what the Recent tab reads).
+- **Conversational history** — last ≤ 6 user+assistant pairs in a process-local `SessionStore` dict. The user turn is the enriched transcript (form + attachments), not the rendered `user.j2`. The assistant turn is `EstimationResult.model_dump_json()`. `append` only stores the pair; `CompressionPolicy` peels the oldest pair when the window overflows. The system prompt is not stored; it is rebuilt each turn from the current `project_metadata`. Restarting uvicorn empties the dict. This is not `services/history.py` (that table is the one-shot Postgres log, what the Recent tab reads).
 - **Project metadata** — durable facts (`project_name`, team size, technologies, scope) kept *outside* the message array and re-injected into `<project_metadata>` every turn. When the window drops turn 1, the name should still be in the system block.
 
 Caches stay off on this path (`cached` is always `false`). The same transcript in two sessions is not the same call: history and metadata differ. A cache hit would be a silent wrong answer. Nothing is written to Postgres.
@@ -178,7 +178,8 @@ estimador-cag/
 │   ├── main.py                 # FastAPI app, /health
 │   ├── config.py               # Pydantic Settings
 │   ├── dependencies.py         # wrapper, caches, SessionStore singleton
-│   ├── sessions.py             # in-process Session + ConversationHistory + metadata
+│   ├── sessions/               # in-process Session + ConversationHistory + store
+│   │   └── compression/        # window peel after append (anchors later)
 │   ├── routers/estimations.py  # POST /api/v1/estimate + GET history
 │   ├── routers/sessions.py     # POST /sessions + multipart /sessions/{id}/estimate
 │   ├── prompts/                # estimation/v1|v2 + metadata_extraction/v1

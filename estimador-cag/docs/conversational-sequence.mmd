@@ -28,7 +28,7 @@ sequenceDiagram
         CW-->>CAPI: result
         CAPI->>COut: filter
         COut-->>CAPI: result
-        CAPI->>CAPI: append pair and trim
+        CAPI->>CAPI: append pair then apply_compression
         CAPI->>CExt: transcript, result, previous metadata
         CExt-->>CAPI: merged or previous if fail-open
         CAPI-->>CUI: result, cached false, project_metadata

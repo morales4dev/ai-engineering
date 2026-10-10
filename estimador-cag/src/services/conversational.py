@@ -2,7 +2,8 @@
 
 Replaces the one-shot ``estimate_session_bridge``. The system prompt is
 rebuilt each turn from the current ``ProjectMetadata``. History is pairs
-only; the window trims on append. Nothing is written to Postgres.
+only; ``append`` stores, then ``apply_compression`` peels overflow.
+Nothing is written to Postgres.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from prompts.loader import render_estimation_prompt
 from schemas.estimation import EstimationRequest, EstimationResponseReloaded, EstimationResult
 from services.metadata_extractor import update_metadata
 from sessions import Session
+from sessions.compression import apply_compression
 
 log = structlog.get_logger()
 
@@ -59,7 +61,8 @@ def estimate_conversational(
         response_model=EstimationResult,
     )
     result = enforce_scope_response(result)
-    session.history.append(user=user_message, assistant=result.model_dump_json())
+    session.history.append(user=transcript, assistant=result.model_dump_json())
+    apply_compression(session.history)
     session.metadata = update_metadata(
         previous=session.metadata,
         transcript=transcript,

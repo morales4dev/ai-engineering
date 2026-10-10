@@ -27,7 +27,7 @@ Entry points today (ours):
 
 | # | Title | OK |
 |---|-------|----|
-| 1 | Dumb `append` + window policy seam | [ ] |
+| 1 | Dumb `append` + window policy seam | [x] |
 | 2 | `GET /sessions/{id}` inspect (read-only) | [ ] |
 | 3 | Compression: anchors + cumulative summary | [ ] |
 | 4 | Dynamic tier + conversational prompt `v3` | [ ] |
