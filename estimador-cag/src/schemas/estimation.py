@@ -55,8 +55,7 @@ class Phase(BaseModel):
 class EstimationResult(BaseModel):
     """Structured estimation. Validators are the rules Instructor re-prompts on.
 
-    ``phases`` is declared before the totals so the model commits to per-phase
-    numbers first and then only needs to sum them.
+    ``total_cost_eur`` is overwritten from the phases; the LLM number is ignored.
     """
 
     summary: str = Field(min_length=10, max_length=1200)
@@ -67,12 +66,8 @@ class EstimationResult(BaseModel):
 
     @model_validator(mode="after")
     def phases_sum_matches_total(self) -> "EstimationResult":
-        phase_sum = sum(p.cost_eur for p in self.phases)
-        if phase_sum != self.total_cost_eur:
-            raise ValueError(
-                f"phases sum ({phase_sum} EUR) does not match total_cost_eur "
-                f"({self.total_cost_eur} EUR); adjust either the phases or the total"
-            )
+        # LLM totals are often wrong; phases are the estimate.
+        self.total_cost_eur = sum(p.cost_eur for p in self.phases)
         return self
 
     @model_validator(mode="after")
