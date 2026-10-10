@@ -47,14 +47,11 @@ def render_estimation_prompt(
     description: str | None = None,
     metadata: ProjectMetadata | None = None,
 ) -> tuple[str, str]:
-    """Render `(system, user)` for `prompts/estimation/<version>/`.
+    """One-shot: render `(system, user)` for `prompts/estimation/<version>/`.
 
-    ``description`` overrides ``request.description`` so the session path can
-    send transcript + extracted attachments, which exceed the 2000-char form
-    cap on ``EstimationRequest.description``.
-
-    ``metadata`` is injected into ``<project_metadata>``. The one-shot path
-    leaves it empty so StrictUndefined still has the variable.
+    ``description`` overrides ``request.description`` so a caller can send
+    text longer than the 2000-char form cap. ``metadata`` is injected into
+    ``<project_metadata>``; the one-shot path leaves it empty.
     """
     known = available_prompt_versions()
     if version not in known:
@@ -69,6 +66,42 @@ def render_estimation_prompt(
         "output_format": _enum_value(request.output_format),
         "metadata": project_metadata,
         "metadata_is_empty": project_metadata.is_empty(),
+        "tier": "default",
+        "critic_feedback": None,
+    }
+    system = _env.get_template(f"estimation/{version}/system.j2").render(**context)
+    user = _env.get_template(f"estimation/{version}/user.j2").render(**context)
+    return system, user
+
+
+def render_conversational_prompt(
+    request: EstimationRequest,
+    version: str,
+    *,
+    description: str,
+    metadata: ProjectMetadata,
+    tier: object | None = None,
+    critic_feedback: object | None = None,
+) -> tuple[str, str]:
+    """Conversational: render the session-path system/user prompts.
+
+    v3 uses ``<audience>`` (from ``tier``) and optional ``<critic_feedback>``.
+    v1/v2 ignore those extras.
+    """
+    known = available_prompt_versions()
+    if version not in known:
+        raise UnknownPromptVersionError(
+            f"Unknown prompt version {version!r}. Available: {', '.join(known)}"
+        )
+    context = {
+        "description": description,
+        "project_type": _enum_value(request.project_type),
+        "detail_level": _enum_value(request.detail_level),
+        "output_format": _enum_value(request.output_format),
+        "metadata": metadata,
+        "metadata_is_empty": metadata.is_empty(),
+        "tier": _enum_value(tier) if tier is not None else "default",
+        "critic_feedback": critic_feedback,
     }
     system = _env.get_template(f"estimation/{version}/system.j2").render(**context)
     user = _env.get_template(f"estimation/{version}/user.j2").render(**context)

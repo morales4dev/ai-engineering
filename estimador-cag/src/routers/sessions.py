@@ -23,6 +23,7 @@ from services.attachments import (
 )
 from services.conversational import estimate_conversational
 from sessions import ProjectMetadata, SessionNotFoundError
+from sessions.tier_resolver import Tier
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 log = structlog.get_logger()
@@ -95,14 +96,20 @@ async def estimate_in_session(
     detail_level: DetailLevel = Form(...),
     output_format: OutputFormat = Form(...),
     attachments: list[UploadFile] = File(default_factory=list),
-    prompt_version: str = Query("v2"),
+    tier: Tier | None = Form(default=None),
+    prompt_version: str | None = Query(default=None),
 ) -> EstimationResponseReloaded:
     """Session estimate: sliding-window history + metadata. Caches stay off."""
+    version = (
+        prompt_version
+        if prompt_version is not None
+        else get_settings().CONVERSATIONAL_PROMPT_VERSION
+    )
     known = available_prompt_versions()
-    if prompt_version not in known:
+    if version not in known:
         raise HTTPException(
             status_code=422,
-            detail=f"Unknown prompt version {prompt_version!r}. Available: {', '.join(known)}",
+            detail=f"Unknown prompt version {version!r}. Available: {', '.join(known)}",
         )
 
     try:
@@ -148,7 +155,8 @@ async def estimate_in_session(
         transcript_chars=len(transcript),
         enriched_transcript_chars=len(enriched),
         attachment_count=len(extracted),
-        prompt_version=prompt_version,
+        prompt_version=version,
+        tier_override=tier.value if tier is not None else None,
     )
 
     _ensure_llm_configured()
@@ -163,7 +171,8 @@ async def estimate_in_session(
             session,
             request,
             transcript=enriched,
-            version=prompt_version,
+            version=version,
+            tier=tier,
         )
     except InputGuardrailViolation as exc:
         log.info(

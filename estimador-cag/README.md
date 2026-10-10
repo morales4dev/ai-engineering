@@ -156,7 +156,9 @@ When the window overflows, the oldest pair is peeled. If the user turn matches a
 
 Caches stay off on this path (`cached` is always `false`). The same transcript in two sessions is not the same call: history and metadata differ. A cache hit would be a silent wrong answer. Nothing is written to Postgres.
 
-`GET /sessions/{id}` is read-only inspect (window size, metadata, `anchors_count`, `summary_chars`; tier fields stay null until dynamic tier lands). It is not a second estimate and does not call the LLM. The estimate response still carries `project_metadata`. No `DELETE /sessions` and no session list. If FastAPI restarted and the id is gone, both GET and estimate return `{"detail": "session_not_found"}`; Streamlit creates a new session and warns.
+`GET /sessions/{id}` is read-only inspect (window size, metadata, `anchors_count`, `summary_chars`, last resolved tier and rule). It is not a second estimate and does not call the LLM. The estimate response still carries `project_metadata`. No `DELETE /sessions` and no session list. If FastAPI restarted and the id is gone, both GET and estimate return `{"detail": "session_not_found"}`; Streamlit creates a new session and warns.
+
+Each session estimate resolves an audience **tier** (`executive` / `pm` / `developer` / `default`) from an optional multipart `tier` override, else the first matching rule (NDA / regulatory → executive; ≥2 infra keywords → developer; team size ≤ 2 → pm). v3 injects that into `<audience>`. `?prompt_version=` still accepted; omitted query uses `CONVERSATIONAL_PROMPT_VERSION` (default **v3**). One-shot `/api/v1/estimate` stays on `render_estimation_prompt`, default v1.
 
 ### Camino B (local PDF/DOCX)
 
@@ -181,10 +183,11 @@ estimador-cag/
 │   ├── config.py               # Pydantic Settings
 │   ├── dependencies.py         # wrapper, caches, SessionStore singleton
 │   ├── sessions/               # in-process Session + ConversationHistory + store
-│   │   └── compression/        # window peel, anchors, cumulative summary
+│   │   ├── compression/        # window peel, anchors, cumulative summary
+│   │   └── tier_resolver.py    # audience tier for conversational v3
 │   ├── routers/estimations.py  # POST /api/v1/estimate + GET history
 │   ├── routers/sessions.py     # POST /sessions + GET inspect + multipart /estimate
-│   ├── prompts/                # estimation/v1|v2 + metadata + conversation_summary
+│   ├── prompts/                # estimation/v1|v2|v3 + metadata + conversation_summary
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
 │   ├── services/
@@ -225,7 +228,7 @@ jq '.result' salida.json
 
 ### Conversational — two turns (API must already be running)
 
-Default prompt on this path is **v2** (`?prompt_version=` still accepts v1|v2).
+Default prompt on this path is **v3** (`?prompt_version=` still accepts v1|v2|v3). Optional multipart `tier` overrides the resolver.
 
 ```bash
 SESSION_ID=$(curl -s -X POST http://localhost:8000/sessions | jq -r .session_id)
