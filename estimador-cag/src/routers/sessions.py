@@ -22,7 +22,7 @@ from services.attachments import (
     extract_text,
 )
 from services.conversational import estimate_conversational
-from sessions import SessionNotFoundError
+from sessions import ProjectMetadata, SessionNotFoundError
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 log = structlog.get_logger()
@@ -40,6 +40,17 @@ class CreateSessionResponse(BaseModel):
     session_id: str = Field(description="UUID identifier for the new conversational session.")
 
 
+class SessionInfoResponse(BaseModel):
+    session_id: str
+    message_count: int
+    max_turns: int
+    metadata: ProjectMetadata
+    anchors_count: int = 0
+    summary_chars: int = 0
+    last_resolved_tier: str | None = None
+    last_tier_rule: str | None = None
+
+
 def _ensure_llm_configured() -> None:
     if get_settings().llm_configured:
         return
@@ -55,6 +66,25 @@ def create_session() -> CreateSessionResponse:
     session = get_session_store().create()
     log.info("session_created", session_id=session.session_id)
     return CreateSessionResponse(session_id=session.session_id)
+
+
+@router.get("/{session_id}", response_model=SessionInfoResponse)
+def get_session(session_id: str) -> SessionInfoResponse:
+    """Read-only inspect of the in-memory session. No LLM."""
+    try:
+        session = get_session_store().get(session_id)
+    except SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="session_not_found") from exc
+    return SessionInfoResponse(
+        session_id=session.session_id,
+        message_count=len(session.history.messages),
+        max_turns=session.history.max_turns,
+        metadata=session.metadata,
+        anchors_count=0,
+        summary_chars=0,
+        last_resolved_tier=session.last_resolved_tier,
+        last_tier_rule=session.last_tier_rule,
+    )
 
 
 @router.post("/{session_id}/estimate", response_model=EstimationResponseReloaded)
@@ -78,7 +108,7 @@ async def estimate_in_session(
     try:
         session = get_session_store().get(session_id)
     except SessionNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Session not found") from exc
+        raise HTTPException(status_code=404, detail="session_not_found") from exc
 
     settings = get_settings()
     extracted: list[tuple[str, str]] = []

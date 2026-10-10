@@ -93,3 +93,5 @@ class Session(BaseModel):
     session_id: str = Field(default_factory=lambda: str(uuid4()))
     history: ConversationHistory = Field(default_factory=ConversationHistory)
     metadata: ProjectMetadata = Field(default_factory=ProjectMetadata)
+    last_resolved_tier: str | None = None
+    last_tier_rule: str | None = None

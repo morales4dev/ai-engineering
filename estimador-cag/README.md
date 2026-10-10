@@ -145,7 +145,7 @@ Conversational tab (no cache, no Postgres persist). Source: `docs/conversational
 
 ## Conversational sessions
 
-`POST /sessions` and `POST /sessions/{id}/estimate` are additive. `POST /api/v1/estimate` is unchanged.
+`POST /sessions`, `POST /sessions/{id}/estimate`, and `GET /sessions/{id}` are additive. `POST /api/v1/estimate` is unchanged.
 
 Two memories, on purpose:
 
@@ -154,7 +154,7 @@ Two memories, on purpose:
 
 Caches stay off on this path (`cached` is always `false`). The same transcript in two sessions is not the same call: history and metadata differ. A cache hit would be a silent wrong answer. Nothing is written to Postgres.
 
-There is no `GET /sessions/{id}` and no `DELETE /sessions`. The estimate response carries `project_metadata`. If FastAPI restarted and the id is gone, Streamlit creates a new session and warns.
+`GET /sessions/{id}` is read-only inspect (window size, metadata, placeholders for anchors/summary/tier). It is not a second estimate and does not call the LLM. The estimate response still carries `project_metadata`. No `DELETE /sessions` and no session list. If FastAPI restarted and the id is gone, both GET and estimate return `{"detail": "session_not_found"}`; Streamlit creates a new session and warns.
 
 ### Camino B (local PDF/DOCX)
 
@@ -181,7 +181,7 @@ estimador-cag/
 │   ├── sessions/               # in-process Session + ConversationHistory + store
 │   │   └── compression/        # window peel after append (anchors later)
 │   ├── routers/estimations.py  # POST /api/v1/estimate + GET history
-│   ├── routers/sessions.py     # POST /sessions + multipart /sessions/{id}/estimate
+│   ├── routers/sessions.py     # POST /sessions + GET inspect + multipart /estimate
 │   ├── prompts/                # estimation/v1|v2 + metadata_extraction/v1
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
