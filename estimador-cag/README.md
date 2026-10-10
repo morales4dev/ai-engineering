@@ -20,8 +20,8 @@ Later modules of the Master are expected to evolve this kind of service toward *
 
 - Python **3.11+**
 - [uv](https://docs.astral.sh/uv/)
-- An **API key** for OpenAI and/or Anthropic (at least one; both if you want provider fallback)
-- **Redis Stack** if you want exact-match and semantic cache (the API still answers if Redis is down; semantic cache also needs an OpenAI key)
+- An **API key** for OpenAI and/or Anthropic (at least one). There is no provider fallback: calls go to `PRIMARY_MODEL` only
+- **Redis** if you want exact-match cache; **Redis Stack** (RediSearch) if you also want semantic cache (the API still answers if Redis is down; semantic cache also needs an OpenAI key)
 
 ## Local setup
 
@@ -34,7 +34,7 @@ cp .env.example .env
 # Edit .env and set the API key for your chosen provider
 ```
 
-Run the API (same layout as the VS Code launch config: app package root is `src/`):
+Run the API (app package root is `src/`):
 
 ```bash
 cd src
@@ -133,42 +133,57 @@ sequenceDiagram
     else Estimate with review
         UI->>API: POST multipart /estimate-acb
     end
-    API->>Attach: pdf or docx by extension
-    Attach-->>API: extracted text
-    API->>API: enrich transcript
-    API->>In: enriched transcript
-    alt InputGuardrailViolation
-        In-->>API: reason, message
-        API-->>UI: 400
-    else ok
-        API->>Tier: transcript, metadata, override
-        Tier-->>API: tier, rule
-        alt /estimate
-            API->>Loader: transcript, enums, metadata, tier
-            Loader-->>API: system, user
-            API->>W: system plus window plus new user
-            W-->>API: result
-            API->>Out: filter
-            Out-->>API: result
-        else /estimate-acb
-            API->>Boss: actor, critic
-            loop accept / iterate / synthesize
-                Boss->>Loader: + optional critic_feedback
-                Loader-->>Boss: system, user
-                Boss->>W: actor draft
-                W-->>Boss: draft
-                Boss->>Out: filter
-                Out-->>Boss: draft
-                Boss->>Critic: review draft
-                Critic-->>Boss: verdict
+    alt session_not_found
+        API-->>UI: 404
+        UI->>API: POST /sessions
+        API-->>UI: new session_id
+        UI->>API: retry POST
+    else session ok
+        API->>Attach: pdf or docx by extension
+        alt unsupported_attachment
+            Attach-->>API: UnsupportedAttachmentError
+            API-->>UI: 415
+        else attachment_extraction_failed
+            Attach-->>API: AttachmentExtractionError
+            API-->>UI: 422
+        else extracted
+            Attach-->>API: extracted text
+            API->>API: enrich transcript
+            API->>In: enriched transcript
+            alt InputGuardrailViolation
+                In-->>API: reason, message
+                API-->>UI: 400
+            else ok
+                API->>Tier: transcript, metadata, override
+                Tier-->>API: tier, rule
+                alt /estimate
+                    API->>Loader: transcript, enums, metadata, tier
+                    Loader-->>API: system, user
+                    API->>W: system plus window plus new user
+                    W-->>API: result
+                    API->>Out: filter
+                    Out-->>API: result
+                else /estimate-acb
+                    API->>Boss: actor, critic
+                    loop accept / iterate / synthesize
+                        Boss->>Loader: + optional critic_feedback
+                        Loader-->>Boss: system, user
+                        Boss->>W: actor draft
+                        W-->>Boss: draft
+                        Boss->>Out: filter
+                        Out-->>Boss: draft
+                        Boss->>Critic: review draft
+                        Critic-->>Boss: verdict
+                    end
+                    Boss-->>API: final result, acb trail
+                end
+                API->>API: append transcript then apply_compression
+                API->>Ext: transcript, result, previous metadata
+                Ext-->>API: merged or previous if fail-open
+                API-->>UI: result, cached false, project_metadata [, acb]
+                UI-->>User: summary, phases, metadata [, Review trail]
             end
-            Boss-->>API: final result, acb trail
         end
-        API->>API: append transcript then apply_compression
-        API->>Ext: transcript, result, previous metadata
-        Ext-->>API: merged or previous if fail-open
-        API-->>UI: result, cached false, project_metadata [, acb]
-        UI-->>User: summary, phases, metadata [, Review trail]
     end
 ```
 
@@ -187,7 +202,7 @@ Caches stay off on this path (`cached` is always `false`). The same transcript i
 
 `GET /sessions/{id}` is read-only inspect (window size, metadata, `anchors_count`, `summary_chars`, last resolved tier and rule). It is not a second estimate and does not call the LLM. The estimate response still carries `project_metadata`. No `DELETE /sessions` and no session list. If FastAPI restarted and the id is gone, both GET and estimate return `{"detail": "session_not_found"}`; Streamlit creates a new session and warns.
 
-Each session estimate resolves an audience **tier** (`executive` / `pm` / `developer` / `default`) from an optional multipart `tier` override, else the first matching rule (NDA / regulatory → executive; ≥2 infra keywords → developer; team size ≤ 2 → pm). v3 injects that into `<audience>`. `?prompt_version=` still accepted; omitted query uses `CONVERSATIONAL_PROMPT_VERSION` (default **v3**). One-shot `/api/v1/estimate` stays on `render_estimation_prompt`, default v1.
+Each session estimate resolves an audience **tier** (`executive` / `pm` / `developer` / `default`) from an optional multipart `tier` override, else the first matching rule (NDA / regulatory in this turn → executive; ≥2 infra keywords in this turn → developer; saved `assumed_team_size` ≤ 2 → pm). v3 injects that into `<audience>`. `?prompt_version=` still accepted; omitted query uses `CONVERSATIONAL_PROMPT_VERSION` (default **v3**). One-shot `/api/v1/estimate` stays on `render_estimation_prompt`, default v1.
 
 `POST /sessions/{id}/estimate-acb` is the same multipart as `/estimate`, then Actor → Critic → Boss (accept / iterate / synthesize, `BOSS_MAX_ITERATIONS=3`). Response adds `acb` (`iterations`, `final_decision`, `iterations_run`). Intermediate actor drafts are discarded; the session stores one turn (enriched transcript + final assistant). Critic fail-open: accept with review confidence 0. Caches stay off. `{"detail": "session_not_found"}` on a missing id.
 
@@ -218,7 +233,7 @@ estimador-cag/
 │   │   └── tier_resolver.py    # audience tier for conversational v3
 │   ├── routers/estimations.py  # POST /api/v1/estimate + GET history
 │   ├── routers/sessions.py     # POST /sessions + GET inspect + /estimate + /estimate-acb
-│   ├── prompts/                # estimation/v1|v2|v3 + metadata + summary + critic
+│   ├── prompts/                # estimation/v1|v2|v3 + metadata + conversation_summary + critic
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
 │   ├── services/
