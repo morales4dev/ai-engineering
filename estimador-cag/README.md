@@ -149,12 +149,14 @@ Conversational tab (no cache, no Postgres persist). Source: `docs/conversational
 
 Two memories, on purpose:
 
-- **Conversational history** — last ≤ 6 user+assistant pairs in a process-local `SessionStore` dict. The user turn is the enriched transcript (form + attachments), not the rendered `user.j2`. The assistant turn is `EstimationResult.model_dump_json()`. `append` only stores the pair; `CompressionPolicy` peels the oldest pair when the window overflows. The system prompt is not stored; it is rebuilt each turn from the current `project_metadata`. Restarting uvicorn empties the dict. This is not `services/history.py` (that table is the one-shot Postgres log, what the Recent tab reads).
+- **Conversational history** — last ≤ 6 user+assistant pairs in a process-local `SessionStore` dict. The user turn is the enriched transcript (form + attachments), not the rendered `user.j2`. The assistant turn is `EstimationResult.model_dump_json()`. `append` only stores the pair; `CompressionPolicy` peels overflow after that. The system prompt is not stored; it is rebuilt each turn from the current `project_metadata`. Restarting uvicorn empties the dict. This is not `services/history.py` (that table is the one-shot Postgres log, what the Recent tab reads).
 - **Project metadata** — durable facts (`project_name`, team size, technologies, scope) kept *outside* the message array and re-injected into `<project_metadata>` every turn. When the window drops turn 1, the name should still be in the system block.
+
+When the window overflows, the oldest pair is peeled. If the user turn matches an anchor (NDA, frozen scope, compliance, …), both messages move to `anchors` and stay verbatim. Otherwise they fold into a cumulative `summary` (`COMPRESSION_MODEL`, fail-open). `to_messages_list()` order: optional summary envelope, then anchors, then the recent window. `ANCHOR_DETECTION_MODE` default is `heuristic`; `llm` classifies the evicted user turn and falls back to heuristic on failure. Memory is still process-local.
 
 Caches stay off on this path (`cached` is always `false`). The same transcript in two sessions is not the same call: history and metadata differ. A cache hit would be a silent wrong answer. Nothing is written to Postgres.
 
-`GET /sessions/{id}` is read-only inspect (window size, metadata, placeholders for anchors/summary/tier). It is not a second estimate and does not call the LLM. The estimate response still carries `project_metadata`. No `DELETE /sessions` and no session list. If FastAPI restarted and the id is gone, both GET and estimate return `{"detail": "session_not_found"}`; Streamlit creates a new session and warns.
+`GET /sessions/{id}` is read-only inspect (window size, metadata, `anchors_count`, `summary_chars`; tier fields stay null until dynamic tier lands). It is not a second estimate and does not call the LLM. The estimate response still carries `project_metadata`. No `DELETE /sessions` and no session list. If FastAPI restarted and the id is gone, both GET and estimate return `{"detail": "session_not_found"}`; Streamlit creates a new session and warns.
 
 ### Camino B (local PDF/DOCX)
 
@@ -179,10 +181,10 @@ estimador-cag/
 │   ├── config.py               # Pydantic Settings
 │   ├── dependencies.py         # wrapper, caches, SessionStore singleton
 │   ├── sessions/               # in-process Session + ConversationHistory + store
-│   │   └── compression/        # window peel after append (anchors later)
+│   │   └── compression/        # window peel, anchors, cumulative summary
 │   ├── routers/estimations.py  # POST /api/v1/estimate + GET history
 │   ├── routers/sessions.py     # POST /sessions + GET inspect + multipart /estimate
-│   ├── prompts/                # estimation/v1|v2 + metadata_extraction/v1
+│   ├── prompts/                # estimation/v1|v2 + metadata + conversation_summary
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
 │   ├── services/

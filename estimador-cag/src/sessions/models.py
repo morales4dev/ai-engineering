@@ -27,16 +27,18 @@ class Message(BaseModel):
 
 
 class ConversationHistory(BaseModel):
-    """Sliding window of user+assistant pairs.
+    """Sliding window of user+assistant pairs, plus anchors and a summary.
 
     ``max_turns`` counts pairs, not individual messages. ``append`` only
-    stores the pair. Overflow is peeled by ``CompressionPolicy`` so role
-    alternation stays intact. ``to_messages_list`` is the array for the
-    LLM call, without a system message.
+    stores the pair. Overflow is peeled by ``CompressionPolicy``: anchors
+    stay verbatim, the rest folds into ``summary``. ``to_messages_list``
+    is the array for the LLM call, without a system message.
     """
 
     max_turns: int = Field(default=6, ge=1)
     messages: list[Message] = Field(default_factory=list)
+    anchors: list[Message] = Field(default_factory=list)
+    summary: str | None = Field(default=None)
 
     def append(self, *, user: str, assistant: str) -> None:
         """Add one turn. Trim / compression are not applied here."""
@@ -44,8 +46,27 @@ class ConversationHistory(BaseModel):
         self.messages.append(Message(role="assistant", content=assistant))
 
     def to_messages_list(self) -> list[dict[str, str]]:
-        """Return ``[{role, content}, …]`` with no system prompt."""
-        return [{"role": m.role, "content": m.content} for m in self.messages]
+        """Return ``[{role, content}, …]`` with no system prompt.
+
+        Order: optional synthetic summary, then anchors, then the recent window.
+        The caller still prepends system.
+        """
+        out: list[dict[str, str]] = []
+        if self.summary:
+            out.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "[Earlier conversation summary — the recent turns "
+                        "below are the live thread]\n" + self.summary
+                    ),
+                }
+            )
+        for anchor in self.anchors:
+            out.append({"role": anchor.role, "content": anchor.content})
+        for message in self.messages:
+            out.append({"role": message.role, "content": message.content})
+        return out
 
 
 class ProjectMetadata(BaseModel):

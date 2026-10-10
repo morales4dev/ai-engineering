@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     MAX_CONVERSATION_TURNS: int = 6
     MAX_ATTACHMENT_CHARS: int = 60000
     METADATA_EXTRACTOR_MODEL: str = "gpt-4o-mini"
+    ANCHOR_DETECTION_MODE: Literal["heuristic", "llm"] = "heuristic"
+    COMPRESSION_MODEL: str = "gpt-4o-mini"
     APP_ENV: Literal["development", "staging", "production"] = "development"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"
 

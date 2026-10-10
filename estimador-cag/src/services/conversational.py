@@ -2,7 +2,8 @@
 
 Replaces the one-shot ``estimate_session_bridge``. The system prompt is
 rebuilt each turn from the current ``ProjectMetadata``. History is pairs
-only; ``append`` stores, then ``apply_compression`` peels overflow.
+only; ``append`` stores, then ``apply_compression`` peels overflow
+into anchors or the cumulative summary.
 Nothing is written to Postgres.
 """
 
@@ -62,7 +63,12 @@ def estimate_conversational(
     )
     result = enforce_scope_response(result)
     session.history.append(user=transcript, assistant=result.model_dump_json())
-    apply_compression(session.history)
+    apply_compression(
+        session.history,
+        llm_wrapper=wrapper,
+        compression_model=settings.COMPRESSION_MODEL,
+        anchor_detection_mode=settings.ANCHOR_DETECTION_MODE,
+    )
     session.metadata = update_metadata(
         previous=session.metadata,
         transcript=transcript,

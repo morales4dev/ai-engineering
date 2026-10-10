@@ -29,7 +29,7 @@ Entry points today (ours):
 |---|-------|----|
 | 1 | Dumb `append` + window policy seam | [x] |
 | 2 | `GET /sessions/{id}` inspect (read-only) | [x] |
-| 3 | Compression: anchors + cumulative summary | [ ] |
+| 3 | Compression: anchors + cumulative summary | [x] |
 | 4 | Dynamic tier + conversational prompt `v3` | [ ] |
 | 5 | Actor-Critic-Boss + `POST /sessions/{id}/estimate-acb` | [ ] |
 | 6 | Streamlit surfaces (inspect button, tier, ACB trail) | [ ] |

@@ -1,13 +1,17 @@
-"""Window policy for conversational history.
+"""Hybrid memory compression for long conversations.
 
-``CompressionPolicy`` is the only mutator after ``append``. This step is
-window-only: peel oldest user/assistant pairs until the sliding window
-fits. Anchors and cumulative summary land in a later step.
+``CompressionPolicy`` peels overflow after ``append``: anchors stay
+verbatim, the rest folds into a cumulative summary.
 """
 
+from sessions.compression.anchors import AnchorDetector, AnchorMatch
 from sessions.compression.policy import CompressionPolicy, apply_compression
+from sessions.compression.summarizer import CumulativeSummarizer
 
 __all__ = [
+    "AnchorDetector",
+    "AnchorMatch",
     "CompressionPolicy",
+    "CumulativeSummarizer",
     "apply_compression",
 ]

@@ -80,8 +80,8 @@ def get_session(session_id: str) -> SessionInfoResponse:
         message_count=len(session.history.messages),
         max_turns=session.history.max_turns,
         metadata=session.metadata,
-        anchors_count=0,
-        summary_chars=0,
+        anchors_count=len(session.history.anchors),
+        summary_chars=len(session.history.summary or ""),
         last_resolved_tier=session.last_resolved_tier,
         last_tier_rule=session.last_tier_rule,
     )

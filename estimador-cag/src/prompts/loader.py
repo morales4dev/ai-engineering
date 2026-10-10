@@ -93,3 +93,22 @@ def render_metadata_extraction_prompt(
     system = _env.get_template(f"metadata_extraction/{version}/system.j2").render(**context)
     user = _env.get_template(f"metadata_extraction/{version}/user.j2").render(**context)
     return system, user
+
+
+def render_conversation_summary_prompt(
+    *,
+    previous_summary: str | None,
+    evicted: list,
+    version: str = "v1",
+) -> tuple[str, str]:
+    """Render the prompts used by the ``CumulativeSummarizer``.
+
+    ``evicted`` is a list of ``Message``-like objects (``role``, ``content``).
+    """
+    context = {
+        "previous_summary": previous_summary or "",
+        "evicted": evicted,
+    }
+    system = _env.get_template(f"conversation_summary/{version}/system.j2").render(**context)
+    user = _env.get_template(f"conversation_summary/{version}/user.j2").render(**context)
+    return system, user
