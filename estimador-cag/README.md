@@ -145,7 +145,7 @@ Conversational tab (no cache, no Postgres persist). Source: `docs/conversational
 
 ## Conversational sessions
 
-`POST /sessions`, `POST /sessions/{id}/estimate`, and `GET /sessions/{id}` are additive. `POST /api/v1/estimate` is unchanged.
+`POST /sessions`, `POST /sessions/{id}/estimate`, `POST /sessions/{id}/estimate-acb`, and `GET /sessions/{id}` are additive. `POST /api/v1/estimate` is unchanged.
 
 Two memories, on purpose:
 
@@ -159,6 +159,8 @@ Caches stay off on this path (`cached` is always `false`). The same transcript i
 `GET /sessions/{id}` is read-only inspect (window size, metadata, `anchors_count`, `summary_chars`, last resolved tier and rule). It is not a second estimate and does not call the LLM. The estimate response still carries `project_metadata`. No `DELETE /sessions` and no session list. If FastAPI restarted and the id is gone, both GET and estimate return `{"detail": "session_not_found"}`; Streamlit creates a new session and warns.
 
 Each session estimate resolves an audience **tier** (`executive` / `pm` / `developer` / `default`) from an optional multipart `tier` override, else the first matching rule (NDA / regulatory → executive; ≥2 infra keywords → developer; team size ≤ 2 → pm). v3 injects that into `<audience>`. `?prompt_version=` still accepted; omitted query uses `CONVERSATIONAL_PROMPT_VERSION` (default **v3**). One-shot `/api/v1/estimate` stays on `render_estimation_prompt`, default v1.
+
+`POST /sessions/{id}/estimate-acb` is the same multipart as `/estimate`, then Actor → Critic → Boss (accept / iterate / synthesize, `BOSS_MAX_ITERATIONS=3`). Response adds `acb` (`iterations`, `final_decision`, `iterations_run`). Intermediate actor drafts are discarded; the session stores one turn (enriched transcript + final assistant). Critic fail-open: accept with review confidence 0. Caches stay off. `{"detail": "session_not_found"}` on a missing id.
 
 ### Camino B (local PDF/DOCX)
 
@@ -186,19 +188,22 @@ estimador-cag/
 │   │   ├── compression/        # window peel, anchors, cumulative summary
 │   │   └── tier_resolver.py    # audience tier for conversational v3
 │   ├── routers/estimations.py  # POST /api/v1/estimate + GET history
-│   ├── routers/sessions.py     # POST /sessions + GET inspect + multipart /estimate
-│   ├── prompts/                # estimation/v1|v2|v3 + metadata + conversation_summary
+│   ├── routers/sessions.py     # POST /sessions + GET inspect + /estimate + /estimate-acb
+│   ├── prompts/                # estimation/v1|v2|v3 + metadata + summary + critic
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
 │   ├── services/
 │   │   ├── llm_service.py      # estimate_oneshot() only
 │   │   ├── conversational.py   # session path: window + metadata, caches off
+│   │   ├── acb.py              # Actor-Critic-Boss orchestration
+│   │   ├── boss.py
+│   │   ├── critic.py
 │   │   ├── attachments.py      # Camino B: local PDF/DOCX text extraction
 │   │   ├── metadata_extractor.py  # second-pass ProjectMetadata, fail-open
 │   │   ├── llm_wrapper.py
 │   │   ├── cache.py            # exact-match Redis
 │   │   └── history.py          # Postgres log of one-shot /estimate rows
-│   └── schemas/estimation.py
+│   └── schemas/                # estimation + acb + critic
 ├── streamlit_app.py            # New + Conversational + Recent
 ├── Dockerfile
 ├── docker-compose.yml

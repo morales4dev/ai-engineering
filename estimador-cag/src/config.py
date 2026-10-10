@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     ANCHOR_DETECTION_MODE: Literal["heuristic", "llm"] = "heuristic"
     COMPRESSION_MODEL: str = "gpt-4o-mini"
     CONVERSATIONAL_PROMPT_VERSION: str = "v3"
+    CRITIC_MODEL: str = "gpt-4o-mini"
+    BOSS_MAX_ITERATIONS: int = 3
     APP_ENV: Literal["development", "staging", "production"] = "development"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"
 

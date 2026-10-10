@@ -128,6 +128,26 @@ def render_metadata_extraction_prompt(
     return system, user
 
 
+def render_critic_prompt(
+    *,
+    transcript: str,
+    metadata: ProjectMetadata,
+    tier: object,
+    result: EstimationResult,
+    version: str = "v1",
+) -> tuple[str, str]:
+    """Render the Critic prompts. ``tier`` may be a ``Tier`` or a string."""
+    context = {
+        "transcript": transcript,
+        "metadata": metadata,
+        "tier": _enum_value(tier),
+        "result": result,
+    }
+    system = _env.get_template(f"critic/{version}/system.j2").render(**context)
+    user = _env.get_template(f"critic/{version}/user.j2").render(**context)
+    return system, user
+
+
 def render_conversation_summary_prompt(
     *,
     previous_summary: str | None,
