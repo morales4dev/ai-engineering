@@ -32,7 +32,7 @@ Entry points today (ours):
 | 3 | Compression: anchors + cumulative summary | [x] |
 | 4 | Dynamic tier + conversational prompt `v3` | [x] |
 | 5 | Actor-Critic-Boss + `POST /sessions/{id}/estimate-acb` | [x] |
-| 6 | Streamlit surfaces (inspect button, tier, ACB trail) | [ ] |
+| 6 | Streamlit surfaces (inspect button, tier, ACB trail) | [x] |
 | 7 | Clean-up | [ ] |
 
 ## Incorporation order (not runtime)
