@@ -90,58 +90,87 @@ Needs the API running. Three tabs:
 
 While a POST is in flight the UI rotates phase labels (Discovery, Design, Implementation, QA, Launch) — wait UX, not SSE.
 
-Two sequences. The first is New / `POST /estimate`. The second is Conversational / `POST /sessions` + multipart estimate.
+Two sequences. One-shot is frozen (New / `POST /api/v1/estimate`). Source: `docs/oneshot-sequence.mmd`.
+
+![One-shot sequence](docs/oneshot-sequence.svg)
+
+Conversational tab (no cache, no Postgres persist). This one keeps evolving, so it stays inline.
 
 ```mermaid
 sequenceDiagram
-    actor User
+    participant User
     participant UI as streamlit_app.py
-    participant API as FastAPI /estimate
+    participant API as FastAPI /sessions
+    participant Attach as extract_text
     participant In as check_input
-    participant Exact as exact cache
-    participant Sem as semantic cache
-    participant Loader as render_estimation_prompt
-    participant W as LLMWrapper.complete_structured
+    participant Tier as resolve_tier
+    participant Loader as render_conversational_prompt
+    participant W as complete_structured_chat
+    participant Critic as Critic.review
+    participant Boss as Boss.run
     participant Out as enforce_scope_response
+    participant Ext as update_metadata
 
-    User->>UI: submit form
-    UI->>API: POST JSON description + enums
-    API->>In: description
+    User->>UI: open Conversational tab
+    UI->>API: POST /sessions
+    API-->>UI: session_id
+
+    opt Inspect session
+        UI->>API: GET /sessions/{id}
+        alt session_not_found
+            API-->>UI: 404
+            UI->>API: POST /sessions
+            API-->>UI: new session_id
+        else 200
+            API-->>UI: inspect JSON
+            UI-->>User: Session inspect expander
+        end
+    end
+
+    User->>UI: transcript, optional files, optional tier
+    alt Generate estimation
+        UI->>API: POST multipart /estimate
+    else Estimate with review
+        UI->>API: POST multipart /estimate-acb
+    end
+    API->>Attach: pdf or docx by extension
+    Attach-->>API: extracted text
+    API->>API: enrich transcript
+    API->>In: enriched transcript
     alt InputGuardrailViolation
         In-->>API: reason, message
         API-->>UI: 400
     else ok
-        API->>Exact: get estimation:v2
-        alt exact hit
-            Exact-->>API: result
-            API->>API: persist row
-            API-->>UI: result, cached=true
-        else exact miss
-            API->>Sem: lookup bucket + cosine
-            alt semantic hit
-                Sem-->>API: result
-                API->>API: persist row
-                API-->>UI: result, cached=true
-            else miss
-                API->>Loader: request, version v1
-                Loader-->>API: system, user
-                API->>W: complete_structured(EstimationResult)
-                W-->>API: result
-                API->>Out: filter
-                Out-->>API: result
-                API->>Exact: set EstimationResult
-                API->>Sem: store result_json
-                API->>API: persist row
-                API-->>UI: result, prompt_version, cached=false
-                UI-->>User: summary, phases, totals, confidence
+        API->>Tier: transcript, metadata, override
+        Tier-->>API: tier, rule
+        alt /estimate
+            API->>Loader: transcript, enums, metadata, tier
+            Loader-->>API: system, user
+            API->>W: system plus window plus new user
+            W-->>API: result
+            API->>Out: filter
+            Out-->>API: result
+        else /estimate-acb
+            API->>Boss: actor, critic
+            loop accept / iterate / synthesize
+                Boss->>Loader: + optional critic_feedback
+                Loader-->>Boss: system, user
+                Boss->>W: actor draft
+                W-->>Boss: draft
+                Boss->>Out: filter
+                Out-->>Boss: draft
+                Boss->>Critic: review draft
+                Critic-->>Boss: verdict
             end
+            Boss-->>API: final result, acb trail
         end
+        API->>API: append transcript then apply_compression
+        API->>Ext: transcript, result, previous metadata
+        Ext-->>API: merged or previous if fail-open
+        API-->>UI: result, cached false, project_metadata [, acb]
+        UI-->>User: summary, phases, metadata [, Review trail]
     end
 ```
-
-Conversational tab (no cache, no Postgres persist). Source: `docs/conversational-sequence.mmd`.
-
-![Conversational sequence](docs/conversational-sequence.svg)
 
 ## Conversational sessions
 
