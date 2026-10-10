@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field, model_validator
 
 
 CriticIssueCategory = Literal[
-    "math_error",
     "hallucination",
     "scope_mismatch",
     "phase_imbalance",
