@@ -37,20 +37,37 @@ except ValueError as exc:
 API_BASE_URL = settings.ESTIMATOR_API_BASE_URL.rstrip("/")
 ESTIMATE_ENDPOINT = f"{API_BASE_URL}/api/v1/estimate"
 HISTORY_ENDPOINT = f"{API_BASE_URL}/api/v1/estimations"
+SESSIONS_ENDPOINT = f"{API_BASE_URL}/sessions"
 
 WAIT_PHASES = ("Discovery", "Design", "Implementation", "QA", "Launch")
 WAIT_PHASE_SECONDS = 2
 
 
-def _post_estimate_with_phase_wait(payload: dict) -> httpx.Response:
-    """POST /estimate while rotating phase labels. Wait UX, not SSE."""
+def _init_conversational_state() -> None:
+    st.session_state.setdefault("session_id", None)
+    st.session_state.setdefault("conv_result", None)
+    st.session_state.setdefault("conv_metadata", None)
+    st.session_state.setdefault("conv_uploader_nonce", 0)
+    st.session_state.setdefault("conv_session_warning", None)
+
+
+def _post_with_phase_wait(
+    url: str,
+    *,
+    json: dict | None = None,
+    data: dict | None = None,
+    files: list | None = None,
+) -> httpx.Response:
+    """POST while rotating phase labels. Wait UX, not SSE."""
     box: dict = {}
 
     def _call() -> None:
         try:
             box["response"] = httpx.post(
-                ESTIMATE_ENDPOINT,
-                json=payload,
+                url,
+                json=json,
+                data=data,
+                files=files,
                 timeout=httpx.Timeout(120.0, connect=10.0),
             )
         except Exception as exc:  # noqa: BLE001 — re-raised in the UI thread
@@ -78,19 +95,129 @@ def _post_estimate_with_phase_wait(payload: dict) -> httpx.Response:
     return box["response"]
 
 
+def _post_estimate_with_phase_wait(payload: dict) -> httpx.Response:
+    """POST /estimate JSON. Same wait UX as the session multipart path."""
+    return _post_with_phase_wait(ESTIMATE_ENDPOINT, json=payload)
+
+
 def _show_http_error(exc: httpx.HTTPStatusError) -> None:
-    """Render a 400 guardrail payload as reason + message; fall back to the raw body."""
-    if exc.response.status_code == 400:
+    """Render structured API errors; fall back to the raw body."""
+    if exc.response.status_code in {400, 415, 422}:
         try:
             detail = exc.response.json().get("detail")
         except ValueError:
             detail = None
-        if isinstance(detail, dict) and detail.get("message"):
+        if isinstance(detail, dict):
             reason = detail.get("reason") or "blocked"
+            filename = detail.get("filename")
+            message = detail.get("message")
+            if filename and message:
+                text = f"{filename}: {message}"
+            elif message:
+                text = message
+            elif filename:
+                text = f"Unsupported file: {filename}"
+            else:
+                text = exc.response.text
             st.badge(str(reason), icon=":material/block:", color="orange")
-            st.error(detail["message"])
+            st.error(text)
             return
     st.error(f"Service returned {exc.response.status_code}: {exc.response.text}")
+
+
+def _create_session() -> str | None:
+    try:
+        response = httpx.post(SESSIONS_ENDPOINT, timeout=httpx.Timeout(15.0, connect=5.0))
+        response.raise_for_status()
+        session_id = response.json().get("session_id")
+    except httpx.HTTPStatusError as exc:
+        _show_http_error(exc)
+        return None
+    except httpx.HTTPError as exc:
+        st.error(f"Could not create a session at `{SESSIONS_ENDPOINT}`: {exc}")
+        return None
+    if not session_id:
+        st.error("The API created a session without a session_id.")
+        return None
+    return session_id
+
+
+def _ensure_conversational_session() -> str | None:
+    session_id = st.session_state.get("session_id")
+    if session_id:
+        return session_id
+    session_id = _create_session()
+    if session_id:
+        st.session_state.session_id = session_id
+    return session_id
+
+
+def _reset_conversational_widgets(session_id: str) -> None:
+    st.session_state.session_id = session_id
+    st.session_state.conv_result = None
+    st.session_state.conv_metadata = None
+    st.session_state.conv_transcript = ""
+    st.session_state.conv_uploader_nonce = st.session_state.get("conv_uploader_nonce", 0) + 1
+    st.session_state.conv_session_warning = None
+
+
+@st.dialog("New conversation")
+def _confirm_new_conversation() -> None:
+    st.write(
+        "This creates a new API session and clears the transcript, files, "
+        "last result and metadata shown here."
+    )
+    if st.button("Start new conversation", type="primary"):
+        session_id = _create_session()
+        if session_id:
+            _reset_conversational_widgets(session_id)
+            st.rerun()
+
+
+def _attachment_parts(uploads: list | None) -> list[tuple[str, tuple[str, bytes, str]]] | None:
+    if not uploads:
+        return None
+    parts: list[tuple[str, tuple[str, bytes, str]]] = []
+    for upload in uploads:
+        filename = getattr(upload, "name", None)
+        if not filename:
+            continue
+        content_type = getattr(upload, "type", None) or "application/octet-stream"
+        parts.append(("attachments", (filename, upload.getvalue(), content_type)))
+    return parts or None
+
+
+def _post_session_estimate(
+    session_id: str,
+    *,
+    data: dict,
+    files: list | None,
+) -> httpx.Response:
+    url = f"{SESSIONS_ENDPOINT}/{session_id}/estimate"
+    response = _post_with_phase_wait(url, data=data, files=files)
+    if response.status_code != 404:
+        return response
+    new_id = _create_session()
+    if new_id is None:
+        return response
+    st.session_state.session_id = new_id
+    st.session_state.conv_session_warning = (
+        "The API no longer had that session (usually a restart). Started a new one."
+    )
+    return _post_with_phase_wait(
+        f"{SESSIONS_ENDPOINT}/{new_id}/estimate",
+        data=data,
+        files=files,
+    )
+
+
+def _render_project_metadata(session_id: str, metadata: dict | None) -> None:
+    with st.expander("Project metadata", expanded=True):
+        st.caption(f"session_id `{session_id}`")
+        st.json(metadata or {})
+        st.caption(
+            "Filled from the API after each turn. Leaving this tab does not clear the session."
+        )
 
 
 def _render_result(body: dict) -> None:
@@ -140,10 +267,15 @@ def _render_result(body: dict) -> None:
     )
 
 
-st.title("Software estimation")
-st.caption("Fill in the form or reopen a saved estimation from the API history.")
+_init_conversational_state()
 
-new_tab, history_tab = st.tabs(["New estimation", "Recent"])
+st.title("Software estimation")
+st.caption("One-shot form, a conversational session, or a saved estimation from the API history.")
+
+new_tab, conv_tab, history_tab = st.tabs(
+    ["New estimation", "Conversational", "Recent"],
+    on_change="rerun",
+)
 
 with new_tab:
     with st.form("estimation_form", clear_on_submit=False):
@@ -195,6 +327,99 @@ with new_tab:
                 )
             else:
                 _render_result(body)
+
+if conv_tab.open:
+    with conv_tab:
+        session_id = _ensure_conversational_session()
+        st.caption(
+            "Transcript plus optional PDF/DOCX. The API default prompt is v2. "
+            "Project facts persist in metadata. Prior turns stay in a sliding window."
+        )
+        if st.session_state.conv_session_warning:
+            st.warning(st.session_state.conv_session_warning)
+        if st.button("New conversation", icon=":material/refresh:"):
+            _confirm_new_conversation()
+        if session_id:
+            uploader_key = f"conv_attachments_{st.session_state.conv_uploader_nonce}"
+            with st.form("conversational_form", clear_on_submit=False):
+                transcript = st.text_area(
+                    "Transcript",
+                    height=200,
+                    key="conv_transcript",
+                    persist_state="session",
+                    placeholder="Describe the project or refine the previous turn…",
+                    help="Between 20 and 2000 characters. Attachment text is added after this.",
+                )
+                uploads = st.file_uploader(
+                    "Attachments",
+                    type=["pdf", "docx"],
+                    accept_multiple_files=True,
+                    key=uploader_key,
+                    help="Optional PDF or Word documents. Extracted locally in the API.",
+                )
+                project_type = st.selectbox(
+                    "Project type",
+                    options=[item.value for item in ProjectType],
+                    index=1,
+                    key="conv_project_type",
+                    persist_state="session",
+                )
+                detail_level = st.radio(
+                    "Detail level",
+                    options=[item.value for item in DetailLevel],
+                    index=1,
+                    horizontal=True,
+                    key="conv_detail_level",
+                    persist_state="session",
+                )
+                output_format = st.selectbox(
+                    "Output format",
+                    options=[item.value for item in OutputFormat],
+                    index=0,
+                    key="conv_output_format",
+                    persist_state="session",
+                )
+                submitted = st.form_submit_button("Generate estimation", type="primary")
+
+            if submitted:
+                if len(transcript.strip()) < 20:
+                    st.error("The transcript must be at least 20 characters long.")
+                elif len(transcript) > 2000:
+                    st.error("The transcript must be at most 2000 characters long.")
+                else:
+                    form = {
+                        "transcript": transcript.strip(),
+                        "project_type": project_type,
+                        "detail_level": detail_level,
+                        "output_format": output_format,
+                    }
+                    try:
+                        response = _post_session_estimate(
+                            session_id,
+                            data=form,
+                            files=_attachment_parts(uploads),
+                        )
+                        response.raise_for_status()
+                        body = response.json()
+                    except httpx.HTTPStatusError as exc:
+                        _show_http_error(exc)
+                    except httpx.HTTPError as exc:
+                        st.error(
+                            f"Could not reach the session estimate at `{SESSIONS_ENDPOINT}`: {exc}"
+                        )
+                    else:
+                        st.session_state.conv_result = body
+                        st.session_state.conv_metadata = body.get("project_metadata") or {}
+                        st.session_state.session_id = (
+                            st.session_state.session_id or session_id
+                        )
+
+            _render_project_metadata(
+                st.session_state.session_id or session_id,
+                st.session_state.conv_metadata,
+            )
+            if st.session_state.conv_result:
+                _render_result(st.session_state.conv_result)
 
 with history_tab:
     st.subheader("Recent estimations")
@@ -253,6 +478,7 @@ with st.sidebar:
     st.header("Service")
     st.code(ESTIMATE_ENDPOINT, language="text")
     st.code(HISTORY_ENDPOINT, language="text")
+    st.code(SESSIONS_ENDPOINT, language="text")
     st.markdown(f"**Primary model:** `{settings.PRIMARY_MODEL}`")
     st.markdown(f"**Fallback model:** `{settings.FALLBACK_MODEL}`")
     st.markdown(f"**Cache TTL:** `{settings.CACHE_TTL}s`")

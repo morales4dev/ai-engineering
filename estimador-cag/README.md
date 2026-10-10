@@ -61,16 +61,36 @@ Compose sets `REDIS_URL=redis://redis:6379` for the API container. When you run 
 Streamlit still runs on the host (not inside Compose):
 
 ```bash
-uv run streamlit run streamlit_app.py          # form → POST /estimate — API must be up
+uv run streamlit run streamlit_app.py          # New / Conversational / Recent — API must be up
+```
+
+## Logs
+
+### Histórico
+```bash
+docker logs estimator
+```
+
+### En vivo, siguiente submit
+```bash
+docker logs -f estimator       
 ```
 
 ## HTTP client
 
-Streamlit is the HTTP client of `POST /estimate`.
+Streamlit is the HTTP client of the estimator API. It never talks to SQL, Redis, or the LLM.
 
 ### Streamlit (HTTP form)
 
-Needs the API running. Submit sends `description` plus the three enums to `POST /estimate` and paints `result` (summary, phases, totals, confidence). While the POST is in flight the UI rotates phase labels (Discovery, Design, Implementation, QA, Launch) — wait UX, not SSE. A 400 from input guardrails is shown as `reason` + `message`. The Recent tab lists the last 20 via `GET /api/v1/estimations` and reopens one via `GET /api/v1/estimations/{id}`. Streamlit does not talk to SQL, Redis, or the LLM.
+Needs the API running. Three tabs:
+
+- **New estimation** — one-shot. Submit sends `description` plus the three enums as JSON to `POST /api/v1/estimate` and paints `result` (summary, phases, totals, confidence). A 400 from input guardrails is shown as `reason` + `message`.
+- **Conversational** — brought forward so the session API can be used without Swagger. Entering the tab calls `POST /sessions` once and keeps `session_id` in `st.session_state`. Submit sends multipart (`transcript`, the three enums, optional PDF/DOCX) to `POST /sessions/{id}/estimate`. The API extracts attachment text locally (pypdf / python-docx). Caches stay off and nothing is written to Postgres. Each turn sends a rebuilt system prompt (current `project_metadata`) plus a sliding window of prior user/assistant pairs (max 6). `project_metadata` is extracted after the estimate and returned in the response. Leaving the tab does not drop the session. **New conversation** confirms and creates another `session_id`.
+- **Recent** — last 20 rows via `GET /api/v1/estimations`; reopen via `GET /api/v1/estimations/{id}` (one-shot history only).
+
+While a POST is in flight the UI rotates phase labels (Discovery, Design, Implementation, QA, Launch) — wait UX, not SSE.
+
+Two sequences. The first is New / `POST /estimate`. The second is Conversational / `POST /sessions` + multipart estimate.
 
 ```mermaid
 sequenceDiagram
@@ -119,6 +139,37 @@ sequenceDiagram
     end
 ```
 
+Conversational tab (no cache, no Postgres persist). Source: `docs/conversational-sequence.mmd`.
+
+![Conversational sequence](docs/conversational-sequence.svg)
+
+## Conversational sessions
+
+`POST /sessions` and `POST /sessions/{id}/estimate` are additive. `POST /api/v1/estimate` is unchanged.
+
+Two memories, on purpose:
+
+- **Conversational history** — last ≤ 6 user+assistant pairs in a process-local `SessionStore` dict. The assistant turn is `EstimationResult.model_dump_json()`. The system prompt is not stored; it is rebuilt each turn from the current `project_metadata`. Restarting uvicorn empties the dict. This is not `services/history.py` (that table is the one-shot Postgres log, what the Recent tab reads).
+- **Project metadata** — durable facts (`project_name`, team size, technologies, scope) kept *outside* the message array and re-injected into `<project_metadata>` every turn. When the window drops turn 1, the name should still be in the system block.
+
+Caches stay off on this path (`cached` is always `false`). The same transcript in two sessions is not the same call: history and metadata differ. A cache hit would be a silent wrong answer. Nothing is written to Postgres.
+
+There is no `GET /sessions/{id}` and no `DELETE /sessions`. The estimate response carries `project_metadata`. If FastAPI restarted and the id is gone, Streamlit creates a new session and warns.
+
+### Camino B (local PDF/DOCX)
+
+Attachments are extracted **in the API** with `pypdf` and `python-docx` (`src/services/attachments.py`). Dispatch is by filename extension: only `.pdf` and `.docx`. No filename or empty upload: ignored. Unsupported type → 415. Broken file → 422. Text is appended after the form `transcript` as `--- attachment: filename ---`. `transcript` stays 20–2000 characters; extracted text is extra, truncated per file at `MAX_ATTACHMENT_CHARS` (60000), not rejected with 413.
+
+Camino A (provider Files API) is out of scope. Local extract keeps the same text path for OpenAI and Anthropic, and we own the truncation. Chunking / retrieval is module 3.
+
+### Metadata extractor
+
+After a successful estimate, a second Instructor call (`METADATA_EXTRACTOR_MODEL`, default `gpt-4o-mini`) reads the enriched transcript + `EstimationResult` + previous metadata and returns a partial `ProjectMetadata`. Scalars: non-null wins. Technologies: case-insensitive union.
+
+Fail-open: if that call fails, it is logged and the previous metadata is kept. The estimate already succeeded; a facts refresh must not 502 the user.
+
+Why a second call instead of asking the estimator to also maintain the object: the window will forget turn 1. Facts have to live in a slot that is re-injected every turn, not only in the dropped messages.
+
 ## Project layout
 
 ```
@@ -126,13 +177,23 @@ estimador-cag/
 ├── src/
 │   ├── main.py                 # FastAPI app, /health
 │   ├── config.py               # Pydantic Settings
-│   ├── dependencies.py         # wrapper + Redis cache singletons
-│   ├── routers/estimations.py  # POST /estimate + GET history
+│   ├── dependencies.py         # wrapper, caches, SessionStore singleton
+│   ├── sessions.py             # in-process Session + ConversationHistory + metadata
+│   ├── routers/estimations.py  # POST /api/v1/estimate + GET history
+│   ├── routers/sessions.py     # POST /sessions + multipart /sessions/{id}/estimate
+│   ├── prompts/                # estimation/v1|v2 + metadata_extraction/v1
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
-│   ├── services/               # estimate(), wrapper, exact cache, history
+│   ├── services/
+│   │   ├── llm_service.py      # estimate_oneshot() only
+│   │   ├── conversational.py   # session path: window + metadata, caches off
+│   │   ├── attachments.py      # Camino B: local PDF/DOCX text extraction
+│   │   ├── metadata_extractor.py  # second-pass ProjectMetadata, fail-open
+│   │   ├── llm_wrapper.py
+│   │   ├── cache.py            # exact-match Redis
+│   │   └── history.py          # Postgres log of one-shot /estimate rows
 │   └── schemas/estimation.py
-├── streamlit_app.py            # HTTP form + history GETs
+├── streamlit_app.py            # New + Conversational + Recent
 ├── Dockerfile
 ├── docker-compose.yml
 ├── pyproject.toml
@@ -159,6 +220,32 @@ curl -X POST http://localhost:8000/api/v1/estimate \
 
 jq '.result' salida.json
 
+### Conversational — two turns (API must already be running)
+
+Default prompt on this path is **v2** (`?prompt_version=` still accepts v1|v2).
+
+```bash
+SESSION_ID=$(curl -s -X POST http://localhost:8000/sessions | jq -r .session_id)
+echo "$SESSION_ID"
+
+curl -s -X POST "http://localhost:8000/sessions/${SESSION_ID}/estimate" \
+  -F "transcript=We will call the project Nimbus. Sales team needs a CRM with contacts, a deal pipeline, and HubSpot import. Team of 3. React + Postgres." \
+  -F "project_type=web_saas" \
+  -F "detail_level=medium" \
+  -F "output_format=phases_table" \
+  | jq '{prompt_version, cached, project_metadata, summary: .result.summary}'
+
+# Second turn: do not repeat the project name. Optional file: -F "attachments=@brief.pdf"
+curl -s -X POST "http://localhost:8000/sessions/${SESSION_ID}/estimate" \
+  -F "transcript=Add a reporting dashboard with weekly pipeline charts for the same team." \
+  -F "project_type=web_saas" \
+  -F "detail_level=medium" \
+  -F "output_format=phases_table" \
+  | jq '{prompt_version, cached, project_metadata, summary: .result.summary}'
+```
+
+Restarting the API drops the in-memory session; the next estimate returns 404.
+
 ### Form HTTP client (API must already be running)
-uv run streamlit run streamlit_app.py
+uv run streamlit run streamlit_app.py          # New / Conversational / Recent
 

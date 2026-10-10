@@ -10,6 +10,7 @@ from cache.semantic import EstimationSemanticCache
 from config import get_settings
 from services.cache import EstimationCache
 from services.llm_wrapper import LLMWrapper
+from sessions import SessionStore
 
 log = structlog.get_logger()
 
@@ -71,3 +72,13 @@ def get_semantic_cache() -> EstimationSemanticCache | None:
             error=str(exc)[:200],
         )
         return None
+
+
+@lru_cache
+def get_session_store() -> SessionStore:
+    """In-process conversational sessions. Singleton per worker.
+
+    Restart clears the dict. workers > 1 each get their own copy.
+    """
+    settings = get_settings()
+    return SessionStore(max_turns=settings.MAX_CONVERSATION_TURNS)

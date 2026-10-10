@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant CUser as User
+    participant CUI as streamlit_app.py
+    participant CAPI as FastAPI /sessions
+    participant CAttach as extract_text
+    participant CIn as check_input
+    participant CLoader as render_estimation_prompt
+    participant CW as LLMWrapper.complete_structured_chat
+    participant COut as enforce_scope_response
+    participant CExt as update_metadata
+
+    CUser->>CUI: open Conversational tab
+    CUI->>CAPI: POST /sessions
+    CAPI-->>CUI: session_id
+    CUser->>CUI: transcript plus optional files
+    CUI->>CAPI: POST multipart session estimate
+    CAPI->>CAttach: pdf or docx by extension
+    CAttach-->>CAPI: extracted text
+    CAPI->>CAPI: enrich transcript
+    CAPI->>CIn: enriched transcript
+    alt InputGuardrailViolation
+        CIn-->>CAPI: reason, message
+        CAPI-->>CUI: 400
+    else ok
+        CAPI->>CLoader: transcript, enums, current metadata
+        CLoader-->>CAPI: system, user
+        CAPI->>CW: system plus window plus new user
+        CW-->>CAPI: result
+        CAPI->>COut: filter
+        COut-->>CAPI: result
+        CAPI->>CAPI: append pair and trim
+        CAPI->>CExt: transcript, result, previous metadata
+        CExt-->>CAPI: merged or previous if fail-open
+        CAPI-->>CUI: result, cached false, project_metadata
+        CUI-->>CUser: summary, phases, metadata
+    end

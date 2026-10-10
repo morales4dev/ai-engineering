@@ -25,11 +25,10 @@ services:
         condition: service_healthy
 
     # Bind-mount src/ so code changes are reflected immediately inside the
-    # container without rebuilding the image. Preserve .venv from the image
-    # so uvicorn remains on PATH (full /app mount would hide it otherwise).
+    # container without rebuilding the image. The image venv lives at
+    # /opt/venv, so this mount cannot hide installed packages.
     volumes:
       - ./src:/app
-      - estimator_venv:/app/.venv
 
     # Override the default CMD to enable auto-reload on file changes.
     # Remove --reload for production deployments.
@@ -82,4 +81,3 @@ services:
 volumes:
   redis_data:
   postgres_data:
-  estimator_venv:

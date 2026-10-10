@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     SEMANTIC_CACHE_LOG_ONLY: bool = False
     DATABASE_URL: str | None = None
     ESTIMATOR_API_BASE_URL: str = "http://localhost:8000"
+    MAX_CONVERSATION_TURNS: int = 6
+    MAX_ATTACHMENT_CHARS: int = 60000
+    METADATA_EXTRACTOR_MODEL: str = "gpt-4o-mini"
     APP_ENV: Literal["development", "staging", "production"] = "development"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"
 

@@ -10,7 +10,8 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from schemas.estimation import EstimationRequest
+from schemas.estimation import EstimationRequest, EstimationResult
+from sessions import ProjectMetadata
 
 _BASE_DIR = Path(__file__).resolve().parent
 
@@ -42,19 +43,53 @@ class UnknownPromptVersionError(ValueError):
 def render_estimation_prompt(
     request: EstimationRequest,
     version: str = "v1",
+    *,
+    description: str | None = None,
+    metadata: ProjectMetadata | None = None,
 ) -> tuple[str, str]:
-    """Render `(system, user)` for `prompts/estimation/<version>/`."""
+    """Render `(system, user)` for `prompts/estimation/<version>/`.
+
+    ``description`` overrides ``request.description`` so the session path can
+    send transcript + extracted attachments, which exceed the 2000-char form
+    cap on ``EstimationRequest.description``.
+
+    ``metadata`` is injected into ``<project_metadata>``. The one-shot path
+    leaves it empty so StrictUndefined still has the variable.
+    """
     known = available_prompt_versions()
     if version not in known:
         raise UnknownPromptVersionError(
             f"Unknown prompt version {version!r}. Available: {', '.join(known)}"
         )
+    project_metadata = metadata if metadata is not None else ProjectMetadata()
     context = {
-        "description": request.description,
+        "description": description if description is not None else request.description,
         "project_type": _enum_value(request.project_type),
         "detail_level": _enum_value(request.detail_level),
         "output_format": _enum_value(request.output_format),
+        "metadata": project_metadata,
+        "metadata_is_empty": project_metadata.is_empty(),
     }
     system = _env.get_template(f"estimation/{version}/system.j2").render(**context)
     user = _env.get_template(f"estimation/{version}/user.j2").render(**context)
+    return system, user
+
+
+def render_metadata_extraction_prompt(
+    *,
+    transcript: str,
+    result: EstimationResult,
+    previous: ProjectMetadata,
+    version: str = "v1",
+) -> tuple[str, str]:
+    """Render `(system, user)` for ``prompts/metadata_extraction/<version>/``."""
+    context = {
+        "transcript": transcript,
+        "result": result,
+        "phases": result.phases,
+        "previous": previous,
+        "previous_is_empty": previous.is_empty(),
+    }
+    system = _env.get_template(f"metadata_extraction/{version}/system.j2").render(**context)
+    user = _env.get_template(f"metadata_extraction/{version}/user.j2").render(**context)
     return system, user

@@ -13,7 +13,7 @@ from schemas.estimation import (
     EstimationResponse,
 )
 from services.history import HistoryUnavailable, get_estimation, list_estimations
-from services.llm_service import estimate
+from services.llm_service import estimate_oneshot
 
 router = APIRouter(prefix="/api/v1", tags=["estimations"])
 log = structlog.get_logger()
@@ -50,7 +50,7 @@ def create_estimation(
         )
     _ensure_llm_configured()
     try:
-        return estimate(request, version=prompt_version)
+        return estimate_oneshot(request, version=prompt_version)
     except InputGuardrailViolation as exc:
         log.info(
             "estimation_blocked_by_input_guardrail",

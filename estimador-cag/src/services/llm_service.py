@@ -44,8 +44,8 @@ def _persist_and_return(
     return response
 
 
-def estimate(request: EstimationRequest, version: str = "v1") -> EstimationResponse:
-    """check_input → exact get → semantic get → LLM → filter → cache writes → persist."""
+def estimate_oneshot(request: EstimationRequest, version: str = "v1") -> EstimationResponse:
+    """One-shot product path: check_input → caches → LLM → filter → persist."""
     check_input(request.description, openai_client=get_openai_client())
 
     wrapper = get_llm_wrapper()
