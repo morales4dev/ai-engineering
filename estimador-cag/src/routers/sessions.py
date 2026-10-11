@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 import structlog
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from instructor.core import InstructorRetryException
 from openai import APIConnectionError, APIStatusError, RateLimitError
 from pydantic import BaseModel, Field
@@ -26,7 +26,7 @@ from services.attachments import (
     extract_text,
 )
 from services.conversational import estimate_conversational
-from sessions import ProjectMetadata, Session, SessionNotFoundError
+from sessions import ProjectMetadata, Session, SessionNotFoundError, SessionStore
 from sessions.tier_resolver import Tier
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -96,6 +96,7 @@ async def _session_estimate_prelude(
     output_format: OutputFormat,
     attachments: list[UploadFile],
     prompt_version: str | None,
+    store: SessionStore,
     *,
     log_event: str,
     tier: Tier | None,
@@ -108,7 +109,7 @@ async def _session_estimate_prelude(
     """
     version = _resolve_prompt_version(prompt_version)
     try:
-        session = get_session_store().get(session_id)
+        session = store.get(session_id)
     except SessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="session_not_found") from exc
 
@@ -169,18 +170,23 @@ async def _session_estimate_prelude(
 
 
 @router.post("", response_model=CreateSessionResponse, status_code=201)
-def create_session() -> CreateSessionResponse:
+def create_session(
+    store: SessionStore = Depends(get_session_store),
+) -> CreateSessionResponse:
     """Create an empty in-memory session. Lost on process restart."""
-    session = get_session_store().create()
+    session = store.create()
     log.info("session_created", session_id=session.session_id)
     return CreateSessionResponse(session_id=session.session_id)
 
 
 @router.get("/{session_id}", response_model=SessionInfoResponse)
-def get_session(session_id: str) -> SessionInfoResponse:
+def get_session(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+) -> SessionInfoResponse:
     """Read-only inspect of the in-memory session. No LLM."""
     try:
-        session = get_session_store().get(session_id)
+        session = store.get(session_id)
     except SessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="session_not_found") from exc
     return SessionInfoResponse(
@@ -205,6 +211,7 @@ async def estimate_in_session(
     attachments: list[UploadFile] = File(default_factory=list),
     tier: Tier | None = Form(default=None),
     prompt_version: str | None = Query(default=None),
+    store: SessionStore = Depends(get_session_store),
 ) -> EstimationResponseReloaded:
     """Session estimate: sliding-window history + metadata. Caches stay off."""
     prelude = await _session_estimate_prelude(
@@ -215,6 +222,7 @@ async def estimate_in_session(
         output_format,
         attachments,
         prompt_version,
+        store,
         log_event="session_estimate_received",
         tier=tier,
     )
@@ -251,6 +259,7 @@ async def estimate_in_session_acb(
     attachments: list[UploadFile] = File(default_factory=list),
     tier: Tier | None = Form(default=None),
     prompt_version: str | None = Query(default=None),
+    store: SessionStore = Depends(get_session_store),
 ) -> ACBResponse:
     """Actor-Critic-Boss variant of /estimate. Caches stay off."""
     prelude = await _session_estimate_prelude(
@@ -261,6 +270,7 @@ async def estimate_in_session_acb(
         output_format,
         attachments,
         prompt_version,
+        store,
         log_event="session_estimate_acb_received",
         tier=tier,
     )
