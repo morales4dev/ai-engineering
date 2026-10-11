@@ -3,11 +3,11 @@ from dataclasses import dataclass
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from instructor.core import InstructorRetryException
-from openai import APIConnectionError, APIStatusError, RateLimitError
+from openai import APIConnectionError, APIStatusError, OpenAI, RateLimitError
 from pydantic import BaseModel, Field
 
 from config import get_settings
-from dependencies import get_session_store
+from dependencies import get_llm_wrapper, get_openai_client, get_session_store
 from guardrails.input import InputGuardrailViolation
 from prompts.loader import available_prompt_versions
 from schemas.acb import ACBResponse
@@ -26,6 +26,7 @@ from services.attachments import (
     extract_text,
 )
 from services.conversational import estimate_conversational
+from services.llm_wrapper import LLMWrapper
 from sessions import ProjectMetadata, Session, SessionNotFoundError, SessionStore
 from sessions.tier_resolver import Tier
 
@@ -212,6 +213,8 @@ async def estimate_in_session(
     tier: Tier | None = Form(default=None),
     prompt_version: str | None = Query(default=None),
     store: SessionStore = Depends(get_session_store),
+    wrapper: LLMWrapper = Depends(get_llm_wrapper),
+    openai_client: OpenAI | None = Depends(get_openai_client),
 ) -> EstimationResponseReloaded:
     """Session estimate: sliding-window history + metadata. Caches stay off."""
     prelude = await _session_estimate_prelude(
@@ -232,6 +235,8 @@ async def estimate_in_session(
             prelude.request,
             transcript=prelude.transcript,
             version=prelude.version,
+            wrapper=wrapper,
+            openai_client=openai_client,
             tier=tier,
         )
     except InputGuardrailViolation as exc:
@@ -260,6 +265,8 @@ async def estimate_in_session_acb(
     tier: Tier | None = Form(default=None),
     prompt_version: str | None = Query(default=None),
     store: SessionStore = Depends(get_session_store),
+    wrapper: LLMWrapper = Depends(get_llm_wrapper),
+    openai_client: OpenAI | None = Depends(get_openai_client),
 ) -> ACBResponse:
     """Actor-Critic-Boss variant of /estimate. Caches stay off."""
     prelude = await _session_estimate_prelude(
@@ -280,6 +287,8 @@ async def estimate_in_session_acb(
             prelude.request,
             transcript=prelude.transcript,
             version=prelude.version,
+            wrapper=wrapper,
+            openai_client=openai_client,
             tier=tier,
         )
     except InputGuardrailViolation as exc:
