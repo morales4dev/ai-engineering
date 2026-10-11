@@ -10,6 +10,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from rates import prompt_vars, weekly_band_eur
 from schemas.estimation import EstimationRequest, EstimationResult
 from sessions import ProjectMetadata
 
@@ -68,6 +69,8 @@ def render_estimation_prompt(
         "metadata_is_empty": project_metadata.is_empty(),
         "tier": "default",
         "critic_feedback": None,
+        "weekly_band_eur": weekly_band_eur(project_metadata.assumed_team_size),
+        **prompt_vars(),
     }
     system = _env.get_template(f"estimation/{version}/system.j2").render(**context)
     user = _env.get_template(f"estimation/{version}/user.j2").render(**context)
@@ -102,6 +105,8 @@ def render_conversational_prompt(
         "metadata_is_empty": metadata.is_empty(),
         "tier": _enum_value(tier) if tier is not None else "default",
         "critic_feedback": critic_feedback,
+        "weekly_band_eur": weekly_band_eur(metadata.assumed_team_size),
+        **prompt_vars(),
     }
     system = _env.get_template(f"estimation/{version}/system.j2").render(**context)
     user = _env.get_template(f"estimation/{version}/user.j2").render(**context)
@@ -146,6 +151,7 @@ def render_critic_prompt(
         "result": result,
         "detail_level": _enum_value(detail_level),
         "facts": facts,
+        **prompt_vars(),
     }
     system = _env.get_template(f"critic/{version}/system.j2").render(**context)
     user = _env.get_template(f"critic/{version}/user.j2").render(**context)

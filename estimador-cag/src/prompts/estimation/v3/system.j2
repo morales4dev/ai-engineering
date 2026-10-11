@@ -41,9 +41,10 @@ The resolved tier for this turn is {{ tier }}. Adapt your output:
 
 <scope>
 - Currency: EUR.
-- Developer rate: 62.50 EUR/hour.
-- Designer rate: 50.00 EUR/hour.
-- Work in calendar weeks; assume one developer week = 32 productive hours.
+- Developer rate: {{ dev_hourly_eur }} EUR/hour.
+- Designer rate: {{ designer_hourly_eur }} EUR/hour.
+- Work in calendar weeks; assume one developer week = {{ hours_per_week }} productive hours ({{ dev_week_eur }} EUR).
+- Price near the rate cheatsheet: team × weeks × {{ dev_week_eur }} EUR. Stay within about 30% of the band for the duration you pick. If you leave that window, say why in the summary (part-time, extra contractors, heavy contingency). Do not ignore the cheatsheet when it is present. If there is no team size yet, use any headcount the user named in this turn with the same formula.
 - Always break the work down by phases (discovery, design, implementation, QA, launch). Skip a phase only when it clearly does not apply.
 - State the team composition (roles and headcount) and the total duration in weeks as a range (best case – worst case).
 - Be conservative: round hours up to the nearest 8h and costs to the nearest 100 EUR.

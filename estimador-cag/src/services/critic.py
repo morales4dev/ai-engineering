@@ -8,6 +8,7 @@ from __future__ import annotations
 import structlog
 
 from prompts.loader import render_critic_prompt
+from rates import DEV_WEEK_EUR
 from schemas.critic import CriticFeedback
 from schemas.estimation import EstimationResult
 from sessions import ProjectMetadata
@@ -15,8 +16,6 @@ from sessions.tier_resolver import Tier
 
 log = structlog.get_logger()
 
-# 32 productive hours × 62.50 EUR/h, same as the estimation / critic prompts.
-_DEV_WEEK_EUR = 2_000
 _IMBALANCE_THRESHOLD_PCT = 75
 
 
@@ -36,7 +35,7 @@ def build_critic_facts(result: EstimationResult, metadata: ProjectMetadata) -> d
         )
     team_size = metadata.assumed_team_size
     duration_weeks = result.total_duration_weeks
-    rate_band_eur = team_size * duration_weeks * _DEV_WEEK_EUR if team_size else None
+    rate_band_eur = team_size * duration_weeks * DEV_WEEK_EUR if team_size else None
     delta_vs_band_pct = (
         round(100 * (total - rate_band_eur) / rate_band_eur, 1) if rate_band_eur else None
     )
@@ -45,7 +44,7 @@ def build_critic_facts(result: EstimationResult, metadata: ProjectMetadata) -> d
         "imbalance_threshold_pct": _IMBALANCE_THRESHOLD_PCT,
         "team_size": team_size,
         "duration_weeks": duration_weeks,
-        "dev_week_eur": _DEV_WEEK_EUR,
+        "dev_week_eur": DEV_WEEK_EUR,
         "rate_band_eur": rate_band_eur,
         "total_cost_eur": total,
         "delta_vs_band_pct": delta_vs_band_pct,
