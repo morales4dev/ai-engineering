@@ -134,6 +134,8 @@ def render_critic_prompt(
     metadata: ProjectMetadata,
     tier: object,
     result: EstimationResult,
+    detail_level: object,
+    facts: dict,
     version: str = "v1",
 ) -> tuple[str, str]:
     """Render the Critic prompts. ``tier`` may be a ``Tier`` or a string."""
@@ -142,6 +144,8 @@ def render_critic_prompt(
         "metadata": metadata,
         "tier": _enum_value(tier),
         "result": result,
+        "detail_level": _enum_value(detail_level),
+        "facts": facts,
     }
     system = _env.get_template(f"critic/{version}/system.j2").render(**context)
     user = _env.get_template(f"critic/{version}/user.j2").render(**context)

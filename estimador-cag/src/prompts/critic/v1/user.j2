@@ -11,6 +11,7 @@
 </project_metadata>
 
 <resolved_tier>{{ tier }}</resolved_tier>
+<detail_level>{{ detail_level }}</detail_level>
 
 <estimation_under_review>
 summary: {{ result.summary }}
@@ -23,5 +24,14 @@ phases:
   summary: {{ phase.summary }}
 {% endfor %}
 </estimation_under_review>
+
+<cheatsheet>
+Already computed. Use these numbers; do not re-add phases or invent a rate band.
+Phase shares (imbalance only if share_pct is greater than {{ facts.imbalance_threshold_pct }}):
+{% for row in facts.phase_shares %}
+- phases[{{ row.index }}] {{ row.name }}: {{ row.cost_eur }} EUR = {{ row.share_pct }}% of total
+{% endfor %}
+Rate band: {% if facts.rate_band_eur is not none %}{{ facts.team_size }} people × {{ facts.duration_weeks }} weeks × {{ facts.dev_week_eur }} EUR/dev-week = {{ facts.rate_band_eur }} EUR. Estimate {{ facts.total_cost_eur }} EUR is {{ facts.delta_vs_band_pct }}% vs that band (negative = cheaper).{% else %}team size unknown — do not flag unrealistic_estimate on rate grounds.{% endif %}
+</cheatsheet>
 
 Audit this estimation. Return a structured ``CriticFeedback`` per the schema. Be specific in ``field_path``.

@@ -93,6 +93,7 @@ def estimate_conversational_acb(
             metadata=session.metadata,
             tier=resolved_tier,
             result=draft,
+            detail_level=request.detail_level.value,
         )
 
     boss = Boss(max_iterations=settings.BOSS_MAX_ITERATIONS)

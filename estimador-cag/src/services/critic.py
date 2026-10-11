@@ -15,6 +15,42 @@ from sessions.tier_resolver import Tier
 
 log = structlog.get_logger()
 
+# 32 productive hours × 62.50 EUR/h, same as the estimation / critic prompts.
+_DEV_WEEK_EUR = 2_000
+_IMBALANCE_THRESHOLD_PCT = 75
+
+
+def build_critic_facts(result: EstimationResult, metadata: ProjectMetadata) -> dict:
+    """Shares and rate band for the critic cheatsheet. No verdicts."""
+    total = result.total_cost_eur
+    phase_shares = []
+    for index, phase in enumerate(result.phases):
+        share_pct = round(100 * phase.cost_eur / total, 1) if total else 0.0
+        phase_shares.append(
+            {
+                "index": index,
+                "name": phase.name,
+                "cost_eur": phase.cost_eur,
+                "share_pct": share_pct,
+            }
+        )
+    team_size = metadata.assumed_team_size
+    duration_weeks = result.total_duration_weeks
+    rate_band_eur = team_size * duration_weeks * _DEV_WEEK_EUR if team_size else None
+    delta_vs_band_pct = (
+        round(100 * (total - rate_band_eur) / rate_band_eur, 1) if rate_band_eur else None
+    )
+    return {
+        "phase_shares": phase_shares,
+        "imbalance_threshold_pct": _IMBALANCE_THRESHOLD_PCT,
+        "team_size": team_size,
+        "duration_weeks": duration_weeks,
+        "dev_week_eur": _DEV_WEEK_EUR,
+        "rate_band_eur": rate_band_eur,
+        "total_cost_eur": total,
+        "delta_vs_band_pct": delta_vs_band_pct,
+    }
+
 
 class Critic:
     def __init__(self, *, llm_wrapper, model: str) -> None:
@@ -28,12 +64,15 @@ class Critic:
         metadata: ProjectMetadata,
         tier: Tier,
         result: EstimationResult,
+        detail_level: str,
     ) -> CriticFeedback:
         system_prompt, user_message = render_critic_prompt(
             transcript=transcript,
             metadata=metadata,
             tier=tier,
             result=result,
+            detail_level=detail_level,
+            facts=build_critic_facts(result, metadata),
         )
 
         try:
