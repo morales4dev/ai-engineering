@@ -1,6 +1,6 @@
 # Evolución del estimador-cag
 
-Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas auxiliares que acabaron mergeadas ahí. HEAD de referencia: `964841c` (2026-10-04).
+Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas auxiliares que acabaron mergeadas ahí. HEAD de referencia: `69860cb` (2026-10-10, `session_05_forense` tratado como mergeado).
 
 | Columna | Significado |
 |---|---|
@@ -18,53 +18,70 @@ Nombres de evento (como en las ramas, salvo `v2` y `sesion-02`, que no fueron ra
 - `sesion_03_forense` — endurecimiento del port
 - `pre_sesion_04` — templates Jinja, contrato tipado, Streamlit HTTP, limpieza SSE
 - `session_04_forense` — port live de la sesión 4 (Instructor, guardrails, caches, historial)
+- `pre_sesion_05` — path conversational (sesiones in-memory, Camino B, window, metadata)
+- `session_05_forense` — port live de la sesión 5 (inspect, compression, tier/v3, ACB)
 
 No entra `session1/` (ejercicios sueltos, no son el estimador).
 
-| Entró en | Vigente | Cambio | Retirado en |
-|---|---|---|---|
-| sesion-02 | [x] | Scaffold del servicio: `pyproject.toml`, Settings, layout FastAPI (`main`, routers, services) | |
-| sesion-02 | [x] | `GET /health` y `POST /api/v1/estimate` | |
-| sesion-02 | [] | Contrato de entrada `transcription` (acta de reunión) y salida markdown libre | pre_sesion_04 |
-| sesion-02 | [] | Few-shot CAG en Python (`src/context/examples.py`) inyectado en el system prompt | session_04_forense |
-| sesion-02 | [] | Llamada LiteLLM directa desde `llm_service` (Anthropic) | sesion_03_post |
-| sesion-02 | [x] | FastAPI “de verdad”: Pydantic Settings, structlog, lifespan, schemas propios | |
-| sesion-02 | [] | Knobs de request CAG: `preprocessing` (none / inline_cleaning / two_phase), `example_format`, `num_examples`, `use_examples`, override de modelo | pre_sesion_04 |
-| v2 | [] | Catálogo canónico de ejemplos (dataclass + markdown/json/narrative) y two-phase (`extract_requirements` + estimación) | session_04_forense |
-| v2 | [] | `evaluation.py` / `StructureCheck`: score estructural del markdown (título, tabla, totales) | session_04_forense |
-| v2 | [] | CORS abierto (`allow_origins=["*"]` + `allow_credentials=True`) | sesion_03_forense |
-| sesion_03_entrega_20260921 | [x] | Primera UI Streamlit de estimación (`streamlit_app.py`) | |
-| sesion_03_entrega_20260921 | [] | Streamlit in-process: la UI llama al LLM/SDK en el mismo proceso (`EstimationTokenStream`, luego `streamlit_inprocess.py`) | pre_sesion_04 |
-| sesion_03_entrega_20260921 | [] | `simple_chat.py` (playground Streamlit, no el formulario) | session_04_forense |
-| sesion_03_entrega_20260921 | [] | Niveles 1–2–3 CAG (`build_cag_context`, sidebar con el system prompt activo) | session_04_forense |
-| sesion_03_post | [x] | Wrapper LiteLLM único (`LLMWrapper`) en lugar de SDKs sueltos | |
-| sesion_03_post | [x] | Timeout configurable (`LLM_TIMEOUT`) | |
-| sesion_03_post | [] | Retries configurables (`LLM_RETRIES`) en el wrapper de texto | session_04_forense |
-| sesion_03_post | [] | Fallback automático `PRIMARY_MODEL` → `FALLBACK_MODEL` | session_04_forense |
-| sesion_03_post | [x] | Cache exact-match en Redis (fail-open, TTL). La clave original era hash del prompt | |
-| sesion_03_post | [] | `cost_usd` en la respuesta (tabla de precios; luego `None` si el modelo no está) | session_04_forense |
-| sesion_03_post | [] | `POST /api/v1/estimate/stream` (SSE) y `complete_stream` | pre_sesion_04 |
-| sesion_03_post | [] | Streaming consciente de cache (hit = un chunk; miss = stream y persistir) | pre_sesion_04 |
-| sesion_03_post | [] | Demo HTML SSE (`/static/sse_demo.html`) | pre_sesion_04 |
-| sesion_03_post | [x] | Streamlit como cliente HTTP de la API (deja de ser el runtime del LLM) | |
-| sesion_03_post | [x] | Docker Compose: servicio `estimator` + Redis | |
-| sesion_03_forense | [x] | La API arranca sin API keys; `/health` siempre 200 con `llm_configured`; `/estimate` → 503 si faltan | |
-| sesion_03_forense | [x] | Fallos de proveedor genéricos en el borde HTTP (502, `detail` fijo; bugs a 500; sin `except Exception`) | |
-| sesion_03_forense | [x] | Frontera de prompt: el user es dato; delimitador por request (`prompt_boundary`) | |
-| sesion_03_forense | [] | `cost_usd: null` si el modelo no está en la tabla de precios (el campo luego desaparece) | session_04_forense |
-| sesion_03_forense | [] | `max_length=50_000` en `transcription` | pre_sesion_04 |
-| sesion_03_forense | [x] | CORS abierto desactivado (middleware comentado; no hay cliente browser cross-origin) | |
-| sesion_03_forense | [x] | Handler de `/estimate` síncrono (`def`): LiteLLM no bloquea el event loop | |
-| pre_sesion_04 | [x] | Templates Jinja2 `prompts/estimation/v1/` + loader (`render_estimation_prompt`) | |
-| pre_sesion_04 | [x] | Contrato tipado: `description` (20–2000) + `project_type` / `detail_level` / `output_format` | |
-| pre_sesion_04 | [] | Salida libre `{ text, prompt_version }` | session_04_forense |
-| pre_sesion_04 | [x] | Streamlit pasa a formulario HTTP (`st.form` → `POST /estimate`) | |
-| pre_sesion_04 | [x] | Prompt v2 (`prompts/estimation/v2/`) y query `?prompt_version=` (default `v1`) | |
-| pre_sesion_04 | [x] | Reorden: `session2/estimador-cag/` → `estimador-cag/` en la raíz del repo | |
-| session_04_forense | [x] | `EstimationResult` + Instructor: `/estimate` devuelve `{ result, prompt_version, cached }` validado | |
-| session_04_forense | [x] | Guardrails de entrada (moderación, injection, PII → 400) y de salida (filtro out-of-scope) | |
-| session_04_forense | [x] | Cache exact-match recableado a clave `estimation:v2:` sobre el request tipado (las claves hash-de-prompt de la sesión 3 ya no pegan) | |
-| session_04_forense | [x] | Cache semántico (bucket + cosine, Redis Stack / RediSearch) | |
-| session_04_forense | [x] | Historial persistente en Postgres: `GET /api/v1/estimations` y `GET /api/v1/estimations/{id}`; pestaña Recent en Streamlit | |
-| session_04_forense | [x] | Espera “flashy” en Streamlit: rota etiquetas de fase mientras `/estimate` está en vuelo (no es SSE) | |
-| session_04_forense | [x] | Limpieza del path vivo: fuera leftovers CAG/`transcription` (`examples.py`, `evaluation.py`, `simple_chat`, `complete()` de texto). Queda FastAPI + Streamlit HTTP | |
+| Entró en                   | Vigente | Cambio | Retirado en        |
+| -------------------------- | ------- | --- | ------------------ |
+| sesion-02                  | [x]     | Scaffold del servicio: `pyproject.toml`, Settings, layout FastAPI (`main`, routers, services) |                    |
+| sesion-02                  | [x]     | `GET /health` y `POST /api/v1/estimate` |                    |
+| sesion-02                  | []      | Contrato de entrada `transcription` (acta de reunión) y salida markdown libre | pre_sesion_04      |
+| sesion-02                  | []      | Few-shot CAG en Python (`src/context/examples.py`) inyectado en el system prompt | session_04_forense |
+| sesion-02                  | []      | Llamada LiteLLM directa desde `llm_service` (Anthropic) | sesion_03_post     |
+| sesion-02                  | [x]     | FastAPI “de verdad”: Pydantic Settings, structlog, lifespan, schemas propios |                    |
+| sesion-02                  | []      | Knobs de request CAG: `preprocessing` (none / inline_cleaning / two_phase), `example_format`, `num_examples`, `use_examples`, override de modelo | pre_sesion_04      |
+| v2                         | []      | Catálogo canónico de ejemplos (dataclass + markdown/json/narrative) y two-phase (`extract_requirements` + estimación) | session_04_forense |
+| v2                         | []      | `evaluation.py` / `StructureCheck`: score estructural del markdown (título, tabla, totales) | session_04_forense |
+| v2                         | []      | CORS abierto (`allow_origins=["*"]` + `allow_credentials=True`) | sesion_03_forense  |
+| sesion_03_entrega_20260921 | [x]     | Primera UI Streamlit de estimación (`streamlit_app.py`) |                    |
+| sesion_03_entrega_20260921 | []      | Streamlit in-process: la UI llama al LLM/SDK en el mismo proceso (`EstimationTokenStream`, luego `streamlit_inprocess.py`) | pre_sesion_04      |
+| sesion_03_entrega_20260921 | []      | `simple_chat.py` (playground Streamlit, no el formulario) | session_04_forense |
+| sesion_03_entrega_20260921 | []      | Niveles 1–2–3 CAG (`build_cag_context`, sidebar con el system prompt activo) | session_04_forense |
+| sesion_03_post             | [x]     | Wrapper LiteLLM único (`LLMWrapper`) en lugar de SDKs sueltos |                    |
+| sesion_03_post             | [x]     | Timeout configurable (`LLM_TIMEOUT`) |                    |
+| sesion_03_post             | []      | Retries configurables (`LLM_RETRIES`) en el wrapper de texto | session_04_forense |
+| sesion_03_post             | []      | Fallback automático `PRIMARY_MODEL` → `FALLBACK_MODEL` | session_04_forense |
+| sesion_03_post             | [x]     | Cache exact-match en Redis (fail-open, TTL). La clave original era hash del prompt |                    |
+| sesion_03_post             | []      | `cost_usd` en la respuesta (tabla de precios; luego `None` si el modelo no está) | session_04_forense |
+| sesion_03_post             | []      | `POST /api/v1/estimate/stream` (SSE) y `complete_stream` | pre_sesion_04      |
+| sesion_03_post             | []      | Streaming consciente de cache (hit = un chunk; miss = stream y persistir) | pre_sesion_04      |
+| sesion_03_post             | []      | Demo HTML SSE (`/static/sse_demo.html`) | pre_sesion_04      |
+| sesion_03_post             | [x]     | Streamlit como cliente HTTP de la API (deja de ser el runtime del LLM) |                    |
+| sesion_03_post             | [x]     | Docker Compose: servicio `estimator` + Redis |                    |
+| sesion_03_forense          | [x]     | La API arranca sin API keys; `/health` siempre 200 con `llm_configured`; `/estimate` → 503 si faltan |                    |
+| sesion_03_forense          | [x]     | Fallos de proveedor genéricos en el borde HTTP (502, `detail` fijo; bugs a 500; sin `except Exception`) |                    |
+| sesion_03_forense          | [x]     | Frontera de prompt: el user es dato; delimitador por request (`prompt_boundary`) |                    |
+| sesion_03_forense          | []      | `cost_usd: null` si el modelo no está en la tabla de precios (el campo luego desaparece) | session_04_forense |
+| sesion_03_forense          | []      | `max_length=50_000` en `transcription` | pre_sesion_04      |
+| sesion_03_forense          | [x]     | CORS abierto desactivado (middleware comentado; no hay cliente browser cross-origin) |                    |
+| sesion_03_forense          | [x]     | Handler de `/estimate` síncrono (`def`): LiteLLM no bloquea el event loop |                    |
+| pre_sesion_04              | [x]     | Templates Jinja2 `prompts/estimation/v1/` + loader (`render_estimation_prompt`). Sigue en one-shot |                    |
+| pre_sesion_04              | [x]     | Contrato tipado: `description` (20–2000) + `project_type` / `detail_level` / `output_format` |                    |
+| pre_sesion_04              | []      | Salida libre `{ text, prompt_version }` | session_04_forense |
+| pre_sesion_04              | [x]     | Streamlit pasa a formulario HTTP (`st.form` → `POST /estimate`) |                    |
+| pre_sesion_04              | [x]     | Prompt v2 (`prompts/estimation/v2/`) y query `?prompt_version=` (default `v1` en one-shot) |                    |
+| pre_sesion_04              | [x]     | Reorden: `session2/estimador-cag/` → `estimador-cag/` en la raíz del repo |                    |
+| session_04_forense         | [x]     | `EstimationResult` + Instructor: `/estimate` devuelve `{ result, prompt_version, cached }` validado |                    |
+| session_04_forense         | [x]     | Guardrails de entrada (moderación, injection, PII → 400) y de salida (filtro out-of-scope) |                    |
+| session_04_forense         | [x]     | Cache exact-match recableado a clave `estimation:v2:` sobre el request tipado (one-shot; conversational no lo usa) |                    |
+| session_04_forense         | [x]     | Cache semántico (bucket + cosine, Redis Stack / RediSearch) (one-shot; conversational no lo usa) |                    |
+| session_04_forense         | [x]     | Historial persistente en Postgres + pestaña Recent (one-shot; conversational no escribe) |                    |
+| session_04_forense         | [x]     | Espera “flashy” en Streamlit: rota etiquetas de fase mientras `/estimate` está en vuelo (no es SSE) |                    |
+| session_04_forense         | [x]     | Limpieza del path vivo: fuera leftovers CAG/`transcription` (`examples.py`, `evaluation.py`, `simple_chat`, `complete()` de texto). Queda FastAPI + Streamlit HTTP |                    |
+| pre_sesion_05              | [x]     | `POST /sessions`: sesión vacía in-memory (dict de proceso; se pierde al reiniciar) |                    |
+| pre_sesion_05              | [x]     | `POST /sessions/{id}/estimate` multipart + Camino B (PDF/DOCX local; 415/422). Caches off; no Postgres |                    |
+| pre_sesion_05              | [x]     | Pestaña Conversational en Streamlit |                    |
+| pre_sesion_05              | [x]     | `project_metadata` + extractor fail-open (segunda llamada Instructor) |                    |
+| pre_sesion_05              | [x]     | Sliding window ≤6 pares; system prompt se reconstruye cada turno |                    |
+| pre_sesion_05              | []      | Overflow: `append` recorta (drop oldest) | session_05_forense |
+| pre_sesion_05              | []      | Conversational usa `render_estimation_prompt` (query default v2). One-shot lo sigue usando (default v1) | session_05_forense |
+| pre_sesion_05              | []      | Diagrama conversational extraído a `docs/conversational-sequence.mmd` + `.svg` | session_05_forense |
+| session_05_forense         | [x]     | `append` solo guarda el transcript enriquecido; `CompressionPolicy` pela overflow |                    |
+| session_05_forense         | [x]     | Overflow → anchors verbatim o summary acumulativo (`COMPRESSION_MODEL`, fail-open) |                    |
+| session_05_forense         | [x]     | `GET /sessions/{id}` inspect (404 `session_not_found`; no LLM) |                    |
+| session_05_forense         | [x]     | Audience tier + `render_conversational_prompt` (default v3). One-shot sigue en `render_estimation_prompt` / v1 |                    |
+| session_05_forense         | [x]     | `POST /sessions/{id}/estimate-acb` (Actor-Critic-Boss) |                    |
+| session_05_forense         | [x]     | UI Conversational: inspect, tier override, Review trail |                    |
+| session_05_forense         | [x]     | One-shot sequence a `docs/oneshot-sequence.mmd`+`.svg`; conversational queda inline |                    |

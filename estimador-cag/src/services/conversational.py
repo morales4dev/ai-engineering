@@ -2,7 +2,9 @@
 
 Replaces the one-shot ``estimate_session_bridge``. The system prompt is
 rebuilt each turn from the current ``ProjectMetadata``. History is pairs
-only; the window trims on append. Nothing is written to Postgres.
+only; ``append`` stores, then ``apply_compression`` peels overflow
+into anchors or the cumulative summary.
+Nothing is written to Postgres.
 """
 
 from __future__ import annotations
@@ -13,10 +15,12 @@ from config import get_settings
 from dependencies import get_llm_wrapper, get_openai_client
 from guardrails.input import check_input
 from guardrails.output import enforce_scope_response
-from prompts.loader import render_estimation_prompt
+from prompts.loader import render_conversational_prompt
 from schemas.estimation import EstimationRequest, EstimationResponseReloaded, EstimationResult
-from services.metadata_extractor import update_metadata
+from services.metadata_extractor import prime_metadata_if_empty, update_metadata
 from sessions import Session
+from sessions.compression import apply_compression
+from sessions.tier_resolver import Tier, resolve_tier
 
 log = structlog.get_logger()
 
@@ -27,17 +31,33 @@ def estimate_conversational(
     *,
     transcript: str,
     version: str,
+    tier: Tier | None = None,
 ) -> EstimationResponseReloaded:
     """Estimate against the session window. ``transcript`` is already enriched."""
     check_input(transcript, openai_client=get_openai_client())
     wrapper = get_llm_wrapper()
     settings = get_settings()
+    prime_metadata_if_empty(
+        session,
+        transcript=transcript,
+        llm_wrapper=wrapper,
+        model=settings.METADATA_EXTRACTOR_MODEL,
+    )
 
-    system_prompt, user_message = render_estimation_prompt(
+    resolved_tier, rule = resolve_tier(
+        transcript=transcript,
+        metadata=session.metadata,
+        override=tier,
+    )
+    session.last_resolved_tier = resolved_tier.value
+    session.last_tier_rule = rule
+
+    system_prompt, user_message = render_conversational_prompt(
         request,
         version=version,
         description=transcript,
         metadata=session.metadata,
+        tier=resolved_tier,
     )
     history = session.history.to_messages_list()
     messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
@@ -52,6 +72,8 @@ def estimate_conversational(
         metadata_is_empty=session.metadata.is_empty(),
         transcript_chars=len(transcript),
         prompt_version=version,
+        resolved_tier=resolved_tier.value,
+        tier_rule=rule,
     )
 
     result, meta = wrapper.complete_structured_chat(
@@ -59,7 +81,13 @@ def estimate_conversational(
         response_model=EstimationResult,
     )
     result = enforce_scope_response(result)
-    session.history.append(user=user_message, assistant=result.model_dump_json())
+    session.history.append(user=transcript, assistant=result.model_dump_json())
+    apply_compression(
+        session.history,
+        llm_wrapper=wrapper,
+        compression_model=settings.COMPRESSION_MODEL,
+        anchor_detection_mode=settings.ANCHOR_DETECTION_MODE,
+    )
     session.metadata = update_metadata(
         previous=session.metadata,
         transcript=transcript,

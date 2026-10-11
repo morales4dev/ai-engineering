@@ -8,8 +8,8 @@ Output schema (you will be re-prompted if you violate it):
 
 Strict rules:
 - Return null (or an empty list for technologies) rather than guessing. If the turn does not mention the team size, leave ``assumed_team_size`` null — the previous value will be preserved upstream by the merge logic.
-- Do not invent facts that are not present in the transcript or the estimation summary.
+- Do not invent facts that are not present in the transcript or the estimation summary (the estimation block may be empty on the first pass).
 - For ``mentioned_technologies``, normalise capitalisation (e.g. ``"Postgres"``, ``"React"``, ``"AWS Lambda"``).
 - ``agreed_scope`` describes the project, not the estimation process. Examples of good values: "Phase 1: build CRM with contact list, deal pipeline and basic reporting on React + Postgres".
 
-Context: this extractor runs after every assistant turn. The merge upstream uses scalar overwrite (your output replaces the previous value when non-null) and list-union for technologies (case-insensitive). So returning the same fact twice has no harmful effect, but returning a wrong value DOES overwrite a correct one. When unsure, return null.
+Context: this extractor may run before the first estimate (transcript only) and again after. The merge upstream uses scalar overwrite (your output replaces the previous value when non-null) and list-union for technologies (case-insensitive). So returning the same fact twice has no harmful effect, but returning a wrong value DOES overwrite a correct one. When unsure, return null.

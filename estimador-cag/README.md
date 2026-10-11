@@ -20,8 +20,8 @@ Later modules of the Master are expected to evolve this kind of service toward *
 
 - Python **3.11+**
 - [uv](https://docs.astral.sh/uv/)
-- An **API key** for OpenAI and/or Anthropic (at least one; both if you want provider fallback)
-- **Redis Stack** if you want exact-match and semantic cache (the API still answers if Redis is down; semantic cache also needs an OpenAI key)
+- An **API key** for OpenAI and/or Anthropic (at least one). There is no provider fallback: calls go to `PRIMARY_MODEL` only
+- **Redis** if you want exact-match cache; **Redis Stack** (RediSearch) if you also want semantic cache (the API still answers if Redis is down; semantic cache also needs an OpenAI key)
 
 ## Local setup
 
@@ -34,7 +34,7 @@ cp .env.example .env
 # Edit .env and set the API key for your chosen provider
 ```
 
-Run the API (same layout as the VS Code launch config: app package root is `src/`):
+Run the API (app package root is `src/`):
 
 ```bash
 cd src
@@ -85,76 +85,126 @@ Streamlit is the HTTP client of the estimator API. It never talks to SQL, Redis,
 Needs the API running. Three tabs:
 
 - **New estimation** — one-shot. Submit sends `description` plus the three enums as JSON to `POST /api/v1/estimate` and paints `result` (summary, phases, totals, confidence). A 400 from input guardrails is shown as `reason` + `message`.
-- **Conversational** — brought forward so the session API can be used without Swagger. Entering the tab calls `POST /sessions` once and keeps `session_id` in `st.session_state`. Submit sends multipart (`transcript`, the three enums, optional PDF/DOCX) to `POST /sessions/{id}/estimate`. The API extracts attachment text locally (pypdf / python-docx). Caches stay off and nothing is written to Postgres. Each turn sends a rebuilt system prompt (current `project_metadata`) plus a sliding window of prior user/assistant pairs (max 6). `project_metadata` is extracted after the estimate and returned in the response. Leaving the tab does not drop the session. **New conversation** confirms and creates another `session_id`.
+- **Conversational** — brought forward so the session API can be used without Swagger. Entering the tab calls `POST /sessions` once and keeps `session_id` in `st.session_state`. The caption states the API default prompt is **v3**. The form has an optional audience-tier select (`auto` omits the field) and two submits: **Generate estimation** → `POST /sessions/{id}/estimate`, **Estimate with review** → `POST /sessions/{id}/estimate-acb`. If the body has `acb`, an expander **Review trail** shows iterations. **Inspect session** sits outside the form and `GET`s the session JSON into a **Session inspect** expander (spinner, not the flashy wait). Submit does not GET. 404 on estimate restarts the session and retries the POST; 404 on inspect starts a new session, keeps `conv_result` / `conv_inspect`, and does not retry the GET. The API extracts attachment text locally (pypdf / python-docx). Caches stay off and nothing is written to Postgres. Each turn sends a rebuilt system prompt (current `project_metadata`) plus a sliding window of prior user/assistant pairs (max 6). `project_metadata` is extracted after the estimate and returned in the response. Leaving the tab does not drop the session. **New conversation** confirms and creates another `session_id` (also clears inspect).
 - **Recent** — last 20 rows via `GET /api/v1/estimations`; reopen via `GET /api/v1/estimations/{id}` (one-shot history only).
 
 While a POST is in flight the UI rotates phase labels (Discovery, Design, Implementation, QA, Launch) — wait UX, not SSE.
 
-Two sequences. The first is New / `POST /estimate`. The second is Conversational / `POST /sessions` + multipart estimate.
+Two sequences. One-shot is frozen (New / `POST /api/v1/estimate`). Source: `docs/oneshot-sequence.mmd`.
+
+![One-shot sequence](docs/oneshot-sequence.svg)
+
+Conversational tab (no cache, no Postgres persist). This one keeps evolving, so it stays inline.
 
 ```mermaid
 sequenceDiagram
-    actor User
+    participant User
     participant UI as streamlit_app.py
-    participant API as FastAPI /estimate
+    participant API as FastAPI /sessions
+    participant Attach as extract_text
     participant In as check_input
-    participant Exact as exact cache
-    participant Sem as semantic cache
-    participant Loader as render_estimation_prompt
-    participant W as LLMWrapper.complete_structured
+    participant Tier as resolve_tier
+    participant Loader as render_conversational_prompt
+    participant W as complete_structured_chat
+    participant Critic as Critic.review
+    participant Boss as Boss.run
     participant Out as enforce_scope_response
+    participant Ext as update_metadata
 
-    User->>UI: submit form
-    UI->>API: POST JSON description + enums
-    API->>In: description
-    alt InputGuardrailViolation
-        In-->>API: reason, message
-        API-->>UI: 400
-    else ok
-        API->>Exact: get estimation:v2
-        alt exact hit
-            Exact-->>API: result
-            API->>API: persist row
-            API-->>UI: result, cached=true
-        else exact miss
-            API->>Sem: lookup bucket + cosine
-            alt semantic hit
-                Sem-->>API: result
-                API->>API: persist row
-                API-->>UI: result, cached=true
-            else miss
-                API->>Loader: request, version v1
-                Loader-->>API: system, user
-                API->>W: complete_structured(EstimationResult)
-                W-->>API: result
-                API->>Out: filter
-                Out-->>API: result
-                API->>Exact: set EstimationResult
-                API->>Sem: store result_json
-                API->>API: persist row
-                API-->>UI: result, prompt_version, cached=false
-                UI-->>User: summary, phases, totals, confidence
+    User->>UI: open Conversational tab
+    UI->>API: POST /sessions
+    API-->>UI: session_id
+
+    opt Inspect session
+        UI->>API: GET /sessions/{id}
+        alt session_not_found
+            API-->>UI: 404
+            UI->>API: POST /sessions
+            API-->>UI: new session_id
+        else 200
+            API-->>UI: inspect JSON
+            UI-->>User: Session inspect expander
+        end
+    end
+
+    User->>UI: transcript, optional files, optional tier
+    alt Generate estimation
+        UI->>API: POST multipart /estimate
+    else Estimate with review
+        UI->>API: POST multipart /estimate-acb
+    end
+    alt session_not_found
+        API-->>UI: 404
+        UI->>API: POST /sessions
+        API-->>UI: new session_id
+        UI->>API: retry POST
+    else session ok
+        API->>Attach: pdf or docx by extension
+        alt unsupported_attachment
+            Attach-->>API: UnsupportedAttachmentError
+            API-->>UI: 415
+        else attachment_extraction_failed
+            Attach-->>API: AttachmentExtractionError
+            API-->>UI: 422
+        else extracted
+            Attach-->>API: extracted text
+            API->>API: enrich transcript
+            API->>In: enriched transcript
+            alt InputGuardrailViolation
+                In-->>API: reason, message
+                API-->>UI: 400
+            else ok
+                API->>Tier: transcript, metadata, override
+                Tier-->>API: tier, rule
+                alt /estimate
+                    API->>Loader: transcript, enums, metadata, tier
+                    Loader-->>API: system, user
+                    API->>W: system plus window plus new user
+                    W-->>API: result
+                    API->>Out: filter
+                    Out-->>API: result
+                else /estimate-acb
+                    API->>Boss: actor, critic
+                    loop accept / iterate / synthesize
+                        Boss->>Loader: + optional critic_feedback
+                        Loader-->>Boss: system, user
+                        Boss->>W: actor draft
+                        W-->>Boss: draft
+                        Boss->>Out: filter
+                        Out-->>Boss: draft
+                        Boss->>Critic: review draft
+                        Critic-->>Boss: verdict
+                    end
+                    Boss-->>API: final result, acb trail
+                end
+                API->>API: append transcript then apply_compression
+                API->>Ext: transcript, result, previous metadata
+                Ext-->>API: merged or previous if fail-open
+                API-->>UI: result, cached false, project_metadata [, acb]
+                UI-->>User: summary, phases, metadata [, Review trail]
             end
         end
     end
 ```
 
-Conversational tab (no cache, no Postgres persist). Source: `docs/conversational-sequence.mmd`.
-
-![Conversational sequence](docs/conversational-sequence.svg)
-
 ## Conversational sessions
 
-`POST /sessions` and `POST /sessions/{id}/estimate` are additive. `POST /api/v1/estimate` is unchanged.
+`POST /sessions`, `POST /sessions/{id}/estimate`, `POST /sessions/{id}/estimate-acb`, and `GET /sessions/{id}` are additive. `POST /api/v1/estimate` is unchanged.
 
 Two memories, on purpose:
 
-- **Conversational history** — last ≤ 6 user+assistant pairs in a process-local `SessionStore` dict. The assistant turn is `EstimationResult.model_dump_json()`. The system prompt is not stored; it is rebuilt each turn from the current `project_metadata`. Restarting uvicorn empties the dict. This is not `services/history.py` (that table is the one-shot Postgres log, what the Recent tab reads).
+- **Conversational history** — last ≤ 6 user+assistant pairs in a process-local `SessionStore` dict. The user turn is the enriched transcript (form + attachments), not the rendered `user.j2`. The assistant turn is `EstimationResult.model_dump_json()`. `append` only stores the pair; `CompressionPolicy` peels overflow after that. The system prompt is not stored; it is rebuilt each turn from the current `project_metadata`. Restarting uvicorn empties the dict. This is not `services/history.py` (that table is the one-shot Postgres log, what the Recent tab reads).
 - **Project metadata** — durable facts (`project_name`, team size, technologies, scope) kept *outside* the message array and re-injected into `<project_metadata>` every turn. When the window drops turn 1, the name should still be in the system block.
+
+When the window overflows, the oldest pair is peeled. If the user turn matches an anchor (NDA, frozen scope, compliance, …), both messages move to `anchors` and stay verbatim. Otherwise they fold into a cumulative `summary` (`COMPRESSION_MODEL`, fail-open). `to_messages_list()` order: optional summary envelope, then anchors, then the recent window. `ANCHOR_DETECTION_MODE` default is `heuristic`; `llm` classifies the evicted user turn and falls back to heuristic on failure. Memory is still process-local.
 
 Caches stay off on this path (`cached` is always `false`). The same transcript in two sessions is not the same call: history and metadata differ. A cache hit would be a silent wrong answer. Nothing is written to Postgres.
 
-There is no `GET /sessions/{id}` and no `DELETE /sessions`. The estimate response carries `project_metadata`. If FastAPI restarted and the id is gone, Streamlit creates a new session and warns.
+`GET /sessions/{id}` is read-only inspect (window size, metadata, `anchors_count`, `summary_chars`, last resolved tier and rule). It is not a second estimate and does not call the LLM. The estimate response still carries `project_metadata`. No `DELETE /sessions` and no session list. If FastAPI restarted and the id is gone, both GET and estimate return `{"detail": "session_not_found"}`; Streamlit creates a new session and warns.
+
+Each session estimate resolves an audience **tier** (`executive` / `pm` / `developer` / `default`) from an optional multipart `tier` override, else the first matching rule (NDA / regulatory in this turn → executive; ≥2 infra keywords in this turn → developer; saved `assumed_team_size` ≤ 2 → pm). v3 injects that into `<audience>`. `?prompt_version=` still accepted; omitted query uses `CONVERSATIONAL_PROMPT_VERSION` (default **v3**). One-shot `/api/v1/estimate` stays on `render_estimation_prompt`, default v1.
+
+`POST /sessions/{id}/estimate-acb` is the same multipart as `/estimate`, then Actor → Critic → Boss (accept / iterate / synthesize, `BOSS_MAX_ITERATIONS=3`). Response adds `acb` (`iterations`, `final_decision`, `iterations_run`). Intermediate actor drafts are discarded; the session stores one turn (enriched transcript + final assistant). Critic fail-open: accept with review confidence 0. Caches stay off. `{"detail": "session_not_found"}` on a missing id.
 
 ### Camino B (local PDF/DOCX)
 
@@ -178,21 +228,26 @@ estimador-cag/
 │   ├── main.py                 # FastAPI app, /health
 │   ├── config.py               # Pydantic Settings
 │   ├── dependencies.py         # wrapper, caches, SessionStore singleton
-│   ├── sessions.py             # in-process Session + ConversationHistory + metadata
+│   ├── sessions/               # in-process Session + ConversationHistory + store
+│   │   ├── compression/        # window peel, anchors, cumulative summary
+│   │   └── tier_resolver.py    # audience tier for conversational v3
 │   ├── routers/estimations.py  # POST /api/v1/estimate + GET history
-│   ├── routers/sessions.py     # POST /sessions + multipart /sessions/{id}/estimate
-│   ├── prompts/                # estimation/v1|v2 + metadata_extraction/v1
+│   ├── routers/sessions.py     # POST /sessions + GET inspect + /estimate + /estimate-acb
+│   ├── prompts/                # estimation/v1|v2|v3 + metadata + conversation_summary + critic
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
 │   ├── services/
 │   │   ├── llm_service.py      # estimate_oneshot() only
 │   │   ├── conversational.py   # session path: window + metadata, caches off
+│   │   ├── acb.py              # Actor-Critic-Boss orchestration
+│   │   ├── boss.py
+│   │   ├── critic.py
 │   │   ├── attachments.py      # Camino B: local PDF/DOCX text extraction
 │   │   ├── metadata_extractor.py  # second-pass ProjectMetadata, fail-open
 │   │   ├── llm_wrapper.py
 │   │   ├── cache.py            # exact-match Redis
 │   │   └── history.py          # Postgres log of one-shot /estimate rows
-│   └── schemas/estimation.py
+│   └── schemas/                # estimation + acb + critic
 ├── streamlit_app.py            # New + Conversational + Recent
 ├── Dockerfile
 ├── docker-compose.yml
@@ -222,7 +277,7 @@ jq '.result' salida.json
 
 ### Conversational — two turns (API must already be running)
 
-Default prompt on this path is **v2** (`?prompt_version=` still accepts v1|v2).
+Default prompt on this path is **v3** (`?prompt_version=` still accepts v1|v2|v3). Optional multipart `tier` overrides the resolver.
 
 ```bash
 SESSION_ID=$(curl -s -X POST http://localhost:8000/sessions | jq -r .session_id)

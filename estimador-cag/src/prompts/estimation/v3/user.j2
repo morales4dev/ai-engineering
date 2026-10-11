@@ -1,0 +1,27 @@
+<project_description>
+{{ description }}
+</project_description>
+
+Project type: {{ project_type }}.
+
+<rate_cheatsheet>
+Band for the duration W you pick: team_size × W × {{ dev_week_eur }} EUR (one person-week = {{ hours_per_week }}h × {{ dev_hourly_eur }}).
+Stay within about 30% of that band. If you leave it, say why in the summary.
+{% if weekly_band_eur %}
+This session's team size is {{ metadata.assumed_team_size }}: each calendar week ≈ {{ weekly_band_eur }} EUR.
+{% else %}
+No team size stored yet. If the user named a headcount T, use T in the formula.
+{% endif %}
+</rate_cheatsheet>
+
+{% if critic_feedback %}
+<critic_feedback>
+A previous version of your estimation was reviewed by an independent auditor. Address the following issues before producing the next answer; do not repeat the same mistakes.
+
+{% for issue in critic_feedback.issues %}
+- [{{ issue.severity }}] {{ issue.category }} at `{{ issue.field_path }}`: {{ issue.description }}{% if issue.suggested_fix %} (suggested fix: {{ issue.suggested_fix }}){% endif %}
+{% endfor %}
+</critic_feedback>
+{% endif %}
+
+Estimate this project following the rules above.

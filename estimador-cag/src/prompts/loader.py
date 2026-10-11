@@ -10,6 +10,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from rates import prompt_vars, weekly_band_eur
 from schemas.estimation import EstimationRequest, EstimationResult
 from sessions import ProjectMetadata
 
@@ -47,14 +48,11 @@ def render_estimation_prompt(
     description: str | None = None,
     metadata: ProjectMetadata | None = None,
 ) -> tuple[str, str]:
-    """Render `(system, user)` for `prompts/estimation/<version>/`.
+    """One-shot: render `(system, user)` for `prompts/estimation/<version>/`.
 
-    ``description`` overrides ``request.description`` so the session path can
-    send transcript + extracted attachments, which exceed the 2000-char form
-    cap on ``EstimationRequest.description``.
-
-    ``metadata`` is injected into ``<project_metadata>``. The one-shot path
-    leaves it empty so StrictUndefined still has the variable.
+    ``description`` overrides ``request.description`` so a caller can send
+    text longer than the 2000-char form cap. ``metadata`` is injected into
+    ``<project_metadata>``; the one-shot path leaves it empty.
     """
     known = available_prompt_versions()
     if version not in known:
@@ -69,6 +67,46 @@ def render_estimation_prompt(
         "output_format": _enum_value(request.output_format),
         "metadata": project_metadata,
         "metadata_is_empty": project_metadata.is_empty(),
+        "tier": "default",
+        "critic_feedback": None,
+        "weekly_band_eur": weekly_band_eur(project_metadata.assumed_team_size),
+        **prompt_vars(),
+    }
+    system = _env.get_template(f"estimation/{version}/system.j2").render(**context)
+    user = _env.get_template(f"estimation/{version}/user.j2").render(**context)
+    return system, user
+
+
+def render_conversational_prompt(
+    request: EstimationRequest,
+    version: str,
+    *,
+    description: str,
+    metadata: ProjectMetadata,
+    tier: object | None = None,
+    critic_feedback: object | None = None,
+) -> tuple[str, str]:
+    """Conversational: render the session-path system/user prompts.
+
+    v3 uses ``<audience>`` (from ``tier``) and optional ``<critic_feedback>``.
+    v1/v2 ignore those extras.
+    """
+    known = available_prompt_versions()
+    if version not in known:
+        raise UnknownPromptVersionError(
+            f"Unknown prompt version {version!r}. Available: {', '.join(known)}"
+        )
+    context = {
+        "description": description,
+        "project_type": _enum_value(request.project_type),
+        "detail_level": _enum_value(request.detail_level),
+        "output_format": _enum_value(request.output_format),
+        "metadata": metadata,
+        "metadata_is_empty": metadata.is_empty(),
+        "tier": _enum_value(tier) if tier is not None else "default",
+        "critic_feedback": critic_feedback,
+        "weekly_band_eur": weekly_band_eur(metadata.assumed_team_size),
+        **prompt_vars(),
     }
     system = _env.get_template(f"estimation/{version}/system.j2").render(**context)
     user = _env.get_template(f"estimation/{version}/user.j2").render(**context)
@@ -78,7 +116,7 @@ def render_estimation_prompt(
 def render_metadata_extraction_prompt(
     *,
     transcript: str,
-    result: EstimationResult,
+    result: EstimationResult | None,
     previous: ProjectMetadata,
     version: str = "v1",
 ) -> tuple[str, str]:
@@ -86,10 +124,54 @@ def render_metadata_extraction_prompt(
     context = {
         "transcript": transcript,
         "result": result,
-        "phases": result.phases,
+        "phases": result.phases if result is not None else [],
         "previous": previous,
         "previous_is_empty": previous.is_empty(),
     }
     system = _env.get_template(f"metadata_extraction/{version}/system.j2").render(**context)
     user = _env.get_template(f"metadata_extraction/{version}/user.j2").render(**context)
+    return system, user
+
+
+def render_critic_prompt(
+    *,
+    transcript: str,
+    metadata: ProjectMetadata,
+    tier: object,
+    result: EstimationResult,
+    detail_level: object,
+    facts: dict,
+    version: str = "v1",
+) -> tuple[str, str]:
+    """Render the Critic prompts. ``tier`` may be a ``Tier`` or a string."""
+    context = {
+        "transcript": transcript,
+        "metadata": metadata,
+        "tier": _enum_value(tier),
+        "result": result,
+        "detail_level": _enum_value(detail_level),
+        "facts": facts,
+        **prompt_vars(),
+    }
+    system = _env.get_template(f"critic/{version}/system.j2").render(**context)
+    user = _env.get_template(f"critic/{version}/user.j2").render(**context)
+    return system, user
+
+
+def render_conversation_summary_prompt(
+    *,
+    previous_summary: str | None,
+    evicted: list,
+    version: str = "v1",
+) -> tuple[str, str]:
+    """Render the prompts used by the ``CumulativeSummarizer``.
+
+    ``evicted`` is a list of ``Message``-like objects (``role``, ``content``).
+    """
+    context = {
+        "previous_summary": previous_summary or "",
+        "evicted": evicted,
+    }
+    system = _env.get_template(f"conversation_summary/{version}/system.j2").render(**context)
+    user = _env.get_template(f"conversation_summary/{version}/user.j2").render(**context)
     return system, user

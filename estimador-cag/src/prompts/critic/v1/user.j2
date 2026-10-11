@@ -1,0 +1,37 @@
+<original_transcript>
+{{ transcript }}
+</original_transcript>
+
+<project_metadata>
+- project_name: {{ metadata.project_name or "unknown" }}
+- assumed_team_size: {{ metadata.assumed_team_size or "unknown" }}
+{% if metadata.mentioned_technologies %}- mentioned_technologies: {{ metadata.mentioned_technologies | join(", ") }}
+{% else %}- mentioned_technologies: none
+{% endif %}- agreed_scope: {{ metadata.agreed_scope or "not yet agreed" }}
+</project_metadata>
+
+<resolved_tier>{{ tier }}</resolved_tier>
+<detail_level>{{ detail_level }}</detail_level>
+
+<estimation_under_review>
+summary: {{ result.summary }}
+confidence_pct: {{ result.confidence_pct }}
+total_duration_weeks: {{ result.total_duration_weeks }}
+total_cost_eur: {{ result.total_cost_eur }}
+phases:
+{% for phase in result.phases %}
+- index {{ loop.index0 }}: {{ phase.name }} | {{ phase.duration_weeks }}w | {{ phase.cost_eur }} EUR
+  summary: {{ phase.summary }}
+{% endfor %}
+</estimation_under_review>
+
+<cheatsheet>
+Already computed. Use these numbers; do not re-add phases or invent a rate band.
+Phase shares (imbalance only if share_pct is greater than {{ facts.imbalance_threshold_pct }}):
+{% for row in facts.phase_shares %}
+- phases[{{ row.index }}] {{ row.name }}: {{ row.cost_eur }} EUR = {{ row.share_pct }}% of total
+{% endfor %}
+Rate band: {% if facts.rate_band_eur is not none %}{{ facts.team_size }} people × {{ facts.duration_weeks }} weeks × {{ facts.dev_week_eur }} EUR/dev-week = {{ facts.rate_band_eur }} EUR. Estimate {{ facts.total_cost_eur }} EUR is {{ facts.delta_vs_band_pct }}% vs that band (negative = cheaper).{% else %}team size unknown — do not flag unrealistic_estimate on rate grounds.{% endif %}
+</cheatsheet>
+
+Audit this estimation. Return a structured ``CriticFeedback`` per the schema. Be specific in ``field_path``.

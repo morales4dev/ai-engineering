@@ -43,10 +43,14 @@ WAIT_PHASES = ("Discovery", "Design", "Implementation", "QA", "Launch")
 WAIT_PHASE_SECONDS = 2
 
 
+_TIER_OPTIONS = ("auto", "executive", "pm", "developer", "default")
+
+
 def _init_conversational_state() -> None:
     st.session_state.setdefault("session_id", None)
     st.session_state.setdefault("conv_result", None)
     st.session_state.setdefault("conv_metadata", None)
+    st.session_state.setdefault("conv_inspect", None)
     st.session_state.setdefault("conv_uploader_nonce", 0)
     st.session_state.setdefault("conv_session_warning", None)
 
@@ -156,6 +160,7 @@ def _reset_conversational_widgets(session_id: str) -> None:
     st.session_state.session_id = session_id
     st.session_state.conv_result = None
     st.session_state.conv_metadata = None
+    st.session_state.conv_inspect = None
     st.session_state.conv_transcript = ""
     st.session_state.conv_uploader_nonce = st.session_state.get("conv_uploader_nonce", 0) + 1
     st.session_state.conv_session_warning = None
@@ -192,8 +197,9 @@ def _post_session_estimate(
     *,
     data: dict,
     files: list | None,
+    path: str = "estimate",
 ) -> httpx.Response:
-    url = f"{SESSIONS_ENDPOINT}/{session_id}/estimate"
+    url = f"{SESSIONS_ENDPOINT}/{session_id}/{path}"
     response = _post_with_phase_wait(url, data=data, files=files)
     if response.status_code != 404:
         return response
@@ -201,14 +207,43 @@ def _post_session_estimate(
     if new_id is None:
         return response
     st.session_state.session_id = new_id
+    st.session_state.conv_inspect = None
     st.session_state.conv_session_warning = (
         "The API no longer had that session (usually a restart). Started a new one."
     )
     return _post_with_phase_wait(
-        f"{SESSIONS_ENDPOINT}/{new_id}/estimate",
+        f"{SESSIONS_ENDPOINT}/{new_id}/{path}",
         data=data,
         files=files,
     )
+
+
+def _inspect_session(session_id: str) -> None:
+    """GET inspect. Cheap spinner. 404 starts a new session and keeps the last JSON."""
+    try:
+        with st.spinner("Inspecting session…"):
+            response = httpx.get(
+                f"{SESSIONS_ENDPOINT}/{session_id}",
+                timeout=httpx.Timeout(15.0, connect=5.0),
+            )
+    except httpx.HTTPError as exc:
+        st.error(f"Could not inspect the session at `{SESSIONS_ENDPOINT}`: {exc}")
+        return
+    if response.status_code == 404:
+        new_id = _create_session()
+        if new_id is not None:
+            st.session_state.session_id = new_id
+            st.session_state.conv_session_warning = (
+                "The API no longer had that session (usually a restart). Started a new one."
+            )
+        return
+    try:
+        response.raise_for_status()
+        st.session_state.conv_inspect = response.json()
+    except httpx.HTTPStatusError as exc:
+        _show_http_error(exc)
+    except ValueError:
+        st.error("The API returned inspect JSON that could not be parsed.")
 
 
 def _render_project_metadata(session_id: str, metadata: dict | None) -> None:
@@ -265,6 +300,24 @@ def _render_result(body: dict) -> None:
             for phase in phases
         ]
     )
+
+
+def _render_review_trail(acb: dict) -> None:
+    with st.expander("Review trail"):
+        st.caption(
+            f"final_decision `{acb.get('final_decision')}` · "
+            f"{acb.get('iterations_run')} run(s)"
+        )
+        for item in acb.get("iterations") or []:
+            st.markdown(
+                f"**Round {item.get('iteration')}** — "
+                f"{item.get('critic_verdict')} "
+                f"({item.get('critic_confidence')}%) → "
+                f"{item.get('decision_after')}"
+            )
+            issues = item.get("issue_summary") or []
+            if issues:
+                st.write(issues)
 
 
 _init_conversational_state()
@@ -332,13 +385,15 @@ if conv_tab.open:
     with conv_tab:
         session_id = _ensure_conversational_session()
         st.caption(
-            "Transcript plus optional PDF/DOCX. The API default prompt is v2. "
+            "Transcript plus optional PDF/DOCX. The API default prompt is v3. "
             "Project facts persist in metadata. Prior turns stay in a sliding window."
         )
         if st.session_state.conv_session_warning:
             st.warning(st.session_state.conv_session_warning)
         if st.button("New conversation", icon=":material/refresh:"):
             _confirm_new_conversation()
+        if session_id and st.button("Inspect session", icon=":material/search:"):
+            _inspect_session(session_id)
         if session_id:
             uploader_key = f"conv_attachments_{st.session_state.conv_uploader_nonce}"
             with st.form("conversational_form", clear_on_submit=False):
@@ -379,13 +434,25 @@ if conv_tab.open:
                     key="conv_output_format",
                     persist_state="session",
                 )
-                submitted = st.form_submit_button("Generate estimation", type="primary")
+                tier_choice = st.selectbox(
+                    "Audience tier",
+                    options=list(_TIER_OPTIONS),
+                    index=0,
+                    key="conv_tier",
+                    persist_state="session",
+                    help="auto lets the API derive the audience. Any other value is sent as an override.",
+                )
+                with st.container(horizontal=True):
+                    submitted = st.form_submit_button("Generate estimation", type="primary")
+                    submitted_acb = st.form_submit_button("Estimate with review")
 
-            if submitted:
+            if submitted or submitted_acb:
                 if len(transcript.strip()) < 20:
                     st.error("The transcript must be at least 20 characters long.")
                 elif len(transcript) > 2000:
                     st.error("The transcript must be at most 2000 characters long.")
+                elif tier_choice not in _TIER_OPTIONS:
+                    st.error("Invalid audience tier.")
                 else:
                     form = {
                         "transcript": transcript.strip(),
@@ -393,11 +460,15 @@ if conv_tab.open:
                         "detail_level": detail_level,
                         "output_format": output_format,
                     }
+                    if tier_choice != "auto":
+                        form["tier"] = tier_choice
+                    path = "estimate-acb" if submitted_acb else "estimate"
                     try:
                         response = _post_session_estimate(
                             session_id,
                             data=form,
                             files=_attachment_parts(uploads),
+                            path=path,
                         )
                         response.raise_for_status()
                         body = response.json()
@@ -418,8 +489,14 @@ if conv_tab.open:
                 st.session_state.session_id or session_id,
                 st.session_state.conv_metadata,
             )
+            if st.session_state.conv_inspect is not None:
+                with st.expander("Session inspect"):
+                    st.json(st.session_state.conv_inspect)
             if st.session_state.conv_result:
                 _render_result(st.session_state.conv_result)
+                acb = st.session_state.conv_result.get("acb")
+                if isinstance(acb, dict):
+                    _render_review_trail(acb)
 
 with history_tab:
     st.subheader("Recent estimations")

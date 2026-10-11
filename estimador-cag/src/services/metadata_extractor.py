@@ -21,7 +21,7 @@ def update_metadata(
     *,
     previous: ProjectMetadata,
     transcript: str,
-    result: EstimationResult,
+    result: EstimationResult | None,
     llm_wrapper: LLMWrapper,
     model: str,
 ) -> ProjectMetadata:
@@ -55,6 +55,7 @@ def update_metadata(
     merged = previous.merge_with(extracted)
     log.info(
         "metadata_extraction_completed",
+        primed_before_estimate=result is None,
         model=meta["model"],
         latency_ms=meta["latency_ms"],
         project_name=merged.project_name,
@@ -62,3 +63,22 @@ def update_metadata(
         tech_count=len(merged.mentioned_technologies),
     )
     return merged
+
+
+def prime_metadata_if_empty(
+    session,
+    *,
+    transcript: str,
+    llm_wrapper: LLMWrapper,
+    model: str,
+) -> None:
+    """Fill facts from the transcript before the first estimate. Fail-open."""
+    if not session.metadata.is_empty():
+        return
+    session.metadata = update_metadata(
+        previous=session.metadata,
+        transcript=transcript,
+        result=None,
+        llm_wrapper=llm_wrapper,
+        model=model,
+    )
