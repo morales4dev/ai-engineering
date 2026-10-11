@@ -23,3 +23,4 @@ def test_total_follows_phases_not_the_llm_number() -> None:
         total_cost_eur=36_000,
     )
     assert result.total_cost_eur == 41_000
+    assert result.total_duration_weeks == 6
