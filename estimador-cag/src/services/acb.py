@@ -18,7 +18,7 @@ from schemas.critic import CriticFeedback
 from schemas.estimation import EstimationRequest, EstimationResult
 from services.boss import Boss
 from services.critic import Critic
-from services.metadata_extractor import update_metadata
+from services.metadata_extractor import prime_metadata_if_empty, update_metadata
 from sessions import Session
 from sessions.compression import apply_compression
 from sessions.tier_resolver import Tier, resolve_tier
@@ -38,6 +38,12 @@ def estimate_conversational_acb(
     check_input(transcript, openai_client=get_openai_client())
     wrapper = get_llm_wrapper()
     settings = get_settings()
+    prime_metadata_if_empty(
+        session,
+        transcript=transcript,
+        llm_wrapper=wrapper,
+        model=settings.METADATA_EXTRACTOR_MODEL,
+    )
 
     resolved_tier, rule = resolve_tier(
         transcript=transcript,

@@ -116,7 +116,7 @@ def render_conversational_prompt(
 def render_metadata_extraction_prompt(
     *,
     transcript: str,
-    result: EstimationResult,
+    result: EstimationResult | None,
     previous: ProjectMetadata,
     version: str = "v1",
 ) -> tuple[str, str]:
@@ -124,7 +124,7 @@ def render_metadata_extraction_prompt(
     context = {
         "transcript": transcript,
         "result": result,
-        "phases": result.phases,
+        "phases": result.phases if result is not None else [],
         "previous": previous,
         "previous_is_empty": previous.is_empty(),
     }
