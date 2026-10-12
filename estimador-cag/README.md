@@ -248,6 +248,7 @@ estimador-cag/
 │   │   ├── cache.py            # exact-match Redis
 │   │   └── history.py          # Postgres log of one-shot /estimate rows
 │   └── schemas/                # estimation + acb + critic
+├── evals/                      # golden dataset, metrics, CLI runner (actor / acb)
 ├── streamlit_app.py            # New + Conversational + Recent
 ├── Dockerfile
 ├── docker-compose.yml
@@ -300,6 +301,19 @@ curl -s -X POST "http://localhost:8000/sessions/${SESSION_ID}/estimate" \
 ```
 
 Restarting the API drops the in-memory session; the next estimate returns 404.
+
+### Golden evals (live eval — real model, keys required)
+
+In-process `TestClient` (default) or `--http` against a server already up.
+Without keys the prelude returns 503 and the case is an ERROR. The runner
+does not skip 503. First live run is for reading FAILs, not 16/16.
+
+```bash
+cd estimador-cag
+PYTHONPATH=src:. uv run python -m evals.run --mode actor
+PYTHONPATH=src:. uv run python -m evals.run --mode acb --limit 5 --output /tmp/acb.json
+PYTHONPATH=src:. uv run python -m evals.run --mode actor --http http://localhost:8000
+```
 
 ### Form HTTP client (API must already be running)
 uv run streamlit run streamlit_app.py          # New / Conversational / Recent

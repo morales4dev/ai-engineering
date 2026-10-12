@@ -279,3 +279,39 @@ Lidr `tests/test_stress_metrics.py` (`unit`) and `tests/test_stress_runner.py` (
 - `case-006` transcript starts with «Ignore previous instructions…» — matches `_PROMPT_INJECTION_PATTERNS` in `src/guardrails/input.py`. Runner 400 → synthetic OoS. `case-005` (vague) is not an injection; OoS depends on the model.
 - In-process and `--http` both call the real LLM when keys exist. Cost and time are not in this plan; Lidr’s runner has no dry-run.
 - I have not run Lidr’s evals or ours. I do not know the pass rate.
+
+# RESULTS
+
+## checkpoint 4 (steps 4/5/6)
+
+Live run 2026-10-12. Command: `PYTHONPATH=src:. uv run python -m evals.run --mode actor --output /tmp/golden-actor.json`. In-process `TestClient`, real `gpt-4o-mini`, no range retune. Exit 1.
+
+**Tally:** 6/16 cases all-green. `schema_adherence` 16/16. `cost_bounds` 6/16. `content_recall` 15/16. Zero ERROR rows.
+
+| Case | Result | Fail details |
+|---|---|---|
+| case-001-web-saas-crm | PASS | |
+| case-002-mobile-loyalty | FAIL | `cost_bounds`: cost 18000 outside [25000, 120000] |
+| case-003-internal-tool-hr | PASS | |
+| case-004-data-pipeline-etl | PASS | |
+| case-005-out-of-scope-vague | PASS | model OoS (`prompt_version=v3`) |
+| case-006-out-of-scope-adversarial | PASS | guardrail `prompt_injection` → synthetic envelope |
+| case-007-nda-executive | PASS | |
+| case-008-hipaa-executive | FAIL | `cost_bounds`: cost 29000 outside [60000, 250000]; `content_recall`: missing `patient` |
+| case-009-gdpr-executive | FAIL | `cost_bounds`: cost 24000 outside [50000, 200000] |
+| case-010-small-team-pm | FAIL | `cost_bounds`: cost 20000 outside [3000, 18000] |
+| case-011-developer-microservices | FAIL | `cost_bounds`: cost 24000 outside [40000, 200000] |
+| case-012-data-pipeline-kafka | FAIL | `cost_bounds`: cost 24000 outside [30000, 140000] |
+| case-013-mobile-fintech | FAIL | `cost_bounds`: duration 12w outside [14, 32] |
+| case-014-internal-tool-knowledge | FAIL | `cost_bounds`: duration 7w outside [10, 22] |
+| case-015-web-saas-marketplace | FAIL | `cost_bounds`: cost 18000 outside [35000, 140000] |
+| case-016-edge-tight-deadline | FAIL | `cost_bounds`: duration 5w outside [1, 4] |
+
+Vs plan suspicions (this run only; LLM is not a law):
+
+- `cost_bounds` / v3 `T×W×2000`: most reds were costs **below** the golden floor (002, 008, 009, 011, 012, 015), not the high-side cheat the plan guessed. 010 was slightly over the ceiling (20000 > 18000), not 32000.
+- `content_recall`: one miss (`patient` on 008). Not a CRM/KYC wipe.
+- `case-005`: passed (model refused). Suspicion that it would estimate did not hold this run.
+- `schema_adherence` phase-sum: 16/16, as expected after our overwrite.
+
+Not run: `--mode acb`. Not compared to a Lidr live board. Report left in `/tmp/golden-actor.json` (not in the repo).
