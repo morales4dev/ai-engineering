@@ -4,7 +4,19 @@
 
 Do not reopen `sesion5_port_plan.md`, `post_sesion_05_mejoras.md`, or the closed evals plan except to read RESULTS.
 
+## Summary
+
+| # | Title | OK |
+|---|-------|----|
+| 1 | Wrapper: real `tokens_*` / `cost_usd` (checkpoint 1, live eval) | [x] |
+| 2 | `TurnObservation` + emit `turn_observed` / `response.observation` | [ ] |
+| 3 | Stress package (copy Lidr, fix imports) | [ ] |
+| 4 | Tests: unit + smoke | [ ] |
+| 5 | Live eval + `REPORT.md` (checkpoint 2) | [ ] |
+
 ## Handoff
+
+Frozen at plan start. Progress is the Summary table. Write **Handoff out** only when this plan closes — same rows, end state, not a mid-flight update.
 
 | | Path / value |
 |---|---|

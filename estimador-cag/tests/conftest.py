@@ -95,7 +95,14 @@ class FakeLLMWrapper:
                 "kwargs": kwargs,
             }
         )
-        meta = {"model": "gpt-4o-mini", "provider": "openai", "latency_ms": 1}
+        meta = {
+            "model": "gpt-4o-mini",
+            "provider": "openai",
+            "latency_ms": 1,
+            "tokens_in": 100,
+            "tokens_out": 50,
+            "cost_usd": 0.000045,
+        }
 
         if response_model is EstimationResult:
             idx = self._turn // 2
