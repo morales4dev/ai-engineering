@@ -63,6 +63,7 @@ class _SessionPrelude:
     request: EstimationRequest
     transcript: str
     version: str
+    attachments_total_chars: int = 0
 
 
 def _ensure_llm_configured() -> None:
@@ -146,12 +147,14 @@ async def _session_estimate_prelude(
             extracted.append((upload.filename, text))
 
     enriched = enrich_transcript(transcript=transcript, attachments=extracted)
+    attachments_total_chars = sum(len(text) for _, text in extracted)
     log.info(
         log_event,
         session_id=session_id,
         transcript_chars=len(transcript),
         enriched_transcript_chars=len(enriched),
         attachment_count=len(extracted),
+        attachments_total_chars=attachments_total_chars,
         prompt_version=version,
         tier_override=tier.value if tier is not None else None,
     )
@@ -167,6 +170,7 @@ async def _session_estimate_prelude(
         request=request,
         transcript=enriched,
         version=version,
+        attachments_total_chars=attachments_total_chars,
     )
 
 
@@ -238,6 +242,7 @@ async def estimate_in_session(
             wrapper=wrapper,
             openai_client=openai_client,
             tier=tier,
+            attachments_total_chars=prelude.attachments_total_chars,
         )
     except InputGuardrailViolation as exc:
         log.info(
