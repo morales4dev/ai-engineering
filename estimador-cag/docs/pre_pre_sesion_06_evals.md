@@ -1,8 +1,8 @@
-# Port evals — Lidr `session_05_live` + `session_06` harness → `estimador-cag`
+# Port evals — Lidr `session_05_live` golden harness → `estimador-cag`
 
-Whole eval harness, same behavior as Lidr, no coverage dropped. Golden (`session_05_live` @ `39f144e`) and stress (`origin/session_06` / `origin/session_06_live`; those two trees match on `evals/stress/`). Enunciado PDF of pre-sesión 6 not read; steps below are from the repo. No implementar until the steps run in order. After each step, stop for review.
+**Closed.** Steps 1–6 done. This plan is only the `session_05_live` @ `39f144e` golden harness (dataset, three metrics, CLI, unit/smoke). Stress never shipped on that branch; it lived in `origin/session_06`. That leftover is `docs/pre_sesion6_plan.md` (step 0).
 
-Do not reopen `sesion5_port_plan.md` (evals: out) nor `post_sesion_05_mejoras.md`.
+Do not reopen `sesion5_port_plan.md` nor `post_sesion_05_mejoras.md`.
 
 ## Handoff
 
@@ -11,10 +11,10 @@ Do not reopen `sesion5_port_plan.md` (evals: out) nor `post_sesion_05_mejoras.md
 | Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `pre-session-06`, app `estimador-cag/` |
 | Reference | `/home/morales4dev/wsTakeoff/ai-engineering-lidr` branch `session_05_live` @ `39f144e` |
 | Why they are missing | `sesion5_port_plan.md` closed decisions: «Evals: out. Lidr test suite: rejected.» Three times. The port finished; evals were never in scope. |
-| Lidr copy-from | Golden: `estimator/evals/*` + `tests/test_evals_*.py` @ `39f144e`. Stress: `estimator/evals/stress/` + `tests/test_stress_*.py` @ `origin/session_06`. |
+| Lidr copy-from | Golden: `estimator/evals/*` + `tests/test_evals_*.py` @ `39f144e`. |
 | Lidr do not copy | `EstimationService` / `get_estimation_service`. Smoke behavior via wrapper override, not their bag class. |
 
-Ours today: no `evals/` directory. Conversational endpoints exist and match what the runner hits:
+Ours when this plan started: no `evals/` directory. Conversational endpoints already matched what the runner hits:
 
 - `POST /sessions` → 201 `{"session_id"}` (`src/routers/sessions.py`)
 - `POST /sessions/{id}/estimate` and `/estimate-acb` (same multipart: transcript 20–2000, three enums, optional `tier`)
@@ -43,19 +43,16 @@ Comments in Lidr `metrics.py` / `__init__.py` say DeepEval `GEval` is wired as `
 
 | # | Title | OK |
 |---|-------|----|
-| 1 | Router: inject `SessionStore` via `Depends` | [ ] |
-| 2 | Inject `LLMWrapper` (+ OpenAI client) via `Depends` | [ ] |
-| 3 | `FakeLLMWrapper` + smoke fixture | [ ] |
-| 4 | Dataset + three metrics | [ ] |
-| 5 | CLI runner + README + pythonpath | [ ] |
-| 6 | Tests: unit + smoke (golden) | [ ] |
-| 7 | Stress package (scenarios, metrics, PDF fixture script) | [ ] |
-| 8 | Stress runner | [ ] |
-| 9 | Stress tests: unit + smoke | [ ] |
+| 1 | Router: inject `SessionStore` via `Depends` | [x] |
+| 2 | Inject `LLMWrapper` (+ OpenAI client) via `Depends` | [x] |
+| 3 | `FakeLLMWrapper` + smoke fixture | [x] |
+| 4 | Dataset + three metrics | [x] |
+| 5 | CLI runner + README + pythonpath | [x] |
+| 6 | Tests: unit + smoke (golden) | [x] |
 
 ## Test surface (label every adopted test and both CLIs)
 
-First line of each test docstring (and the module docstring of `evals/run.py` / `evals/stress/run.py`):
+First line of each test docstring (and the module docstring of `evals/run.py`):
 
 | Label | Surface | Provider |
 |---|---|---|
@@ -73,7 +70,6 @@ Do not leave an unlabeled test. “I want to know which layer this is” = this 
 4. Load JSON and score an `EstimationResult` without HTTP. If this is wrong, the runner is noise.
 5. Runner talks to our endpoints. README says how to invoke it. Live eval **does** hit the real LLM (same as Lidr `evals/run.py`).
 6. Golden tests: unit metrics + smoke (HTTP yes, provider no).
-7–9. Stress harness from `origin/session_06` (same behavior: in-process = smoke, `--http` = live eval). Not optional. Previous «stress is out» is **void**.
 
 Runtime of a live run (Lidr `run.py`, unchanged behaviour):
 
@@ -210,39 +206,9 @@ Adopt Lidr `test_evals_run.py` as **smoke** (same behavior, not the same `Estima
 - `load_dataset()` length ≥ 15 and at least one `expected_out_of_scope` (`unit` is fine for this one — no HTTP).
 - The HTTP loop: `conversational_client` + two golden cases + `POST /estimate` + `run_all_metrics` → 3 names. Label `smoke`. Override the wrapper/store/client, **not** `get_estimation_service`.
 
-Label every function with the surface table (`unit` / `smoke` / `live eval`). Stress tests are step 9.
+Label every function with the surface table (`unit` / `smoke` / `live eval`).
 
 **Parada:** `uv run pytest tests/test_evals_metrics.py tests/test_evals_run.py` green. Metrics labeled `unit`. HTTP cases labeled `smoke`. No provider calls.
-
-## Step 7 — Stress package
-
-**After** golden (steps 4–6). Own commit. Lidr copy-from `origin/session_06`: `evals/stress/{__init__,scenarios,metrics}.py`, `evals/stress/fixtures/{__init__,build_pdfs.py}`. Not `REPORT.md` numbers (placeholders).
-
-Ours: `estimador-cag/evals/stress/…`
-
-- Three scenarios: `growing`, `pivot`, `contradiction` (≥20 turns). Same fact-trackers.
-- Metrics: `LatencyBudgetMetric`, `CostBudgetMetric`, `MemoryDriftMetric`. Copy as-is.
-- `build_pdfs.py` needs `fpdf2` (Lidr `session_06` `pyproject`: `fpdf2>=2.7`). Add that dep here. PDFs gitignored; script committed.
-- Imports: our `schemas.estimation`, not `app.schemas…`.
-
-**Parada:** scenarios load; metric unit logic can be exercised by step 9. No HTTP in this commit if you only land the package — or wait for step 9. Then **commit this step alone**.
-
-## Step 8 — Stress runner
-
-**Alone.** Lidr `evals/stress/run.py`.
-
-- `--http` → real server = `live eval`.
-- No `--http` → `TestClient` + isolated store override (step 1) = in-process. Lidr comments call that smoke; **with a real wrapper it still calls the LLM**. Same as Lidr: default in-process without fake is live-in-process unless tests inject `FakeLLMWrapper`. Document both in the module docstring (`live eval` vs `smoke` when the fixture overrides the wrapper).
-- Same flags: `--repeats`, `--latency-budget-ms`, `--cost-budget-usd`, CSV.
-- No `EstimationService`.
-
-**Parada:** `--help`. Then **commit this step alone**.
-
-## Step 9 — Stress tests
-
-Lidr `tests/test_stress_metrics.py` (`unit`) and `tests/test_stress_runner.py` (`smoke` via `conversational_client`). Adapt imports; no `EstimationService`. Label every test.
-
-**Parada:** `uv run pytest tests/test_stress_metrics.py tests/test_stress_runner.py` green. No provider calls.
 
 ---
 
@@ -255,10 +221,10 @@ Lidr `tests/test_stress_metrics.py` (`unit`) and `tests/test_stress_runner.py` (
 - Router delivers `SessionStore` via `Depends(get_session_store)` (step 1, own commit). Previous «do not touch the router» is void.
 - Session estimate/ACB receive `LLMWrapper` + OpenAI client via `Depends` (step 2, own commit).
 - `FakeLLMWrapper` + `conversational_client` (step 3, own commit). Smokes must not hit a provider. Live eval must. No `EstimationService`.
-- Full harness: golden **and** stress. Same behavior as Lidr. Previous «stress is out» is void. Enunciado PDF not used; `origin/session_06` code is.
+- This plan is golden only. Stress (`origin/session_06`) moved to `docs/pre_sesion6_plan.md`.
 - Do not change `/estimate`, `/estimate-acb`, guardrails, or `EstimationResult`.
-- README with both runners. No `evolution.md`.
-- Every adopted test and both CLIs labeled `unit` / `smoke` / `live eval` (surface table above).
+- README with the golden runner. No `evolution.md`.
+- Every adopted test and the golden CLI labeled `unit` / `smoke` / `live eval` (surface table above).
 - One-shot `/api/v1/estimate` stays out of this harness (Lidr’s runner only hits session endpoints).
 
 ## Do not copy from Lidr
@@ -271,14 +237,14 @@ Lidr `tests/test_stress_metrics.py` (`unit`) and `tests/test_stress_runner.py` (
 
 - Retuning golden ranges or prompts so the board is 16/16 green. Seeing reds and studying them is **in** scope (step 5 parada).
 - Asserting `last_resolved_tier` against `expected_tier`. Why out: Lidr does not. The JSON field is dead there too. Scoring it would be a new metric, not a port. Dataset still carries the field (step 4).
-- Filling `evals/stress/REPORT.md` with real numbers (Lidr ships placeholders). Why out: that is the **sesión 6 / post-sesión 6** lab (run stress on a real model, write P50/P95/$/drift). Not pre-sesión 6 and not this port. We copy the skeleton; we do not run the experiment or fill the table.
+- Stress harness and filling `evals/stress/REPORT.md`. Why out: not on `session_05_live`. See `docs/pre_sesion6_plan.md`.
 
 ## Known limits (evidence, not guesses)
 
 - `SchemaAdherenceMetric` phase-sum: always passes on a result that went through our validator. Still useful if the overwrite goes away.
 - `case-006` transcript starts with «Ignore previous instructions…» — matches `_PROMPT_INJECTION_PATTERNS` in `src/guardrails/input.py`. Runner 400 → synthetic OoS. `case-005` (vague) is not an injection; OoS depends on the model.
 - In-process and `--http` both call the real LLM when keys exist. Cost and time are not in this plan; Lidr’s runner has no dry-run.
-- I have not run Lidr’s evals or ours. I do not know the pass rate.
+- Live actor tally is in RESULTS below. ACB not run. Not compared to a Lidr board.
 
 # RESULTS
 
