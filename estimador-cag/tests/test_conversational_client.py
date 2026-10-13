@@ -40,7 +40,27 @@ def test_conversational_client_estimate_is_smoke(
 
     response = client.post(f"/sessions/{session_id}/estimate", data=_FORM)
     assert response.status_code == 200, response.text
-    assert response.json()["result"]["summary"] == "Canned CRM build for the sales team."
+    payload = response.json()
+    assert payload["result"]["summary"] == "Canned CRM build for the sales team."
+    observation = payload["observation"]
+    assert observation is not None
+    assert set(observation) == {
+        "turn_index",
+        "session_id",
+        "enriched_transcript_chars",
+        "attachments_total_chars",
+        "messages_in_window",
+        "anchors_count",
+        "summary_chars",
+        "tokens_in",
+        "tokens_out",
+        "cost_usd",
+        "latency_ms",
+        "cache_hit_kind",
+        "last_resolved_tier",
+    }
+    assert observation["session_id"] == session_id
+    assert observation["cache_hit_kind"] == "none"
     assert fake_wrapper.chat_calls
     names = [call["response_model"] for call in fake_wrapper.chat_calls]
     assert "EstimationResult" in names

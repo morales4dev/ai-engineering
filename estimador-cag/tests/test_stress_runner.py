@@ -54,7 +54,7 @@ def _tiny_scenario() -> Scenario:
 def test_runner_writes_csv_with_expected_columns_and_rows(
     conversational_client, tmp_path: Path
 ):
-    """Walk 3 turns of a scripted session, validate CSV shape."""
+    """smoke: TestClient + FakeLLMWrapper. No provider."""
     client, _store = conversational_client
     scenario = _tiny_scenario()
     # Truncate to 3 turns for speed — the scenario object enforces >=20 but
@@ -98,7 +98,7 @@ def test_runner_writes_csv_with_expected_columns_and_rows(
 
 
 def test_runner_records_error_row_on_failure(conversational_client, tmp_path: Path):
-    """If a turn raises, the runner records an error row and stops the session."""
+    """smoke: TestClient + FakeLLMWrapper. No provider."""
     client, _store = conversational_client
     scenario = _tiny_scenario()
     # Replace turn 2's transcript with one short enough to trigger the

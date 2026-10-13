@@ -40,6 +40,7 @@ def _obs(**overrides) -> TurnObservation:
 
 
 def test_latency_under_budget_passes():
+    """unit: in-process objects only. No HTTP."""
     metric = LatencyBudgetMetric(budget_ms=8000)
     result = metric.evaluate(_obs(latency_ms=3200))
     assert result.passed is True
@@ -48,6 +49,7 @@ def test_latency_under_budget_passes():
 
 
 def test_latency_over_budget_fails():
+    """unit: in-process objects only. No HTTP."""
     metric = LatencyBudgetMetric(budget_ms=8000)
     result = metric.evaluate(_obs(latency_ms=9100))
     assert result.passed is False
@@ -55,13 +57,14 @@ def test_latency_over_budget_fails():
 
 
 def test_latency_exactly_at_budget_passes():
-    """Boundary: latency == budget passes (the comparison is ``<=``)."""
+    """unit: in-process objects only. No HTTP. Boundary: latency == budget is ``<=``."""
     metric = LatencyBudgetMetric(budget_ms=4000)
     result = metric.evaluate(_obs(latency_ms=4000))
     assert result.passed is True
 
 
 def test_latency_budget_must_be_positive():
+    """unit: in-process objects only. No HTTP."""
     with pytest.raises(ValueError):
         LatencyBudgetMetric(budget_ms=0)
 
@@ -70,12 +73,14 @@ def test_latency_budget_must_be_positive():
 
 
 def test_cost_under_budget_passes():
+    """unit: in-process objects only. No HTTP."""
     metric = CostBudgetMetric(budget_usd=0.02)
     result = metric.evaluate(_obs(cost_usd=0.0035))
     assert result.passed is True
 
 
 def test_cost_over_budget_fails():
+    """unit: in-process objects only. No HTTP."""
     metric = CostBudgetMetric(budget_usd=0.002)
     result = metric.evaluate(_obs(cost_usd=0.01))
     assert result.passed is False
@@ -83,6 +88,7 @@ def test_cost_over_budget_fails():
 
 
 def test_cost_exactly_at_budget_passes():
+    """unit: in-process objects only. No HTTP."""
     metric = CostBudgetMetric(budget_usd=0.005)
     result = metric.evaluate(_obs(cost_usd=0.005))
     assert result.passed is True
@@ -116,6 +122,7 @@ def _snapshot(
 
 
 def test_drift_fact_present_in_project_name_passes():
+    """unit: in-process objects only. No HTTP."""
     metric = MemoryDriftMetric(fact="Nimbus", fact_field="project_name")
     result = metric.evaluate(_snapshot(project_name="Nimbus"))
     assert result.passed is True
@@ -123,12 +130,14 @@ def test_drift_fact_present_in_project_name_passes():
 
 
 def test_drift_fact_missing_from_project_name_fails():
+    """unit: in-process objects only. No HTTP."""
     metric = MemoryDriftMetric(fact="Nimbus", fact_field="project_name")
     result = metric.evaluate(_snapshot(project_name="Atlas"))
     assert result.passed is False
 
 
 def test_drift_fact_present_in_technologies_passes():
+    """unit: in-process objects only. No HTTP."""
     metric = MemoryDriftMetric(fact="Flutter", fact_field="technologies")
     result = metric.evaluate(
         _snapshot(technologies=["React", "Flutter", "Postgres"])
@@ -137,6 +146,7 @@ def test_drift_fact_present_in_technologies_passes():
 
 
 def test_drift_fact_present_in_summary_passes():
+    """unit: in-process objects only. No HTTP."""
     metric = MemoryDriftMetric(fact="budget locked at 80k", fact_field="summary")
     result = metric.evaluate(
         _snapshot(summary="Turn 8: client confirms budget locked at 80k EUR.")
@@ -145,14 +155,14 @@ def test_drift_fact_present_in_summary_passes():
 
 
 def test_drift_fact_case_insensitive_match():
+    """unit: in-process objects only. No HTTP."""
     metric = MemoryDriftMetric(fact="NIMBUS", fact_field="project_name")
     result = metric.evaluate(_snapshot(project_name="nimbus"))
     assert result.passed is True
 
 
 def test_drift_any_field_searches_full_snapshot():
-    """``fact_field='any'`` matches anywhere in the serialised snapshot —
-    including anchor turn content and free-form fields."""
+    """unit: in-process objects only. No HTTP. ``fact_field='any'`` searches the whole snapshot."""
     metric = MemoryDriftMetric(fact="signed NDA", fact_field="any")
     snap = _snapshot(extra={"anchors": [{"role": "user", "content": "We signed NDA last week."}]})
     result = metric.evaluate(snap)
@@ -160,11 +170,13 @@ def test_drift_any_field_searches_full_snapshot():
 
 
 def test_drift_any_field_misses_when_truly_absent():
+    """unit: in-process objects only. No HTTP."""
     metric = MemoryDriftMetric(fact="Cerner", fact_field="any")
     result = metric.evaluate(_snapshot(project_name="Nimbus"))
     assert result.passed is False
 
 
 def test_drift_empty_fact_rejected():
+    """unit: in-process objects only. No HTTP."""
     with pytest.raises(ValueError):
         MemoryDriftMetric(fact="")
