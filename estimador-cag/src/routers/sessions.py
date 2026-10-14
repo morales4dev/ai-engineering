@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 
 import structlog
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from instructor.core import InstructorRetryException
-from openai import APIConnectionError, APIStatusError, RateLimitError
+from openai import APIConnectionError, APIStatusError, OpenAI, RateLimitError
 from pydantic import BaseModel, Field
 
 from config import get_settings
-from dependencies import get_session_store
+from dependencies import get_llm_wrapper, get_openai_client, get_session_store
 from guardrails.input import InputGuardrailViolation
 from prompts.loader import available_prompt_versions
 from schemas.acb import ACBResponse
@@ -26,7 +26,8 @@ from services.attachments import (
     extract_text,
 )
 from services.conversational import estimate_conversational
-from sessions import ProjectMetadata, Session, SessionNotFoundError
+from services.llm_wrapper import LLMWrapper
+from sessions import ProjectMetadata, Session, SessionNotFoundError, SessionStore
 from sessions.tier_resolver import Tier
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -62,6 +63,7 @@ class _SessionPrelude:
     request: EstimationRequest
     transcript: str
     version: str
+    attachments_total_chars: int = 0
 
 
 def _ensure_llm_configured() -> None:
@@ -96,6 +98,7 @@ async def _session_estimate_prelude(
     output_format: OutputFormat,
     attachments: list[UploadFile],
     prompt_version: str | None,
+    store: SessionStore,
     *,
     log_event: str,
     tier: Tier | None,
@@ -108,7 +111,7 @@ async def _session_estimate_prelude(
     """
     version = _resolve_prompt_version(prompt_version)
     try:
-        session = get_session_store().get(session_id)
+        session = store.get(session_id)
     except SessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="session_not_found") from exc
 
@@ -144,12 +147,14 @@ async def _session_estimate_prelude(
             extracted.append((upload.filename, text))
 
     enriched = enrich_transcript(transcript=transcript, attachments=extracted)
+    attachments_total_chars = sum(len(text) for _, text in extracted)
     log.info(
         log_event,
         session_id=session_id,
         transcript_chars=len(transcript),
         enriched_transcript_chars=len(enriched),
         attachment_count=len(extracted),
+        attachments_total_chars=attachments_total_chars,
         prompt_version=version,
         tier_override=tier.value if tier is not None else None,
     )
@@ -165,22 +170,28 @@ async def _session_estimate_prelude(
         request=request,
         transcript=enriched,
         version=version,
+        attachments_total_chars=attachments_total_chars,
     )
 
 
 @router.post("", response_model=CreateSessionResponse, status_code=201)
-def create_session() -> CreateSessionResponse:
+def create_session(
+    store: SessionStore = Depends(get_session_store),
+) -> CreateSessionResponse:
     """Create an empty in-memory session. Lost on process restart."""
-    session = get_session_store().create()
+    session = store.create()
     log.info("session_created", session_id=session.session_id)
     return CreateSessionResponse(session_id=session.session_id)
 
 
 @router.get("/{session_id}", response_model=SessionInfoResponse)
-def get_session(session_id: str) -> SessionInfoResponse:
+def get_session(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+) -> SessionInfoResponse:
     """Read-only inspect of the in-memory session. No LLM."""
     try:
-        session = get_session_store().get(session_id)
+        session = store.get(session_id)
     except SessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="session_not_found") from exc
     return SessionInfoResponse(
@@ -205,6 +216,9 @@ async def estimate_in_session(
     attachments: list[UploadFile] = File(default_factory=list),
     tier: Tier | None = Form(default=None),
     prompt_version: str | None = Query(default=None),
+    store: SessionStore = Depends(get_session_store),
+    wrapper: LLMWrapper = Depends(get_llm_wrapper),
+    openai_client: OpenAI | None = Depends(get_openai_client),
 ) -> EstimationResponseReloaded:
     """Session estimate: sliding-window history + metadata. Caches stay off."""
     prelude = await _session_estimate_prelude(
@@ -215,6 +229,7 @@ async def estimate_in_session(
         output_format,
         attachments,
         prompt_version,
+        store,
         log_event="session_estimate_received",
         tier=tier,
     )
@@ -224,7 +239,10 @@ async def estimate_in_session(
             prelude.request,
             transcript=prelude.transcript,
             version=prelude.version,
+            wrapper=wrapper,
+            openai_client=openai_client,
             tier=tier,
+            attachments_total_chars=prelude.attachments_total_chars,
         )
     except InputGuardrailViolation as exc:
         log.info(
@@ -251,6 +269,9 @@ async def estimate_in_session_acb(
     attachments: list[UploadFile] = File(default_factory=list),
     tier: Tier | None = Form(default=None),
     prompt_version: str | None = Query(default=None),
+    store: SessionStore = Depends(get_session_store),
+    wrapper: LLMWrapper = Depends(get_llm_wrapper),
+    openai_client: OpenAI | None = Depends(get_openai_client),
 ) -> ACBResponse:
     """Actor-Critic-Boss variant of /estimate. Caches stay off."""
     prelude = await _session_estimate_prelude(
@@ -261,6 +282,7 @@ async def estimate_in_session_acb(
         output_format,
         attachments,
         prompt_version,
+        store,
         log_event="session_estimate_acb_received",
         tier=tier,
     )
@@ -270,6 +292,8 @@ async def estimate_in_session_acb(
             prelude.request,
             transcript=prelude.transcript,
             version=prelude.version,
+            wrapper=wrapper,
+            openai_client=openai_client,
             tier=tier,
         )
     except InputGuardrailViolation as exc:

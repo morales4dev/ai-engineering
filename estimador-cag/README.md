@@ -76,6 +76,49 @@ docker logs estimator
 docker logs -f estimator       
 ```
 
+## CAG stress
+
+Live eval of the conversational CAG. Real `gpt-4o-mini` (OpenAI only; Anthropic is not on this path). Not pytest. Burns credit — check the OpenAI dashboard before and after.
+
+The runner writes `evals/stress/results.csv` (gitignored). You fill `evals/stress/REPORT.md` by hand from that CSV. The runner does not write the report.
+
+Full matrix: 3 scenarios × 5 attachment sizes × 3 repeats × 20 turns = 900 turns if every call succeeds. Floor is ≥50 CSV rows; do not shrink the 20-turn scripts to hit it.
+
+### Stress fixtures
+
+```bash
+cd estimador-cag
+PYTHONPATH=src:. uv run python -m evals.stress.fixtures.build_pdfs
+```
+
+Writes `attach_{5,20,50,100}kb.pdf` under `evals/stress/fixtures/`. Deterministic. Gitignored.
+
+### Stress server up
+
+API must already be running (Compose or uvicorn). Same stack as [Docker](#docker).
+
+```bash
+cd estimador-cag
+docker compose up --build -d
+curl -sf http://localhost:8000/health
+```
+
+### Stress run
+
+```bash
+cd estimador-cag
+PYTHONPATH=src:. uv run python -m evals.stress.run \
+    --http http://localhost:8000 \
+    --scenarios growing,pivot,contradiction \
+    --attachment-sizes 0,5,20,50,100 \
+    --repeats 3 \
+    --output evals/stress/results.csv
+```
+
+### Stress report
+
+Open `evals/stress/results.csv` (or the summary the runner prints) and replace the `_xxx_` placeholders in `evals/stress/REPORT.md`. Commit the report, not the CSV.
+
 ## HTTP client
 
 Streamlit is the HTTP client of the estimator API. It never talks to SQL, Redis, or the LLM.
@@ -248,6 +291,7 @@ estimador-cag/
 │   │   ├── cache.py            # exact-match Redis
 │   │   └── history.py          # Postgres log of one-shot /estimate rows
 │   └── schemas/                # estimation + acb + critic
+├── evals/                      # golden dataset, metrics, CLI runner (actor / acb)
 ├── streamlit_app.py            # New + Conversational + Recent
 ├── Dockerfile
 ├── docker-compose.yml
@@ -300,6 +344,19 @@ curl -s -X POST "http://localhost:8000/sessions/${SESSION_ID}/estimate" \
 ```
 
 Restarting the API drops the in-memory session; the next estimate returns 404.
+
+### Golden evals (live eval — real model, keys required)
+
+In-process `TestClient` (default) or `--http` against a server already up.
+Without keys the prelude returns 503 and the case is an ERROR. The runner
+does not skip 503. First live run is for reading FAILs, not 16/16.
+
+```bash
+cd estimador-cag
+PYTHONPATH=src:. uv run python -m evals.run --mode actor
+PYTHONPATH=src:. uv run python -m evals.run --mode acb --limit 5 --output /tmp/acb.json
+PYTHONPATH=src:. uv run python -m evals.run --mode actor --http http://localhost:8000
+```
 
 ### Form HTTP client (API must already be running)
 uv run streamlit run streamlit_app.py          # New / Conversational / Recent

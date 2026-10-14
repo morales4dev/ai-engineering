@@ -11,12 +11,19 @@ from __future__ import annotations
 
 import structlog
 
+from openai import OpenAI
+
 from config import get_settings
-from dependencies import get_llm_wrapper, get_openai_client
 from guardrails.input import check_input
 from guardrails.output import enforce_scope_response
 from prompts.loader import render_conversational_prompt
-from schemas.estimation import EstimationRequest, EstimationResponseReloaded, EstimationResult
+from schemas.estimation import (
+    EstimationRequest,
+    EstimationResponseReloaded,
+    EstimationResult,
+    TurnObservation,
+)
+from services.llm_wrapper import LLMWrapper
 from services.metadata_extractor import prime_metadata_if_empty, update_metadata
 from sessions import Session
 from sessions.compression import apply_compression
@@ -31,11 +38,13 @@ def estimate_conversational(
     *,
     transcript: str,
     version: str,
+    wrapper: LLMWrapper,
+    openai_client: OpenAI | None,
     tier: Tier | None = None,
+    attachments_total_chars: int = 0,
 ) -> EstimationResponseReloaded:
     """Estimate against the session window. ``transcript`` is already enriched."""
-    check_input(transcript, openai_client=get_openai_client())
-    wrapper = get_llm_wrapper()
+    check_input(transcript, openai_client=openai_client)
     settings = get_settings()
     prime_metadata_if_empty(
         session,
@@ -82,6 +91,8 @@ def estimate_conversational(
     )
     result = enforce_scope_response(result)
     session.history.append(user=transcript, assistant=result.model_dump_json())
+    # After append, before compression: the window later plateaus at max_turns.
+    turn_index = max(1, len(session.history.messages) // 2)
     apply_compression(
         session.history,
         llm_wrapper=wrapper,
@@ -95,6 +106,22 @@ def estimate_conversational(
         llm_wrapper=wrapper,
         model=settings.METADATA_EXTRACTOR_MODEL,
     )
+    observation = TurnObservation(
+        turn_index=turn_index,
+        session_id=session.session_id,
+        enriched_transcript_chars=len(transcript),
+        attachments_total_chars=attachments_total_chars,
+        messages_in_window=len(session.history.messages),
+        anchors_count=len(session.history.anchors),
+        summary_chars=len(session.history.summary or ""),
+        tokens_in=int(meta.get("tokens_in", 0) or 0),
+        tokens_out=int(meta.get("tokens_out", 0) or 0),
+        cost_usd=float(meta.get("cost_usd", 0.0) or 0.0),
+        latency_ms=int(meta.get("latency_ms", 0) or 0),
+        cache_hit_kind="none",
+        last_resolved_tier=session.last_resolved_tier,
+    )
+    log.info("turn_observed", **observation.model_dump())
     log.info(
         "estimation_conversational_generated",
         session_id=session.session_id,
@@ -110,4 +137,5 @@ def estimate_conversational(
         prompt_version=version,
         cached=False,
         project_metadata=session.metadata,
+        observation=observation,
     )

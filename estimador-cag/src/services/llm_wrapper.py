@@ -34,6 +34,43 @@ def _provider_from_model(model: str) -> str:
     return "unknown"
 
 
+# Cost per 1M tokens (USD). Same table as Lidr session_06.
+MODEL_COSTS: dict[str, dict[str, float]] = {
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
+    "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
+    "claude-sonnet-4-5": {"input": 3.00, "output": 15.00},
+}
+
+
+def _estimate_cost(model: str, tokens_in: int, tokens_out: int) -> float:
+    base = _normalise_model_name(model)
+    costs = MODEL_COSTS.get(base) or MODEL_COSTS.get(model) or {"input": 0.0, "output": 0.0}
+    return round((tokens_in * costs["input"] + tokens_out * costs["output"]) / 1_000_000, 6)
+
+
+def _tokens_from_raw(raw: Any) -> tuple[int, int]:
+    """Lidr free-text path: usage.prompt_tokens / usage.completion_tokens."""
+    usage = getattr(raw, "usage", None)
+    tokens_in = getattr(usage, "prompt_tokens", 0) or 0
+    tokens_out = getattr(usage, "completion_tokens", 0) or 0
+    return int(tokens_in), int(tokens_out)
+
+
+def _structured_meta(raw: Any, *, target_model: str, latency_ms: int) -> dict[str, Any]:
+    tokens_in, tokens_out = _tokens_from_raw(raw)
+    model = _normalise_model_name(target_model)
+    return {
+        "model": model,
+        "provider": _provider_from_model(target_model),
+        "latency_ms": latency_ms,
+        "tokens_in": tokens_in,
+        "tokens_out": tokens_out,
+        "cost_usd": _estimate_cost(model, tokens_in, tokens_out),
+    }
+
+
 class LLMWrapper:
     """Structured LLM client. Caches live in ``estimate_oneshot()``, not here."""
 
@@ -80,7 +117,7 @@ class LLMWrapper:
         )
         t0 = time.perf_counter()
         try:
-            result = self._instructor.chat.completions.create(
+            result, raw = self._instructor.chat.completions.create_with_completion(
                 model=target_model,
                 api_key=self._api_key_for(target_model),
                 timeout=self.timeout,
@@ -100,16 +137,15 @@ class LLMWrapper:
             raise
 
         latency_ms = int((time.perf_counter() - t0) * 1000)
-        meta = {
-            "model": _normalise_model_name(target_model),
-            "provider": _provider_from_model(target_model),
-            "latency_ms": latency_ms,
-        }
+        meta = _structured_meta(raw, target_model=target_model, latency_ms=latency_ms)
         log.info(
             "llm_structured_call_completed",
             model=meta["model"],
             provider=meta["provider"],
             latency_ms=latency_ms,
+            tokens_in=meta["tokens_in"],
+            tokens_out=meta["tokens_out"],
+            cost_usd=meta["cost_usd"],
         )
         return result, meta
 
@@ -138,7 +174,7 @@ class LLMWrapper:
         )
         t0 = time.perf_counter()
         try:
-            result = self._instructor.chat.completions.create(
+            result, raw = self._instructor.chat.completions.create_with_completion(
                 model=target_model,
                 api_key=self._api_key_for(target_model),
                 timeout=self.timeout,
@@ -158,16 +194,15 @@ class LLMWrapper:
             raise
 
         latency_ms = int((time.perf_counter() - t0) * 1000)
-        meta = {
-            "model": _normalise_model_name(target_model),
-            "provider": _provider_from_model(target_model),
-            "latency_ms": latency_ms,
-        }
+        meta = _structured_meta(raw, target_model=target_model, latency_ms=latency_ms)
         log.info(
             "llm_structured_chat_completed",
             model=meta["model"],
             provider=meta["provider"],
             latency_ms=latency_ms,
+            tokens_in=meta["tokens_in"],
+            tokens_out=meta["tokens_out"],
+            cost_usd=meta["cost_usd"],
         )
         return result, meta
 

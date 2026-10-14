@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import structlog
 
+from openai import OpenAI
+
 from config import get_settings
-from dependencies import get_llm_wrapper, get_openai_client
 from guardrails.input import check_input
 from guardrails.output import enforce_scope_response
 from prompts.loader import render_conversational_prompt
@@ -18,6 +19,7 @@ from schemas.critic import CriticFeedback
 from schemas.estimation import EstimationRequest, EstimationResult
 from services.boss import Boss
 from services.critic import Critic
+from services.llm_wrapper import LLMWrapper
 from services.metadata_extractor import prime_metadata_if_empty, update_metadata
 from sessions import Session
 from sessions.compression import apply_compression
@@ -32,11 +34,12 @@ def estimate_conversational_acb(
     *,
     transcript: str,
     version: str,
+    wrapper: LLMWrapper,
+    openai_client: OpenAI | None,
     tier: Tier | None = None,
 ) -> ACBResponse:
     """ACB variant. ``transcript`` is already enriched."""
-    check_input(transcript, openai_client=get_openai_client())
-    wrapper = get_llm_wrapper()
+    check_input(transcript, openai_client=openai_client)
     settings = get_settings()
     prime_metadata_if_empty(
         session,
