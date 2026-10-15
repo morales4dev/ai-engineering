@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -29,6 +30,11 @@ class Settings(BaseSettings):
     SEMANTIC_CACHE_TTL: int = 86400
     SEMANTIC_CACHE_LOG_ONLY: bool = False
     DATABASE_URL: str | None = None
+    CATALOG_PATH: Path = get_absolute_path().parent / "data/catalog/catalog.yaml"
+    INGESTION_DATA_ROOT: Path = get_absolute_path().parent / "data/seed"
+    PRESIDIO_SPACY_MODEL: str = "es_core_news_md"
+    PSEUDONYM_FAKER_LOCALE: str = "es_ES"
+    PSEUDONYM_HASH_SALT: str = "change-me-in-prod"
     ESTIMATOR_API_BASE_URL: str = "http://localhost:8000"
     MAX_CONVERSATION_TURNS: int = 6
     MAX_ATTACHMENT_CHARS: int = 60000
