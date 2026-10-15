@@ -6,17 +6,27 @@ This file is the handoff. A later session should need only this plan plus the tw
 
 ## Handoff (start here in a new session)
 
-**Next work is step 5 only.** Step 4 is done. Do not redo cleaning, HTTP, catalog, parsers, Alembic, the image, or `create_all`. Do not reopen the Q&A below. Stop after step 5 and wait.
+**Next work is step 6 only.** Step 5 is done. Do not redo PII, cleaning, HTTP, catalog, parsers, Alembic, the image, or `create_all`. Do not reopen the Q&A below. Stop after step 6 and wait.
 
 | | Path / value |
 |---|---|
-| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense` @ `788d722`, app `estimador-cag/` |
+| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense` @ `f60141b`, app `estimador-cag/` |
 | Reference | `/home/morales4dev/wsTakeoff/ai-engineering-lidr` `origin/session_06_live` @ `aa1fcf4` |
-| Already shipped | CAG through stress: one-shot, sessions, attachments, compression, tier, ACB, golden evals, `TurnObservation`, `evals/stress/`. **Step 1:** Alembic `0000_estimations` + `0001_session6_initial`, image `pgvector/pgvector:pg16`, seed+catalog on disk, lazy `persistence.database`. **Step 2:** `src/ingestion/` catalog + documents + loaders + parsers (json/txt). `get_catalog` / `get_filesystem_loader` / `get_parser_registry`. Lifespan logs `catalog_loaded` / `catalog_load_failed` (no crash). `pyyaml>=6.0`. **Step 3:** `ingest_source` + `POST /api/v1/ingestion/runs` + `GET /jobs/{job_id}`. No `SessionLocal`; BackgroundTask uses `_open_background_session` (lazy engine). **Step 4:** `ingestion.cleaning` + host `scripts/demo_cleaning_s06.py`. `pandas>=2.2`, `pandera>=0.20`. Not on the POST. |
+| Already shipped | CAG through stress: one-shot, sessions, attachments, compression, tier, ACB, golden evals, `TurnObservation`, `evals/stress/`. **Step 1:** Alembic + pgvector image + seed. **Step 2:** catalog + parsers. **Step 3:** POST /runs + GET /jobs. **Step 4:** cleaning library + host demo. **Step 5:** `ingestion.pii` + host `scripts/demo_pii_s06.py` + `build_pseudonymizer`. Tests stub the analyzer. `es_core_news_md` download is step 6. Not on the POST. |
 | Closed plans (read-only) | `pre_pre_sesion_06_evals.md`, `pre_sesion6_plan.md`, `sesion5_port_plan.md` |
 | Lidr copy-from | listed per step. Layout is `estimator/app/…`; ours is `estimador-cag/src/…`. |
 
-Entry points **after step 4** (ours):
+Entry points **after step 5** (ours):
+
+- `src/ingestion/pii/` — recognizers, analyzer, pseudonymizer, mapping stores. Four-line block on `__init__.py`.
+- `scripts/demo_pii_s06.py` — host only; `InMemoryMappingStore`. Four-line block. Needs `es_core_news_md` (step 6).
+- `dependencies.build_pseudonymizer(session)` — lazy import; Postgres store. Not called by the POST.
+- `tests/test_pii_recognizers.py`, `test_pii_pseudonymizer.py` — `unit`. Stub analyzer. No spaCy for pytest.
+- `pyproject.toml` — `presidio-analyzer>=2.2`, `presidio-anonymizer>=2.2`, `spacy>=3.7`, `faker>=24.0`.
+- `ingest_source` / router still do not import PII.
+- Everything else under “after step 4” still holds.
+
+Entry points **after step 4** (step 5 did not touch HTTP; keep as freeze, do not restore):
 
 - `src/ingestion/cleaning/` — `clean_budget_records` + `validate_with_policy`. Four-line block on `__init__.py`.
 - `scripts/demo_cleaning_s06.py` — host only; `ROOT / "src"` on `sys.path`. Four-line block. No docker exec.
@@ -115,7 +125,7 @@ Alembic is a CLI (`upgrade head`). `env.py` reads `get_settings().DATABASE_URL`.
 | 2 | Catalog YAML + filesystem loader + JSON/TXT parsers | [x] |
 | 3 | Orchestrator + `POST /runs` + `GET /jobs` | [x] |
 | 4 | Cleaning library + demo (not on the POST) | [x] |
-| 5 | PII library + demo (not on the POST) | [ ] |
+| 5 | PII library + demo (not on the POST) | [x] |
 | 6 | Teaching CLIs + README Ingestion (curl) | [ ] |
 
 ## Incorporation order (not runtime)
@@ -372,6 +382,8 @@ Lidr copy-from: `estimator/app/ingestion/pii/**`, `estimator/scripts/demo_pii_s0
 - `PostgresMappingStore` uses `pseudonym_mappings`. Demos and tests use `InMemoryMappingStore`.
 - Deps: `presidio-analyzer`, `presidio-anonymizer`, `spacy`, `faker`.
 - Tests stub the analyzer. No spaCy model required for pytest. `unit`.
+
+**Done.** PII unit tests + ingestion/cleaning smoke — 20 passed. Analyzer stubbed; no spaCy model for pytest. Demo not run (model download is step 6). Not on the POST.
 
 ## Step 6 — Teaching CLIs + README Ingestion
 

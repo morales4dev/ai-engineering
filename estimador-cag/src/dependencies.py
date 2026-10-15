@@ -102,6 +102,29 @@ def get_parser_registry() -> ParserRegistry:
     return default_registry()
 
 
+def build_pseudonymizer(session):
+    """Build a :class:`ConsistentPseudonymizer` backed by Postgres.
+
+    Not a singleton — the mapping store wraps a Session, so callers (scripts,
+    BackgroundTasks, tests) must pass their own. The analyzer (singleton via
+    ``build_analyzer``) and the salt come from settings.
+    """
+    from ingestion.pii import (
+        ConsistentPseudonymizer,
+        PostgresMappingStore,
+        build_analyzer,
+    )
+
+    settings = get_settings()
+    return ConsistentPseudonymizer(
+        analyzer=build_analyzer(),
+        mapping_store=PostgresMappingStore(session),
+        salt=settings.PSEUDONYM_HASH_SALT,
+        faker_locale=settings.PSEUDONYM_FAKER_LOCALE,
+        language="es",
+    )
+
+
 @lru_cache
 def get_session_store() -> SessionStore:
     """In-process conversational sessions. Singleton per worker.
