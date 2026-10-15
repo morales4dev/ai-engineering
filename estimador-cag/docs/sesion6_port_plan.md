@@ -6,27 +6,45 @@ This file is the handoff. A later session should need only this plan plus the tw
 
 ## Handoff (start here in a new session)
 
+**Next work is step 2 only.** Step 1 is done (`7186193` on `session_06_forense`, pushed). Do not redo Alembic, the image, or `create_all`. Do not reopen the Q&A below. Stop after step 2 and wait.
+
 | | Path / value |
 |---|---|
-| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense`, app `estimador-cag/` |
+| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense` @ `7186193`, app `estimador-cag/` |
 | Reference | `/home/morales4dev/wsTakeoff/ai-engineering-lidr` `origin/session_06_live` @ `aa1fcf4` |
-| Already shipped | CAG through stress: one-shot, sessions, attachments, compression, tier, ACB, golden evals, `TurnObservation`, `evals/stress/`. Postgres table `estimations` via `create_all` in `history.py`. |
+| Already shipped | CAG through stress: one-shot, sessions, attachments, compression, tier, ACB, golden evals, `TurnObservation`, `evals/stress/`. **Step 1:** Alembic `0000_estimations` + `0001_session6_initial`, image `pgvector/pgvector:pg16`, seed+catalog on disk, lazy `persistence.database`. No catalog loader. No ingestion HTTP. |
 | Closed plans (read-only) | `pre_pre_sesion_06_evals.md`, `pre_sesion6_plan.md`, `sesion5_port_plan.md` |
 | Lidr copy-from | listed per step. Layout is `estimator/app/…`; ours is `estimador-cag/src/…`. |
 
-Entry points today (ours):
+Entry points **after step 1** (ours):
 
-- `src/main.py` — lifespan calls `init_db()`; routers: estimations + sessions. No ingestion.
-- `src/services/history.py` — `Base` + `EstimationRow` + `create_all` in `init_db` / persist / list / get. `get_engine()` returns `None` if `DATABASE_URL` is unset. Fail-open writes.
-- `src/config.py` — `DATABASE_URL: str | None = None`. No catalog / PII settings.
-- `src/utils.py` — `get_absolute_path()` is the `src/` directory. `.env` is `parent / ".env"`.
-- `pyproject.toml` — `pythonpath = ["src", "."]`. Tests import `from main import app`, `from schemas.…`.
-- `tests/conftest.py` — `from main import app`. That import must work without Postgres.
-- `docker-compose.yml` — `postgres:16-alpine` on `5432`, user/db `postgres`/`estimator`. Bind-mount `./src:/app`. Command is uvicorn only.
-- `Dockerfile` — `COPY src/ /app/`.
+- `src/main.py` — lifespan calls `init_db()`; routers: estimations + sessions. Still no ingestion HTTP.
+- `src/services/history.py` — no `Base`, no `EstimationRow` class, no `create_all`. Imports `EstimationRow` from `persistence.models`. Own `get_engine()` (not merged). Fail-open writes. `init_db`: no URL → `history_disabled`; URL set → `schema_via_alembic`.
+- `src/persistence/models.py` — one `Base`: `EstimationRow` + `IngestionJobRow` + `PseudonymMappingRow`.
+- `src/persistence/database.py` — lazy `get_engine()` (`None` if no URL). `get_session()` is FastAPI `Depends`; 503 `"database is unavailable"` if unset. No eager `SessionLocal`.
+- `src/persistence/repositories/` — Lidr `jobs.py` / `mappings.py`, our imports.
+- `src/config.py` — `DATABASE_URL: str | None = None` plus the five Session 6 settings (host Path defaults). None of the five in the machine `.env`.
+- `alembic/` — `0000_estimations` then `0001_session6_initial`. `env.py` inserts `src` on `sys.path` if that dir exists; raises if `DATABASE_URL` is missing.
+- `docker-compose.yml` — `pgvector/pgvector:pg16`, host **5432**, user/db `postgres`/`estimator`. Command: `alembic upgrade head && uvicorn`. Volumes: `./src:/app`, `./alembic`, `./alembic.ini`, `./data`. Compose env: `CATALOG_PATH` + `INGESTION_DATA_ROOT` under `/app/data/…`. Healthcheck `start_period: 30s`.
+- `Dockerfile` — `COPY src/`, `data/`, `alembic/`, `alembic.ini`.
+- `data/catalog/catalog.yaml` + `data/seed/` — copied from Lidr, not loaded yet.
+- `tests/test_persistence_database.py` — `unit`. Import-safe; 503 without URL (settings monkeypatched).
 - `streamlit_app.py` — New / Conversational / Recent. Do not touch.
+- Compose bind-mount collision: an empty `src/alembic.ini` can reappear while the stack is up. Do not commit it.
 
-Lidr `session_06_live` does not change estimate, sessions, cache, guardrails, or Streamlit. It adds ingestion.
+Entry points **at plan start** (step 1 replaced these; keep as freeze, do not restore):
+
+- `src/main.py` — lifespan calls `init_db()`; routers: estimations + sessions. No ingestion. *(was)*
+- `src/services/history.py` — `Base` + `EstimationRow` + `create_all` in `init_db` / persist / list / get. `get_engine()` returns `None` if `DATABASE_URL` is unset. Fail-open writes. *(was)*
+- `src/config.py` — `DATABASE_URL: str | None = None`. No catalog / PII settings. *(was)*
+- `src/utils.py` — `get_absolute_path()` is the `src/` directory. `.env` is `parent / ".env"`. *(still true)*
+- `pyproject.toml` — `pythonpath = ["src", "."]`. Tests import `from main import app`, `from schemas.…`. *(still true; step 1 also added `alembic>=1.13`)*
+- `tests/conftest.py` — `from main import app`. That import must work without Postgres. *(still true)*
+- `docker-compose.yml` — `postgres:16-alpine` on `5432`, user/db `postgres`/`estimator`. Bind-mount `./src:/app`. Command is uvicorn only. *(was)*
+- `Dockerfile` — `COPY src/ /app/`. *(was)*
+- `streamlit_app.py` — New / Conversational / Recent. Do not touch. *(still true)*
+
+Lidr `session_06_live` adds ingestion. It does not change cache, guardrails, or Streamlit. `estimation.py` / `sessions.py` vs `session_05_live` only grew `TurnObservation` (already in our CAG). See step 1 Q&A. Do not re-port those files.
 
 ## Import rewrite (every copied file)
 
@@ -65,7 +83,7 @@ Alembic is a CLI (`upgrade head`). `env.py` reads `get_settings().DATABASE_URL`.
 
 | # | Title | OK |
 |---|-------|----|
-| 1 | Alembic (`0000_estimations` + `0001_session6_initial`) + `pgvector` image + seed | [ ] |
+| 1 | Alembic (`0000_estimations` + `0001_session6_initial`) + `pgvector` image + seed | [x] |
 | 2 | Catalog YAML (load, inspect, boot log) | [ ] |
 | 3 | Filesystem loader + JSON/TXT parsers | [ ] |
 | 4 | Orchestrator + `POST /runs` + `GET /jobs` | [ ] |
@@ -186,6 +204,78 @@ The current `postgres_data` volume has `estimations` and no `alembic_version`, a
 Out of this step: catalog loader, parsers, router, spaCy download.
 
 Acceptance: `down -v` + compose up. `\dt` shows `estimations`, `ingestion_jobs`, `pseudonym_mappings`, `alembic_version` (head = `0001_session6_initial`). No `vector` extension. No `create_all` in `history.py`. `persistence.database` is import-safe without a URL.
+
+**Done.** Measured on compose after `down -v`: four tables, head `0001_session6_initial`, no `vector`, boot log `schema_via_alembic`, `/health` 200, `tests/test_persistence_database.py` green. Commit `7186193`. Volume wipe was once; do not `down -v` again unless told.
+
+### Step 1 — Q&A (do not reopen)
+
+Recorded so a later session does not re-litigate this. Not a new design pass.
+
+**Before implement (readiness + two doubts)**
+
+Plan vs trees: matched. No `alembic/` / `ingestion/` / `persistence/` yet. `history.py` had `create_all` in four places. Lidr `aa1fcf4` has every copy-from file. `ingest_source` does not import cleaning or PII. Catalog decisions: `presupuestos_json` include, `transcripciones_txt` review, `rate_card_xlsx` exclude. `PROYECTO_2` → RAG is in Lidr’s `test_architecture.py`.
+
+Plan wording that is imprecise — do not “fix” Lidr or re-port CAG:
+
+- «Lidr does not change estimate / sessions»: vs `session_05_live`, `estimation.py` and `sessions.py` *did* change (`82fd1d9`, `TurnObservation`). That is already in our CAG. Cache / guardrails / Streamlit: no diff. Do not copy those two files.
+- Lidr `database.py` is **not** lazy (`SessionLocal = sessionmaker(bind=create_engine_from_settings())` at import). We did not copy that. Lidr’s ingest smoke also patches `SessionLocal`; our step-4 test must patch the lazy factory / `get_session`, not an eager `SessionLocal`.
+- Lidr `DATABASE_URL` is a required `str` with default `estimator@localhost:5433`. Ours stays optional. `env.py` must raise if unset (Lidr never passes `None`).
+- Lidr `0001` has `down_revision = None`. Ours is `"0000_estimations"`.
+- Lidr image does not `COPY` alembic/data (they mount `./app:/app/app`, so those paths are not hidden). Ours `./src:/app` hides them → the extra Compose mounts are required.
+- Lidr `CATALOG_PATH` is cwd-relative. Inside our container `get_absolute_path().parent` is `/`, not `/app`. Compose must set the two paths.
+- Lidr scripts insert `ROOT` for package `app`. Ours insert `ROOT / "src"`. Drop Lidr’s `docker compose exec … python scripts/…` lines (scripts are host-only).
+- Four-line POST block is ours, not in Lidr.
+
+Unverified at that review (later closed by doing step 1): volume `\dt` before wipe; machine `.env` (example has `DATABASE_URL`; the five Session 6 names were not added); spaCy on host; whether `unstructured[all-docs]` builds on slim (step 7).
+
+Doubts asked and answered:
+
+1. Compose healthcheck `start_period` is 10s; Lidr uses 30s with `alembic && uvicorn`. **Use 30s.**
+2. Lazy engine, what to name it. **Lazy.** Symbols: `persistence.database.get_engine()` and `get_session()` (Depends → 503). No eager `SessionLocal`. Leave `history.get_engine()` in place.
+
+**After implement (same session; architecture, not new work)**
+
+Q: `pgvector/pgvector:pg16` still has Postgres?  
+A: Yes. PostgreSQL 16 with the pgvector **binary compiled in**. We did not `CREATE EXTENSION vector`. Same reason as Lidr: avoid recreating the volume in session 7. Not Alpine.
+
+Q: What is `\dt`? What did it prove?  
+A: psql *describe tables*. It proved Alembic created `estimations`, `ingestion_jobs`, `pseudonym_mappings`, `alembic_version`. It does not prove the API, jobs, or data. `vector` was a separate `pg_extension` query (empty).
+
+Q: What is `script.py.mako`?  
+A: Alembic’s template for `alembic revision`. `0000`/`0001` were written by hand. Compose `upgrade head` does not execute the mako.
+
+Q: What does `.mako` stand for?  
+A: **Mako**, a Python templating engine. Not “migration”.
+
+Q: Settings/`.env` mixes estimator and ingest. Two envs?  
+A: The smell is real (`Settings` is a session 2–6 drawer). Two `.env` files do not isolate anything: one FastAPI process, one `os.environ`. `DATABASE_URL` is already shared (`estimations` and ingest tables). Cosmetic unless we split **processes**. Not this port.
+
+Q: Why “they share a process”? Is `src/producto` vs `src/ingesta` easy?  
+A: Folders ≠ process. One uvicorn PID, `BackgroundTask` on that worker. A folder split is a rename. Two products = two apps, who owns Alembic, a worker for 202, session-7 glue. **Buried.** Ingestion-as-router is the grain for this course.
+
+Q: Same Postgres for two unrelated things — two schemas?  
+A: Same server, two uses, no FKs. All tables are `public`. Two schemas are possible and still one URL / one Alembic. Not worth it. Two databases would be real isolation on **one engine**; two engines is over-resource.
+
+Q: One PG engine, two DBs, two Alembic, two products, almost two repos?  
+A: One server + two databases = cheap isolation, fine as a picture. Two **products** is a different bill: ingest today is catalog → parse → job row, not a product. Session 7 RAG joins what we would split. Monorepo with two apps later if ingest becomes a pipeline. Almost-two-repos for a course is theatre. Drawn, not built.
+
+Q: `services/` mixes ingest and estimator — a mess?  
+A: `services/` is estimator-only (`history`, conversational, LLM, cache, ACB…). Lidr puts ingest in `app/ingestion/`. The mix is `persistence/models.py` (three rows, one `Base`) and `config` / `dependencies`. Do not reshuffle `services/`. Step 2 adds `src/ingestion/` as a package, like Lidr.
+
+Q: `history.py`?  
+A: Estimator persist for the Recent tab. Fail-open. The **model** moved to `persistence.models`; the **access** stayed here; two `get_engine()` on purpose (closed: do not merge). Not ingest. A later cleanup could be `persistence/repositories/estimations.py`. Not this port.
+
+Q: `EstimationRow` — estimations or ingest?  
+A: **Estimations.** One-shot `/estimate` row for Recent. It **lives** in `persistence/models.py` next to ingest tables because one `Base` / one Alembic, not because it is ingest.
+
+Q: So the messy drawer is `persistence/`?  
+A: Yes. `persistence/` is Postgres (Base, Alembic, lazy engine, job/mapping repos), not the ingest package and not the estimate package. Ingest will be `src/ingestion/`. Estimate stays `services/` + `routers/estimations.py`. `history.py` is the Recent facade.
+
+Q: “The three rows share `models.py` because we share engine and migration chain, not domain”?  
+A: Plumbing. Alembic sees one `Base.metadata`. No FKs. A join between `estimations` and `ingestion_jobs` means nothing. Same disk, same `upgrade head`. If we had two databases, each would have its own `models.py`.
+
+Q: Package inside-out: `ingesta/persistence`, `estimation/routers`, `common/`?  
+A: Package-by-domain (modular monolith), not two services. Cleaner if this grows. `common/` would still hold `Base` / Alembic / `DATABASE_URL` while there is one DB — the drawer changes name. Two true persistences = two Alembic = the two-DB design again. **Not mid-port.** Lidr is already a hybrid: ingest is a feature package; CAG is layered. Step 2’s `src/ingestion/` is that hybrid, not the glove.
 
 ## Step 2 — Catalog
 
@@ -343,6 +433,13 @@ None of the five belong in the local `.env`. `.env.example` lists them with that
 - `pyyaml` in step 2.
 - CAG / estimate / sessions / stress unchanged. History writes fail-open.
 - README Ingestion in step 7. No `evolution.md`.
+- Compose healthcheck `start_period: 30s` (step 1 Q&A).
+- Ingest engine: lazy `get_engine` / `get_session`. No eager `SessionLocal`. Do not merge with `history.get_engine()`.
+- One process, one `Settings`, one Postgres, one Alembic, tables in `public`. Not two envs, not two schemas, not two products, not `src/producto` vs `src/ingesta`, not inverted-glove packaging.
+- `persistence/` is the shared Postgres drawer. `EstimationRow` is estimations. Ingest code goes in `src/ingestion/`.
+- Do not re-port Lidr `estimation.py` / `sessions.py` (`TurnObservation` already shipped).
+- Do not commit a Compose-leaked `src/alembic.ini`.
+- `postgres_data` was wiped once for the first Alembic upgrade. Do not `down -v` again unless told.
 
 ## Out of this port
 
@@ -359,3 +456,4 @@ None of the five belong in the local `.env`. `.env.example` lists them with that
 - Changing `/api/v1/estimate` or conversational routes.
 - Older product tests.
 - Session 7+ (RAG, indexing, `CREATE EXTENSION vector`, wiring PII into ingest).
+
