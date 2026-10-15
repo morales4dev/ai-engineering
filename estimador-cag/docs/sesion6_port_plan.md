@@ -6,17 +6,27 @@ This file is the handoff. A later session should need only this plan plus the tw
 
 ## Handoff (start here in a new session)
 
-**Next work is step 6 only.** Step 5 is done. Do not redo PII, cleaning, HTTP, catalog, parsers, Alembic, the image, or `create_all`. Do not reopen the Q&A below. Stop after step 6 and wait.
+**Port complete.** Step 6 is done. Do not start session 7. Do not reopen the Q&A below.
 
 | | Path / value |
 |---|---|
-| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense` @ `f60141b`, app `estimador-cag/` |
+| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense` @ `6de4da6`, app `estimador-cag/` |
 | Reference | `/home/morales4dev/wsTakeoff/ai-engineering-lidr` `origin/session_06_live` @ `aa1fcf4` |
-| Already shipped | CAG through stress: one-shot, sessions, attachments, compression, tier, ACB, golden evals, `TurnObservation`, `evals/stress/`. **Step 1:** Alembic + pgvector image + seed. **Step 2:** catalog + parsers. **Step 3:** POST /runs + GET /jobs. **Step 4:** cleaning library + host demo. **Step 5:** `ingestion.pii` + host `scripts/demo_pii_s06.py` + `build_pseudonymizer`. Tests stub the analyzer. `es_core_news_md` download is step 6. Not on the POST. |
+| Already shipped | CAG through stress + session 6 ingest port (steps 1–6). **Step 6:** `ingestion.architecture` (`PROYECTO_2` → RAG), `scripts/preflight_s06.py` (lazy `get_engine`, not Lidr `SessionLocal`), README Ingestion, `unstructured[all-docs]>=0.14`, `openpyxl>=3.1`, host `es_core_news_md`. POST still does not clean or pseudonymize. |
 | Closed plans (read-only) | `pre_pre_sesion_06_evals.md`, `pre_sesion6_plan.md`, `sesion5_port_plan.md` |
 | Lidr copy-from | listed per step. Layout is `estimator/app/…`; ours is `estimador-cag/src/…`. |
 
-Entry points **after step 5** (ours):
+Entry points **after step 6** (ours):
+
+- `src/ingestion/architecture.py` — four-line block. CLI: `PROYECTO_2` → RAG.
+- `scripts/preflight_s06.py` — four-line block. Host `ROOT / "src"`. Postgres check uses `get_engine()`, not `create_engine_from_settings`.
+- `tests/test_architecture.py` — `unit`.
+- `README.md` — **Ingestion** at the end (not between CAG stress and HTTP client). Curl + host scripts. POST does not clean or pseudonymize.
+- `pyproject.toml` — `unstructured[all-docs]>=0.14`, `openpyxl>=3.1`.
+- Host venv has `es_core_news_md`. Not in the image. `scripts/` not in the image.
+- Everything else under “after step 5” still holds.
+
+Entry points **after step 5** (step 6 added CLIs + README; keep as freeze, do not restore):
 
 - `src/ingestion/pii/` — recognizers, analyzer, pseudonymizer, mapping stores. Four-line block on `__init__.py`.
 - `scripts/demo_pii_s06.py` — host only; `InMemoryMappingStore`. Four-line block. Needs `es_core_news_md` (step 6).
@@ -126,7 +136,7 @@ Alembic is a CLI (`upgrade head`). `env.py` reads `get_settings().DATABASE_URL`.
 | 3 | Orchestrator + `POST /runs` + `GET /jobs` | [x] |
 | 4 | Cleaning library + demo (not on the POST) | [x] |
 | 5 | PII library + demo (not on the POST) | [x] |
-| 6 | Teaching CLIs + README Ingestion (curl) | [ ] |
+| 6 | Teaching CLIs + README Ingestion (curl) | [x] |
 
 ## Incorporation order (not runtime)
 
@@ -439,6 +449,8 @@ PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
 ```
 
 (`alembic upgrade head` on the host is for uvicorn-on-the-host. Compose already runs it.)
+
+**Done.** Architecture unit + CLI: `PROYECTO_2` → RAG. 36 related tests passed. spaCy model downloaded on host. Preflight all 8 checks green (compose was already up). PII demo ran. README **Ingestion** is at the end of the file (review: not between CAG stress and the estimator HTTP client). Did not `down -v`.
 
 ---
 
