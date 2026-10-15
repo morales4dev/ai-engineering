@@ -57,7 +57,7 @@ Docstrings and README: host commands only. Do not put `scripts/` in the image or
 
 Leave `history.get_engine()` in place. History writes stay fail-open. Ingest does not return 202 without a database.
 
-Alembic is a CLI (`upgrade head`). `env.py` reads `get_settings().DATABASE_URL`. Compose sets it. Host `.env` already has it. If the URL is missing, `upgrade` fails.
+Alembic is a CLI (`upgrade head`). `env.py` reads `get_settings().DATABASE_URL`. Compose sets it. Host `.env` already has it. If the URL is missing, `env.py` raises explicitly — do not pass `None` to `set_main_option`.
 
 ---
 
@@ -152,13 +152,22 @@ Lidr copy-from: `estimator/alembic.ini`, `estimator/alembic/{env.py,script.py.ma
 - Repos: Lidr `jobs.py` / `mappings.py`, our imports.
 - `init_db()`: no URL → log `history_disabled`; URL set → log `schema_via_alembic`. No `create_all`. No migrate. Remove every `Base.metadata.create_all(...)` from `history.py`. Estimate persist stays fail-open.
 - `alembic.ini`: same layout as Lidr. Placeholder `sqlalchemy.url` = `postgresql+psycopg://postgres:postgres@localhost:5432/estimator`. Live URL comes from Settings in `env.py`.
-- `alembic/env.py`: `from config import get_settings`, `from persistence.models import Base`. Insert `src` on `sys.path` so `uv run alembic` from `estimador-cag/` resolves them. Compose already has `PYTHONPATH=/app`.
+- `alembic/env.py`: `from config import get_settings`, `from persistence.models import Base`. Insert `src` on `sys.path` so `uv run alembic` from `estimador-cag/` resolves them. Compose already has `PYTHONPATH=/app`. Missing `DATABASE_URL` → raise; do not pass `None` to `set_main_option`.
 - Host: `cd estimador-cag && PYTHONPATH=src:. uv run alembic upgrade head`.
 - Compose: image `pgvector/pgvector:pg16`. Service `postgres`, host **5432**, user/password/db `postgres` / `postgres` / `estimator`. No `CREATE EXTENSION vector` (Session 7).
-- Compose command: `alembic upgrade head && uvicorn …`. Volumes: `./src:/app`, `./alembic`, `./alembic.ini`, `./data`.
-- Dockerfile: `COPY data/`, `COPY alembic/`, `COPY alembic.ini`.
+- Compose command: `alembic upgrade head && uvicorn …`.
+- Volumes (host → container). `./src:/app` hides anything `COPY`’d into `/app`, so the other three must be mounted on top:
+  - `./src:/app`
+  - `./alembic:/app/alembic`
+  - `./alembic.ini:/app/alembic.ini`
+  - `./data:/app/data`
+- Dockerfile: `COPY src/`, `COPY data/`, `COPY alembic/`, `COPY alembic.ini`. Image is self-contained; Compose bind-mounts win at runtime (same pattern as `src/` today).
+- Compose `environment` (container only; same pattern as `REDIS_URL` / `DATABASE_URL`):
+  - `CATALOG_PATH=/app/data/catalog/catalog.yaml`
+  - `INGESTION_DATA_ROOT=/app/data/seed`
+  Host uvicorn does not read this block. It uses the Settings defaults below.
 - Dep: `alembic>=1.13`.
-- Settings (boot without keys / without DB):
+- Settings (boot without keys / without DB). Host defaults use `get_absolute_path().parent` (`estimador-cag/`). Compose overrides the two paths. None of the five go in the machine `.env`.
 
   | Name | Default (host) |
   |---|---|
@@ -170,7 +179,7 @@ Lidr copy-from: `estimator/alembic.ini`, `estimator/alembic/{env.py,script.py.ma
 
   `DATABASE_URL` stays optional. Credentials and port stay as they are.
 - Copy `data/catalog/catalog.yaml` and `data/seed/` from Lidr.
-- `.env.example`: Session 6 block, `localhost:5432`, our user/db.
+- `.env.example`: Session 6 block, `localhost:5432`, our user/db. List the five names with their host defaults. Comment on each: not required in local `.env` — Settings defaults cover the host; Compose sets the two paths. Do not add them to the machine `.env`.
 
 The current `postgres_data` volume has `estimations` and no `alembic_version`, and uses `postgres:16-alpine`. Before the first `upgrade` on the new image: `docker compose down -v` (wipes Recent-tab rows).
 
@@ -303,15 +312,17 @@ PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
 
 ## Settings (Session 6)
 
-| Name | Default | Step |
-|---|---|---|
-| `CATALOG_PATH` | `<repo>/data/catalog/catalog.yaml` | 1 / used in 2 |
-| `INGESTION_DATA_ROOT` | `<repo>/data/seed` | 1 / used in 3 |
-| `PRESIDIO_SPACY_MODEL` | `es_core_news_md` | 1 / used in 6 |
-| `PSEUDONYM_FAKER_LOCALE` | `es_ES` | 1 / used in 6 |
-| `PSEUDONYM_HASH_SALT` | `change-me-in-prod` | 1 / used in 6 |
+| Name | Default (host) | Container | Step |
+|---|---|---|---|
+| `CATALOG_PATH` | `get_absolute_path().parent / "data/catalog/catalog.yaml"` | Compose `environment`: `/app/data/catalog/catalog.yaml` | 1 / used in 2 |
+| `INGESTION_DATA_ROOT` | `get_absolute_path().parent / "data/seed"` | Compose `environment`: `/app/data/seed` | 1 / used in 3 |
+| `PRESIDIO_SPACY_MODEL` | `es_core_news_md` | Settings default | 1 / used in 6 |
+| `PSEUDONYM_FAKER_LOCALE` | `es_ES` | Settings default | 1 / used in 6 |
+| `PSEUDONYM_HASH_SALT` | `change-me-in-prod` | Settings default | 1 / used in 6 |
 
 `DATABASE_URL` already exists. It stays optional.
+
+None of the five belong in the local `.env`. `.env.example` lists them with that comment so `cp .env.example .env` does not look like they must be filled in.
 
 ---
 
@@ -321,7 +332,9 @@ PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
 - Feature steps. Stop after each step.
 - Imports: drop `app.`. Do not add `src.`.
 - Scripts and `es_core_news_md`: host. `sys.path` includes `ROOT / "src"`.
-- Engine: lazy. Alembic: CLI.
+- Engine: lazy. Alembic: CLI. `env.py` raises if `DATABASE_URL` is missing.
+- Image `COPY` + Compose bind-mount for `src`, `alembic`, `alembic.ini`, `data`. Container paths: `/app`, `/app/alembic`, `/app/alembic.ini`, `/app/data`.
+- Catalog/seed paths: Settings default on the host; Compose `environment` in the container. The five Session 6 settings stay out of the local `.env`.
 - Four-line block: the six files listed above. Catalog is on the POST.
 - Cleaning, PII, architecture, preflight, demos ship and stay off the POST.
 - Ingestion tests ship (`unit` / `smoke`). Older product tests do not.
