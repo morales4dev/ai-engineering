@@ -31,6 +31,8 @@ dependencies = [
     "python-multipart>=0.0.32",
     "fpdf2>=2.7",
     "pyyaml>=6.0",
+    "pandas>=2.2",
+    "pandera>=0.20",
 ]
 
 [dependency-groups]

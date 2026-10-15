@@ -6,17 +6,26 @@ This file is the handoff. A later session should need only this plan plus the tw
 
 ## Handoff (start here in a new session)
 
-**Next work is step 4 only.** Step 3 is done. Do not redo HTTP, catalog, parsers, Alembic, the image, or `create_all`. Do not reopen the Q&A below. Stop after step 4 and wait.
+**Next work is step 5 only.** Step 4 is done. Do not redo cleaning, HTTP, catalog, parsers, Alembic, the image, or `create_all`. Do not reopen the Q&A below. Stop after step 5 and wait.
 
 | | Path / value |
 |---|---|
-| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense` @ `61d2659`, app `estimador-cag/` |
+| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense` @ `788d722`, app `estimador-cag/` |
 | Reference | `/home/morales4dev/wsTakeoff/ai-engineering-lidr` `origin/session_06_live` @ `aa1fcf4` |
-| Already shipped | CAG through stress: one-shot, sessions, attachments, compression, tier, ACB, golden evals, `TurnObservation`, `evals/stress/`. **Step 1:** Alembic `0000_estimations` + `0001_session6_initial`, image `pgvector/pgvector:pg16`, seed+catalog on disk, lazy `persistence.database`. **Step 2:** `src/ingestion/` catalog + documents + loaders + parsers (json/txt). `get_catalog` / `get_filesystem_loader` / `get_parser_registry`. Lifespan logs `catalog_loaded` / `catalog_load_failed` (no crash). `pyyaml>=6.0`. **Step 3:** `ingest_source` + `POST /api/v1/ingestion/runs` + `GET /jobs/{job_id}`. No `SessionLocal`; BackgroundTask uses `_open_background_session` (lazy engine). No cleaning / PII on the POST. |
+| Already shipped | CAG through stress: one-shot, sessions, attachments, compression, tier, ACB, golden evals, `TurnObservation`, `evals/stress/`. **Step 1:** Alembic `0000_estimations` + `0001_session6_initial`, image `pgvector/pgvector:pg16`, seed+catalog on disk, lazy `persistence.database`. **Step 2:** `src/ingestion/` catalog + documents + loaders + parsers (json/txt). `get_catalog` / `get_filesystem_loader` / `get_parser_registry`. Lifespan logs `catalog_loaded` / `catalog_load_failed` (no crash). `pyyaml>=6.0`. **Step 3:** `ingest_source` + `POST /api/v1/ingestion/runs` + `GET /jobs/{job_id}`. No `SessionLocal`; BackgroundTask uses `_open_background_session` (lazy engine). **Step 4:** `ingestion.cleaning` + host `scripts/demo_cleaning_s06.py`. `pandas>=2.2`, `pandera>=0.20`. Not on the POST. |
 | Closed plans (read-only) | `pre_pre_sesion_06_evals.md`, `pre_sesion6_plan.md`, `sesion5_port_plan.md` |
 | Lidr copy-from | listed per step. Layout is `estimator/app/…`; ours is `estimador-cag/src/…`. |
 
-Entry points **after step 3** (ours):
+Entry points **after step 4** (ours):
+
+- `src/ingestion/cleaning/` — `clean_budget_records` + `validate_with_policy`. Four-line block on `__init__.py`.
+- `scripts/demo_cleaning_s06.py` — host only; `ROOT / "src"` on `sys.path`. Four-line block. No docker exec.
+- `tests/test_cleaning_budgets.py`, `test_validation_policy.py` — `unit`.
+- `pyproject.toml` — `pandas>=2.2`, `pandera>=0.20`.
+- `ingest_source` / router still do not import cleaning.
+- Everything else under “after step 3” still holds.
+
+Entry points **after step 3** (step 4 did not touch HTTP; keep as freeze, do not restore):
 
 - `src/main.py` — routers: estimations + sessions + ingestion.
 - `src/ingestion/orchestrator.py` — `ingest_source`; no cleaning / PII imports. Documents stay in memory.
@@ -105,7 +114,7 @@ Alembic is a CLI (`upgrade head`). `env.py` reads `get_settings().DATABASE_URL`.
 | 1 | Alembic (`0000_estimations` + `0001_session6_initial`) + `pgvector` image + seed | [x] |
 | 2 | Catalog YAML + filesystem loader + JSON/TXT parsers | [x] |
 | 3 | Orchestrator + `POST /runs` + `GET /jobs` | [x] |
-| 4 | Cleaning library + demo (not on the POST) | [ ] |
+| 4 | Cleaning library + demo (not on the POST) | [x] |
 | 5 | PII library + demo (not on the POST) | [ ] |
 | 6 | Teaching CLIs + README Ingestion (curl) | [ ] |
 
@@ -350,6 +359,8 @@ Lidr copy-from: `estimator/app/ingestion/cleaning/**`, `estimator/scripts/demo_c
 - Four-line block on `cleaning/__init__.py` and `scripts/demo_cleaning_s06.py`.
 - Deps: `pandas`, `pandera`.
 - Tests: `unit`.
+
+**Done.** Cleaning unit tests + ingestion smoke — 16 passed. Demo: 6 files → 5 rows after dedup; `-50000` discarded. Not on the POST.
 
 ## Step 5 — PII (not on the POST)
 
