@@ -10,9 +10,9 @@ This file is the handoff. A later session should need only this plan plus the tw
 
 | | Path / value |
 |---|---|
-| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense` @ `7186193`, app `estimador-cag/` |
+| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense` @ `8b6119d`, app `estimador-cag/` |
 | Reference | `/home/morales4dev/wsTakeoff/ai-engineering-lidr` `origin/session_06_live` @ `aa1fcf4` |
-| Already shipped | CAG through stress: one-shot, sessions, attachments, compression, tier, ACB, golden evals, `TurnObservation`, `evals/stress/`. **Step 1:** Alembic `0000_estimations` + `0001_session6_initial`, image `pgvector/pgvector:pg16`, seed+catalog on disk, lazy `persistence.database`. No catalog loader. No ingestion HTTP. |
+| Already shipped | CAG through stress: one-shot, sessions, attachments, compression, tier, ACB, golden evals, `TurnObservation`, `evals/stress/`. **Step 1:** Alembic `0000_estimations` + `0001_session6_initial`, image `pgvector/pgvector:pg16`, seed+catalog on disk, lazy `persistence.database`. No catalog loader. No parsers. No ingestion HTTP. |
 | Closed plans (read-only) | `pre_pre_sesion_06_evals.md`, `pre_sesion6_plan.md`, `sesion5_port_plan.md` |
 | Lidr copy-from | listed per step. Layout is `estimator/app/…`; ours is `estimador-cag/src/…`. |
 
@@ -56,7 +56,7 @@ Lidr `session_06_live` adds ingestion. It does not change cache, guardrails, or 
 | `from app.dependencies import get_catalog` | `from dependencies import get_catalog` |
 | `python -m app.ingestion.architecture` | `python -m ingestion.architecture` |
 
-Drop the `app.` prefix. Do not write `from src.…`. `pytest` already has `src` on `pythonpath`. Host scripts add `src` themselves.
+Drop the `app.` prefix. Do not write `from src.…`. `pytest` already has `src` on `pythonpath`. Host scripts add `src` themselves. Same rewrite for comments in `data/catalog/catalog.yaml` that still say `app.ingestion`.
 
 ## Scripts
 
@@ -84,24 +84,22 @@ Alembic is a CLI (`upgrade head`). `env.py` reads `get_settings().DATABASE_URL`.
 | # | Title | OK |
 |---|-------|----|
 | 1 | Alembic (`0000_estimations` + `0001_session6_initial`) + `pgvector` image + seed | [x] |
-| 2 | Catalog YAML (load, inspect, boot log) | [ ] |
-| 3 | Filesystem loader + JSON/TXT parsers | [ ] |
-| 4 | Orchestrator + `POST /runs` + `GET /jobs` | [ ] |
-| 5 | Cleaning library + demo (not on the POST) | [ ] |
-| 6 | PII library + demo (not on the POST) | [ ] |
-| 7 | Teaching CLIs + README Ingestion (curl) | [ ] |
+| 2 | Catalog YAML + filesystem loader + JSON/TXT parsers | [ ] |
+| 3 | Orchestrator + `POST /runs` + `GET /jobs` | [ ] |
+| 4 | Cleaning library + demo (not on the POST) | [ ] |
+| 5 | PII library + demo (not on the POST) | [ ] |
+| 6 | Teaching CLIs + README Ingestion (curl) | [ ] |
 
 ## Incorporation order (not runtime)
 
 1. Infra — Postgres image, Alembic, seed, lazy `persistence/database.py`. No HTTP.
-2. Catalog — YAML is code. Boot logs it. Dep: `pyyaml`.
-3. Parse — disk → `Document`s.
-4. HTTP — catalog + loader + parser + job row. Does not call steps 5–7.
-5. Cleaning — library + host demo.
-6. PII — library + host demo. Uses `pseudonym_mappings` from step 1.
-7. CLIs + README.
+2. Catalog + parse — YAML is code; boot logs it; disk → `Document`s. One package (`src/ingestion/`), one new dep (`pyyaml`). No HTTP.
+3. HTTP — catalog + loader + parser + job row. Does not call steps 4–6.
+4. Cleaning — library + host demo.
+5. PII — library + host demo. Uses `pseudonym_mappings` from step 1.
+6. CLIs + README.
 
-Why this order: the POST needs tables, catalog and parsers. Cleaning and PII are not part of that path. README waits until curl can hit the API.
+Why this order: the POST needs tables, catalog and parsers. Catalog and parsers share one dep and live in one package; they are not two feature slices. Cleaning and PII pull pandas / Presidio and are not on that path. README waits until curl can hit the API.
 
 Runtime of `POST /api/v1/ingestion/runs`:
 
@@ -135,7 +133,7 @@ Why not wired: POST /api/v1/ingestion/runs only does catalog → load → parse 
 When useful: <the exact host command>
 ```
 
-The catalog **is** on the POST. `loader.py` / `inspect.py` do not get this block. Their `__main__` may say they are a CLI.
+The catalog **is** on the POST. `loader.py` / `inspect.py` do not get this block. Their `__main__` may say they are a CLI. `documents/` / `loaders/` / `parsers/` are on the POST; no block.
 
 ---
 
@@ -218,7 +216,7 @@ Plan vs trees: matched. No `alembic/` / `ingestion/` / `persistence/` yet. `hist
 Plan wording that is imprecise — do not “fix” Lidr or re-port CAG:
 
 - «Lidr does not change estimate / sessions»: vs `session_05_live`, `estimation.py` and `sessions.py` *did* change (`82fd1d9`, `TurnObservation`). That is already in our CAG. Cache / guardrails / Streamlit: no diff. Do not copy those two files.
-- Lidr `database.py` is **not** lazy (`SessionLocal = sessionmaker(bind=create_engine_from_settings())` at import). We did not copy that. Lidr’s ingest smoke also patches `SessionLocal`; our step-4 test must patch the lazy factory / `get_session`, not an eager `SessionLocal`.
+- Lidr `database.py` is **not** lazy (`SessionLocal = sessionmaker(bind=create_engine_from_settings())` at import). We did not copy that. Lidr’s ingest smoke also patches `SessionLocal`; our step-3 test must patch the lazy factory / `get_session`, not an eager `SessionLocal`.
 - Lidr `DATABASE_URL` is a required `str` with default `estimator@localhost:5433`. Ours stays optional. `env.py` must raise if unset (Lidr never passes `None`).
 - Lidr `0001` has `down_revision = None`. Ours is `"0000_estimations"`.
 - Lidr image does not `COPY` alembic/data (they mount `./app:/app/app`, so those paths are not hidden). Ours `./src:/app` hides them → the extra Compose mounts are required.
@@ -226,7 +224,7 @@ Plan wording that is imprecise — do not “fix” Lidr or re-port CAG:
 - Lidr scripts insert `ROOT` for package `app`. Ours insert `ROOT / "src"`. Drop Lidr’s `docker compose exec … python scripts/…` lines (scripts are host-only).
 - Four-line POST block is ours, not in Lidr.
 
-Unverified at that review (later closed by doing step 1): volume `\dt` before wipe; machine `.env` (example has `DATABASE_URL`; the five Session 6 names were not added); spaCy on host; whether `unstructured[all-docs]` builds on slim (step 7).
+Unverified at that review (later closed by doing step 1): volume `\dt` before wipe; machine `.env` (example has `DATABASE_URL`; the five Session 6 names were not added); spaCy on host; whether `unstructured[all-docs]` builds on slim (step 6).
 
 Doubts asked and answered:
 
@@ -277,35 +275,33 @@ A: Plumbing. Alembic sees one `Base.metadata`. No FKs. A join between `estimatio
 Q: Package inside-out: `ingesta/persistence`, `estimation/routers`, `common/`?  
 A: Package-by-domain (modular monolith), not two services. Cleaner if this grows. `common/` would still hold `Base` / Alembic / `DATABASE_URL` while there is one DB — the drawer changes name. Two true persistences = two Alembic = the two-DB design again. **Not mid-port.** Lidr is already a hybrid: ingest is a feature package; CAG is layered. Step 2’s `src/ingestion/` is that hybrid, not the glove.
 
-## Step 2 — Catalog
+## Step 2 — Catalog + parse
 
-Lidr copy-from: `estimator/app/ingestion/catalog/{models,loader,inspect,__init__}.py`, `estimator/tests/test_catalog_loader.py`.
+Lidr copy-from: `estimator/app/ingestion/__init__.py`, `estimator/app/ingestion/catalog/{models,loader,inspect,__init__}.py`, `estimator/app/ingestion/documents/`, `estimator/app/ingestion/loaders/`, `estimator/app/ingestion/parsers/`, `estimator/tests/test_catalog_loader.py`, `estimator/tests/test_parsers_{json,txt}.py`.
 
 - Import rewrite.
-- Dep: `pyyaml` (`import yaml` in `loader.py`).
-- Same validators: snake_case names, `include` / `review` / `exclude`, `decision_reason` required when not `include`.
+- Dep: `pyyaml` (`import yaml` in `catalog/loader.py`). Parsers and the filesystem loader add no further deps (stdlib + pydantic already in the project).
+- `src/ingestion/__init__.py` is Lidr’s package docstring (no imports). Rewrite `app.` paths. It names cleaning / PII / orchestrator; those packages are not copied here and this file does not import them (Lidr’s doesn’t either).
+- Same catalog validators: snake_case names, `include` / `review` / `exclude`, `decision_reason` required when not `include`.
 - `dependencies.get_catalog()` — `lru_cache`.
 - Lifespan: log `catalog_loaded` (version, totals, included) or `catalog_load_failed`. Do not crash boot.
-- Keep the two CLIs. No four-line POST block on them.
-- Test: `tests/test_catalog_loader.py`. `"""unit: in-process objects only. No HTTP."""`
-
-Catalog decisions: `presupuestos_json` include, `transcripciones_txt` review, `rate_card_xlsx` exclude.
-
-Out of this step: parsers, HTTP.
-
-## Step 3 — Loader + parsers
-
-Lidr copy-from: `estimator/app/ingestion/documents/`, `loaders/`, `parsers/`, `estimator/tests/test_parsers_{json,txt}.py`.
-
-- Import rewrite.
+- Keep the two catalog CLIs. No four-line POST block on them.
 - `FileSystemLoader` resolves `CatalogSource.location` under `INGESTION_DATA_ROOT`.
 - `default_registry()` registers json + txt only.
 - `dependencies.get_filesystem_loader`, `get_parser_registry`.
-- Tests: `unit`.
+- Tests: `tests/test_catalog_loader.py`, `tests/test_parsers_json.py`, `tests/test_parsers_txt.py`. All `"""unit: in-process objects only. No HTTP."""`
 
-Out of this step: HTTP, cleaning, PII.
+Catalog decisions: `presupuestos_json` include, `transcripciones_txt` review, `rate_card_xlsx` exclude.
 
-## Step 4 — Orchestrator + HTTP
+Out of this step: HTTP, cleaning, PII, orchestrator.
+
+### Step 2 — Q&A (do not reopen)
+
+1. `src/ingestion/__init__.py` — copy Lidr’s (docstring, no imports). Rewrite `app.` paths. It names cleaning / PII / orchestrator; those packages are not in this step and this file does not import them.
+2. `data/catalog/catalog.yaml` comments — align: `app.ingestion` → `ingestion` (same rewrite as Python).
+3. After this step (and every later step): tick the summary checkbox, point the handoff at the next step, stop. Do not start the next step until told.
+
+## Step 3 — Orchestrator + HTTP
 
 Lidr copy-from: `estimator/app/ingestion/orchestrator.py`, `estimator/app/routers/ingestion.py`, `estimator/app/schemas/ingestion.py`, `estimator/tests/test_ingestion_endpoint.py`.
 
@@ -322,7 +318,7 @@ Lidr copy-from: `estimator/app/ingestion/orchestrator.py`, `estimator/app/router
 
 Out of this step: README, cleaning, PII, Streamlit.
 
-## Step 5 — Cleaning (not on the POST)
+## Step 4 — Cleaning (not on the POST)
 
 Lidr copy-from: `estimator/app/ingestion/cleaning/**`, `estimator/scripts/demo_cleaning_s06.py`, `estimator/tests/test_cleaning_budgets.py`, `estimator/tests/test_validation_policy.py`.
 
@@ -332,7 +328,7 @@ Lidr copy-from: `estimator/app/ingestion/cleaning/**`, `estimator/scripts/demo_c
 - Deps: `pandas`, `pandera`.
 - Tests: `unit`.
 
-## Step 6 — PII (not on the POST)
+## Step 5 — PII (not on the POST)
 
 Lidr copy-from: `estimator/app/ingestion/pii/**`, `estimator/scripts/demo_pii_s06.py`, `estimator/tests/test_pii_{recognizers,pseudonymizer}.py`, `build_pseudonymizer` in Lidr `dependencies.py`.
 
@@ -343,7 +339,7 @@ Lidr copy-from: `estimator/app/ingestion/pii/**`, `estimator/scripts/demo_pii_s0
 - Deps: `presidio-analyzer`, `presidio-anonymizer`, `spacy`, `faker`.
 - Tests stub the analyzer. No spaCy model required for pytest. `unit`.
 
-## Step 7 — Teaching CLIs + README Ingestion
+## Step 6 — Teaching CLIs + README Ingestion
 
 Lidr copy-from: `estimator/app/ingestion/architecture.py`, `estimator/scripts/preflight_s06.py`, `estimator/tests/test_architecture.py`.
 
@@ -405,10 +401,10 @@ PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
 | Name | Default (host) | Container | Step |
 |---|---|---|---|
 | `CATALOG_PATH` | `get_absolute_path().parent / "data/catalog/catalog.yaml"` | Compose `environment`: `/app/data/catalog/catalog.yaml` | 1 / used in 2 |
-| `INGESTION_DATA_ROOT` | `get_absolute_path().parent / "data/seed"` | Compose `environment`: `/app/data/seed` | 1 / used in 3 |
-| `PRESIDIO_SPACY_MODEL` | `es_core_news_md` | Settings default | 1 / used in 6 |
-| `PSEUDONYM_FAKER_LOCALE` | `es_ES` | Settings default | 1 / used in 6 |
-| `PSEUDONYM_HASH_SALT` | `change-me-in-prod` | Settings default | 1 / used in 6 |
+| `INGESTION_DATA_ROOT` | `get_absolute_path().parent / "data/seed"` | Compose `environment`: `/app/data/seed` | 1 / used in 2 |
+| `PRESIDIO_SPACY_MODEL` | `es_core_news_md` | Settings default | 1 / used in 5 |
+| `PSEUDONYM_FAKER_LOCALE` | `es_ES` | Settings default | 1 / used in 5 |
+| `PSEUDONYM_HASH_SALT` | `change-me-in-prod` | Settings default | 1 / used in 5 |
 
 `DATABASE_URL` already exists. It stays optional.
 
@@ -419,20 +415,20 @@ None of the five belong in the local `.env`. `.env.example` lists them with that
 ## Closed decisions
 
 - FastAPI only. No Rails. No `EstimationService`. No Streamlit change. Curl for ingest.
-- Feature steps. Stop after each step.
+- Feature steps. Stop after each step. Then update this file (summary checkbox + handoff “Next work is step N only”) and wait. Do not start the next step until told.
 - Imports: drop `app.`. Do not add `src.`.
 - Scripts and `es_core_news_md`: host. `sys.path` includes `ROOT / "src"`.
 - Engine: lazy. Alembic: CLI. `env.py` raises if `DATABASE_URL` is missing.
 - Image `COPY` + Compose bind-mount for `src`, `alembic`, `alembic.ini`, `data`. Container paths: `/app`, `/app/alembic`, `/app/alembic.ini`, `/app/data`.
 - Catalog/seed paths: Settings default on the host; Compose `environment` in the container. The five Session 6 settings stay out of the local `.env`.
-- Four-line block: the six files listed above. Catalog is on the POST.
+- Four-line block: the six files listed above. Catalog is on the POST. `documents/` / `loaders/` / `parsers/` are on the POST.
 - Cleaning, PII, architecture, preflight, demos ship and stay off the POST.
 - Ingestion tests ship (`unit` / `smoke`). Older product tests do not.
 - One Postgres. Alembic: `0000_estimations` + `0001_session6_initial`. Image `pgvector/pgvector:pg16`. No `CREATE EXTENSION vector`. Port `5432`, user/db `postgres`/`estimator`. Wipe `postgres_data` once before first upgrade.
 - Preflight packages include `spacy`, `unstructured[all-docs]`, `openpyxl`, `alembic`.
-- `pyyaml` in step 2.
+- `pyyaml` in step 2. Catalog + parse are one step: same dep, one package, no HTTP.
 - CAG / estimate / sessions / stress unchanged. History writes fail-open.
-- README Ingestion in step 7. No `evolution.md`.
+- README Ingestion in step 6. No `evolution.md`.
 - Compose healthcheck `start_period: 30s` (step 1 Q&A).
 - Ingest engine: lazy `get_engine` / `get_session`. No eager `SessionLocal`. Do not merge with `history.get_engine()`.
 - One process, one `Settings`, one Postgres, one Alembic, tables in `public`. Not two envs, not two schemas, not two products, not `src/producto` vs `src/ingesta`, not inverted-glove packaging.
@@ -456,4 +452,3 @@ None of the five belong in the local `.env`. `.env.example` lists them with that
 - Changing `/api/v1/estimate` or conversational routes.
 - Older product tests.
 - Session 7+ (RAG, indexing, `CREATE EXTENSION vector`, wiring PII into ingest).
-
