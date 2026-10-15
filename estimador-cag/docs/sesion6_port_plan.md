@@ -6,17 +6,26 @@ This file is the handoff. A later session should need only this plan plus the tw
 
 ## Handoff (start here in a new session)
 
-**Next work is step 3 only.** Step 2 is done. Do not redo catalog, parsers, Alembic, the image, or `create_all`. Do not reopen the Q&A below. Stop after step 3 and wait.
+**Next work is step 4 only.** Step 3 is done. Do not redo HTTP, catalog, parsers, Alembic, the image, or `create_all`. Do not reopen the Q&A below. Stop after step 4 and wait.
 
 | | Path / value |
 |---|---|
-| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense` @ `82a686b`, app `estimador-cag/` |
+| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense` @ `61d2659`, app `estimador-cag/` |
 | Reference | `/home/morales4dev/wsTakeoff/ai-engineering-lidr` `origin/session_06_live` @ `aa1fcf4` |
-| Already shipped | CAG through stress: one-shot, sessions, attachments, compression, tier, ACB, golden evals, `TurnObservation`, `evals/stress/`. **Step 1:** Alembic `0000_estimations` + `0001_session6_initial`, image `pgvector/pgvector:pg16`, seed+catalog on disk, lazy `persistence.database`. **Step 2:** `src/ingestion/` catalog + documents + loaders + parsers (json/txt). `get_catalog` / `get_filesystem_loader` / `get_parser_registry`. Lifespan logs `catalog_loaded` / `catalog_load_failed` (no crash). `pyyaml>=6.0`. No HTTP. No orchestrator. |
+| Already shipped | CAG through stress: one-shot, sessions, attachments, compression, tier, ACB, golden evals, `TurnObservation`, `evals/stress/`. **Step 1:** Alembic `0000_estimations` + `0001_session6_initial`, image `pgvector/pgvector:pg16`, seed+catalog on disk, lazy `persistence.database`. **Step 2:** `src/ingestion/` catalog + documents + loaders + parsers (json/txt). `get_catalog` / `get_filesystem_loader` / `get_parser_registry`. Lifespan logs `catalog_loaded` / `catalog_load_failed` (no crash). `pyyaml>=6.0`. **Step 3:** `ingest_source` + `POST /api/v1/ingestion/runs` + `GET /jobs/{job_id}`. No `SessionLocal`; BackgroundTask uses `_open_background_session` (lazy engine). No cleaning / PII on the POST. |
 | Closed plans (read-only) | `pre_pre_sesion_06_evals.md`, `pre_sesion6_plan.md`, `sesion5_port_plan.md` |
 | Lidr copy-from | listed per step. Layout is `estimator/app/…`; ours is `estimador-cag/src/…`. |
 
-Entry points **after step 2** (ours):
+Entry points **after step 3** (ours):
+
+- `src/main.py` — routers: estimations + sessions + ingestion.
+- `src/ingestion/orchestrator.py` — `ingest_source`; no cleaning / PII imports. Documents stay in memory.
+- `src/routers/ingestion.py` — POST 202 / 404 unknown / 400 not-include; GET 200 / 404. BackgroundTask opens `_open_background_session` (not `SessionLocal`). No URL → request `get_session` → 503.
+- `src/schemas/ingestion.py` — run request/response + job view.
+- `tests/test_ingestion_endpoint.py` — `smoke`. In-memory jobs; patches `JobsRepository` + `_open_background_session`.
+- Everything else under “after step 2” still holds.
+
+Entry points **after step 2** (step 3 added the router; keep as freeze, do not restore):
 
 - `src/main.py` — lifespan: catalog try/except, then `application_started`, then `init_db()`. Routers: estimations + sessions. Still no ingestion HTTP.
 - `src/dependencies.py` — `get_catalog`, `get_filesystem_loader`, `get_parser_registry` (`lru_cache`).
@@ -95,7 +104,7 @@ Alembic is a CLI (`upgrade head`). `env.py` reads `get_settings().DATABASE_URL`.
 |---|-------|----|
 | 1 | Alembic (`0000_estimations` + `0001_session6_initial`) + `pgvector` image + seed | [x] |
 | 2 | Catalog YAML + filesystem loader + JSON/TXT parsers | [x] |
-| 3 | Orchestrator + `POST /runs` + `GET /jobs` | [ ] |
+| 3 | Orchestrator + `POST /runs` + `GET /jobs` | [x] |
 | 4 | Cleaning library + demo (not on the POST) | [ ] |
 | 5 | PII library + demo (not on the POST) | [ ] |
 | 6 | Teaching CLIs + README Ingestion (curl) | [ ] |
@@ -329,6 +338,8 @@ Lidr copy-from: `estimator/app/ingestion/orchestrator.py`, `estimator/app/router
 - No `DATABASE_URL` on a real request: 503.
 
 Out of this step: README, cleaning, PII, Streamlit.
+
+**Done.** `uv run pytest tests/test_ingestion_endpoint.py` plus catalog/parser/persistence/conversational — 21 passed. BackgroundTask patched via `_open_background_session`, not `SessionLocal`.
 
 ## Step 4 — Cleaning (not on the POST)
 
