@@ -1,15 +1,15 @@
 # Catálogo de fuentes — Proyecto 2 (Sesión 06 · 2026-05-22)
 #
-# Este fichero ES código: lo carga `app.ingestion.catalog.loader.load_catalog`
-# y lo valida contra los modelos Pydantic de `app.ingestion.catalog.models`.
+# Este fichero ES código: lo carga `ingestion.catalog.loader.load_catalog`
+# y lo valida contra los modelos Pydantic de `ingestion.catalog.models`.
 # Cada `source` tiene una decision explícita y, si no es `include`, también
 # un `decision_reason`. Excluir una fuente es disciplina, no desidia.
 #
 # Para añadir una nueva fuente:
-#   1. Ejecuta `python -m app.ingestion.catalog.inspect data/seed` para obtener
+#   1. Ejecuta `python -m ingestion.catalog.inspect data/seed` para obtener
 #      los facts (file_count, latest_modified, formats_detected).
 #   2. Añade el bloque YAML aquí abajo, con quality y sensitivity razonadas.
-#   3. Tira `python -m app.ingestion.catalog.loader data/catalog/catalog.yaml`
+#   3. Tira `python -m ingestion.catalog.loader data/catalog/catalog.yaml`
 #      para validar el cambio antes de hacer commit.
 
 version: "1.0.0"

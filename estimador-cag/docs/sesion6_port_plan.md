@@ -6,17 +6,27 @@ This file is the handoff. A later session should need only this plan plus the tw
 
 ## Handoff (start here in a new session)
 
-**Next work is step 2 only.** Step 1 is done (`7186193` on `session_06_forense`, pushed). Do not redo Alembic, the image, or `create_all`. Do not reopen the Q&A below. Stop after step 2 and wait.
+**Next work is step 3 only.** Step 2 is done. Do not redo catalog, parsers, Alembic, the image, or `create_all`. Do not reopen the Q&A below. Stop after step 3 and wait.
 
 | | Path / value |
 |---|---|
-| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense` @ `8b6119d`, app `estimador-cag/` |
+| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session_06_forense` @ `82a686b`, app `estimador-cag/` |
 | Reference | `/home/morales4dev/wsTakeoff/ai-engineering-lidr` `origin/session_06_live` @ `aa1fcf4` |
-| Already shipped | CAG through stress: one-shot, sessions, attachments, compression, tier, ACB, golden evals, `TurnObservation`, `evals/stress/`. **Step 1:** Alembic `0000_estimations` + `0001_session6_initial`, image `pgvector/pgvector:pg16`, seed+catalog on disk, lazy `persistence.database`. No catalog loader. No parsers. No ingestion HTTP. |
+| Already shipped | CAG through stress: one-shot, sessions, attachments, compression, tier, ACB, golden evals, `TurnObservation`, `evals/stress/`. **Step 1:** Alembic `0000_estimations` + `0001_session6_initial`, image `pgvector/pgvector:pg16`, seed+catalog on disk, lazy `persistence.database`. **Step 2:** `src/ingestion/` catalog + documents + loaders + parsers (json/txt). `get_catalog` / `get_filesystem_loader` / `get_parser_registry`. Lifespan logs `catalog_loaded` / `catalog_load_failed` (no crash). `pyyaml>=6.0`. No HTTP. No orchestrator. |
 | Closed plans (read-only) | `pre_pre_sesion_06_evals.md`, `pre_sesion6_plan.md`, `sesion5_port_plan.md` |
 | Lidr copy-from | listed per step. Layout is `estimator/app/…`; ours is `estimador-cag/src/…`. |
 
-Entry points **after step 1** (ours):
+Entry points **after step 2** (ours):
+
+- `src/main.py` — lifespan: catalog try/except, then `application_started`, then `init_db()`. Routers: estimations + sessions. Still no ingestion HTTP.
+- `src/dependencies.py` — `get_catalog`, `get_filesystem_loader`, `get_parser_registry` (`lru_cache`).
+- `src/ingestion/` — package docstring only in `__init__.py` (names cleaning / PII / orchestrator; does not import them). `catalog/` + `documents/` + `loaders/` + `parsers/`. `default_registry()` is json + txt.
+- `data/catalog/catalog.yaml` — comments say `ingestion.…`, not `app.ingestion`. Loaded at boot; decisions unchanged.
+- `tests/test_catalog_loader.py`, `test_parsers_json.py`, `test_parsers_txt.py` — `unit`.
+- `pyproject.toml` — `pyyaml>=6.0`.
+- Everything else under “after step 1” still holds.
+
+Entry points **after step 1** (step 2 only changed `main.py` + catalog comments; keep as freeze, do not restore):
 
 - `src/main.py` — lifespan calls `init_db()`; routers: estimations + sessions. Still no ingestion HTTP.
 - `src/services/history.py` — no `Base`, no `EstimationRow` class, no `create_all`. Imports `EstimationRow` from `persistence.models`. Own `get_engine()` (not merged). Fail-open writes. `init_db`: no URL → `history_disabled`; URL set → `schema_via_alembic`.
@@ -84,7 +94,7 @@ Alembic is a CLI (`upgrade head`). `env.py` reads `get_settings().DATABASE_URL`.
 | # | Title | OK |
 |---|-------|----|
 | 1 | Alembic (`0000_estimations` + `0001_session6_initial`) + `pgvector` image + seed | [x] |
-| 2 | Catalog YAML + filesystem loader + JSON/TXT parsers | [ ] |
+| 2 | Catalog YAML + filesystem loader + JSON/TXT parsers | [x] |
 | 3 | Orchestrator + `POST /runs` + `GET /jobs` | [ ] |
 | 4 | Cleaning library + demo (not on the POST) | [ ] |
 | 5 | PII library + demo (not on the POST) | [ ] |
@@ -294,6 +304,8 @@ Lidr copy-from: `estimator/app/ingestion/__init__.py`, `estimator/app/ingestion/
 Catalog decisions: `presupuestos_json` include, `transcripciones_txt` review, `rate_card_xlsx` exclude.
 
 Out of this step: HTTP, cleaning, PII, orchestrator.
+
+**Done.** `uv run pytest tests/test_catalog_loader.py tests/test_parsers_json.py tests/test_parsers_txt.py tests/test_persistence_database.py tests/test_conversational_client.py` — 15 passed. No HTTP.
 
 ### Step 2 — Q&A (do not reopen)
 
