@@ -42,8 +42,12 @@ WORKDIR /app
 # Bring in the pre-built virtual environment from the builder stage.
 COPY --from=builder /opt/venv /opt/venv
 
-# Copy application source code (FastAPI entrypoint: main:app under /app).
+# Copy application source, catalog/seed, and Alembic. Compose bind-mounts
+# win at runtime (./src:/app hides the rest unless they are also mounted).
 COPY src/ /app/
+COPY data/ /app/data/
+COPY alembic/ /app/alembic/
+COPY alembic.ini /app/alembic.ini
 
 # Ensure the non-root user owns everything it needs to run.
 RUN chown -R appuser:appgroup /app /opt/venv

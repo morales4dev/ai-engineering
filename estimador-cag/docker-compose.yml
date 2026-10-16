@@ -17,6 +17,8 @@ services:
     environment:
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/estimator
+      CATALOG_PATH: /app/data/catalog/catalog.yaml
+      INGESTION_DATA_ROOT: /app/data/seed
 
     depends_on:
       redis:
@@ -27,12 +29,18 @@ services:
     # Bind-mount src/ so code changes are reflected immediately inside the
     # container without rebuilding the image. The image venv lives at
     # /opt/venv, so this mount cannot hide installed packages.
+    # ./src:/app hides image files under /app, so alembic/data mount on top.
     volumes:
       - ./src:/app
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+      - ./data:/app/data
 
-    # Override the default CMD to enable auto-reload on file changes.
+    # Apply pending migrations on startup, then run uvicorn with auto-reload.
     # Remove --reload for production deployments.
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
     restart: unless-stopped
 
@@ -41,7 +49,7 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 5s
-      start_period: 10s
+      start_period: 30s
       retries: 3
 
   redis:
@@ -61,7 +69,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: estimator-postgres
     ports:
       - "5432:5432"

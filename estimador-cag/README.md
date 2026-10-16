@@ -361,3 +361,59 @@ PYTHONPATH=src:. uv run python -m evals.run --mode actor --http http://localhost
 ### Form HTTP client (API must already be running)
 uv run streamlit run streamlit_app.py          # New / Conversational / Recent
 
+## Ingestion
+
+`POST /api/v1/ingestion/runs` catalogs, loads, parses, and writes a job row. It does not clean or pseudonymize.
+
+```bash
+cd estimador-cag
+docker compose down -v   # empty volume before the first Alembic upgrade
+docker compose up --build -d
+curl -sf http://localhost:8000/health
+```
+
+Do not `down -v` again unless you intend to wipe `postgres_data` (Recent-tab rows go with it). Compose already runs `alembic upgrade head`.
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/ingestion/runs \
+  -H 'Content-Type: application/json' \
+  -d '{"source_name":"presupuestos_json"}'
+
+curl -sS http://localhost:8000/api/v1/ingestion/jobs/<job_id>
+```
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/ingestion/runs \
+  -H 'Content-Type: application/json' \
+  -d '{"source_name":"transcripciones_txt"}'
+
+curl -sS -X POST http://localhost:8000/api/v1/ingestion/runs \
+  -H 'Content-Type: application/json' \
+  -d '{"source_name":"rate_card_xlsx"}'
+
+curl -sS -X POST http://localhost:8000/api/v1/ingestion/runs \
+  -H 'Content-Type: application/json' \
+  -d '{"source_name":"no_existe"}'
+```
+
+```bash
+# custom
+curl -sS -X POST http://localhost:8000/api/v1/ingestion/runs \
+  -H 'Content-Type: application/json' \
+  -d '{"source_name":"presupuestossv_json"}'
+```
+
+Host scripts (not in the image). `alembic upgrade head` on the host is for uvicorn-on-the-host:
+
+```bash
+cd estimador-cag
+PYTHONPATH=src:. uv run alembic upgrade head
+uv run python -m spacy download es_core_news_md
+PYTHONPATH=src:. uv run python -m ingestion.catalog.inspect data/seed
+PYTHONPATH=src:. uv run python -m ingestion.catalog.loader data/catalog/catalog.yaml
+PYTHONPATH=src:. uv run python -m ingestion.architecture
+PYTHONPATH=src:. uv run python scripts/preflight_s06.py
+PYTHONPATH=src:. uv run python scripts/demo_cleaning_s06.py
+PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
+```
+

@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from config import get_settings
 from routers.estimations import router as estimations_router
+from routers.ingestion import router as ingestion_router
 from routers.sessions import router as sessions_router
 from services.history import init_db
 
@@ -41,6 +42,18 @@ async def lifespan(app: FastAPI):
     configure_logging()
     log = structlog.get_logger()
     settings = get_settings()
+    try:
+        from dependencies import get_catalog
+
+        catalog = get_catalog()
+        log.info(
+            "catalog_loaded",
+            version=catalog.version,
+            sources_total=len(catalog.sources),
+            sources_included=len(catalog.included_sources()),
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.error("catalog_load_failed", error=str(exc)[:400])
     log.info("application_started", environment=settings.APP_ENV)
     init_db()
     yield
@@ -70,6 +83,7 @@ app = FastAPI(
 
 app.include_router(estimations_router)
 app.include_router(sessions_router)
+app.include_router(ingestion_router)
 
 
 @app.get("/health")

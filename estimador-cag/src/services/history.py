@@ -3,6 +3,7 @@
 FastAPI is the only process that talks to the DB. Streamlit only consumes HTTP.
 Missing DATABASE_URL or a write error must not break /estimate (fail-open).
 List/show raise HistoryUnavailable so the router can return 503.
+Schema is Alembic's job — this module does not create_all.
 """
 
 from __future__ import annotations
@@ -11,12 +12,12 @@ from datetime import datetime, timezone
 from functools import lru_cache
 
 import structlog
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, create_engine, desc, func, select
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import create_engine, desc, select
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy.orm import Session
 
 from config import get_settings
+from persistence.models import EstimationRow
 from schemas.estimation import (
     EstimationDetail,
     EstimationListItem,
@@ -34,32 +35,6 @@ class HistoryUnavailable(Exception):
     """Raised when list/show cannot reach Postgres."""
 
 
-class Base(DeclarativeBase):
-    pass
-
-
-class EstimationRow(Base):
-    __tablename__ = "estimations"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    description: Mapped[str] = mapped_column(Text, nullable=False)
-    project_type: Mapped[str] = mapped_column(String, nullable=False)
-    detail_level: Mapped[str] = mapped_column(String, nullable=False)
-    output_format: Mapped[str] = mapped_column(String, nullable=False)
-    response_payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    prompt_version: Mapped[str | None] = mapped_column(String, nullable=True)
-    cached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-    )
-
-
 @lru_cache
 def get_engine() -> Engine | None:
     url = get_settings().DATABASE_URL
@@ -69,20 +44,12 @@ def get_engine() -> Engine | None:
 
 
 def init_db() -> None:
-    """Create tables if DATABASE_URL is set. Must not crash boot."""
+    """Log whether history has a URL. Schema comes from Alembic, not create_all."""
     engine = get_engine()
     if engine is None:
         log.warning("history_disabled", reason="no_database_url")
         return
-    try:
-        Base.metadata.create_all(engine)
-        log.info("history_schema_ready")
-    except Exception as exc:  # noqa: BLE001
-        log.warning(
-            "history_schema_failed",
-            error_type=type(exc).__name__,
-            error=str(exc)[:200],
-        )
+    log.info("schema_via_alembic")
 
 
 def persist_estimation(request: EstimationRequest, response: EstimationResponse) -> None:
@@ -91,7 +58,6 @@ def persist_estimation(request: EstimationRequest, response: EstimationResponse)
     if engine is None:
         return
     try:
-        Base.metadata.create_all(engine)
         row = EstimationRow(
             description=request.description,
             project_type=request.project_type.value,
@@ -129,7 +95,6 @@ def list_estimations(limit: int = 20) -> list[EstimationListItem]:
     if engine is None:
         raise HistoryUnavailable("DATABASE_URL is not set")
     try:
-        Base.metadata.create_all(engine)
         with Session(engine) as session:
             rows = session.scalars(
                 select(EstimationRow).order_by(desc(EstimationRow.created_at)).limit(limit)
@@ -158,7 +123,6 @@ def get_estimation(estimation_id: int) -> EstimationDetail | None:
     if engine is None:
         raise HistoryUnavailable("DATABASE_URL is not set")
     try:
-        Base.metadata.create_all(engine)
         with Session(engine) as session:
             row = session.get(EstimationRow, estimation_id)
             if row is None:
