@@ -99,3 +99,28 @@ sources:
       esta fuente alimentaría respuestas con precios de hace más de un año.
       Si operaciones cierra la revisión 2025, levantar a `review`.
     last_audited: 2026-05-22T09:00:00Z
+
+  - name: presupuestossv_json
+    description: >
+      Presupuestos firmados 2027 en formato JSON. Cada fichero un presupuesto.
+      Fuente principal para el módulo de retrieval del Proyecto 2.
+    location: budgetssv
+    owners: ["comercial@empresa.local"]
+    format: json
+    volume_estimate: "< 5 ficheros, 5-10 KB cada uno"
+    refresh_declared: "Semanal tras cierre comercial."
+    refresh_observed: "Carga inicial; aún no hay segunda iteración medida."
+    quality:
+      completeness: 4
+      consistency: 4   # heterogeneidad de moneda EUR/eur, fechas mixtas
+      actuality: 5
+      reliability: 4
+    sensitivity:
+      has_pii: true
+      pii_flags: ["PERSON", "EMAIL", "BUDGET_ID", "CLIENT_CODE"]
+      access_level: confidential
+    lineage:
+      - "Generados por el CRM comercial -BAS- (export manual)."
+      - "Validados por finanzas antes de firma."
+    decision: include
+    last_audited: 2026-10-16T09:00:00Z

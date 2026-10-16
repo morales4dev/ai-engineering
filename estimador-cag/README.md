@@ -396,6 +396,13 @@ curl -sS -X POST http://localhost:8000/api/v1/ingestion/runs \
   -d '{"source_name":"no_existe"}'
 ```
 
+```bash
+# custom
+curl -sS -X POST http://localhost:8000/api/v1/ingestion/runs \
+  -H 'Content-Type: application/json' \
+  -d '{"source_name":"presupuestossv_json"}'
+```
+
 Host scripts (not in the image). `alembic upgrade head` on the host is for uvicorn-on-the-host:
 
 ```bash
