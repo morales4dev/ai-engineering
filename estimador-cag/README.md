@@ -271,27 +271,24 @@ estimador-cag/
 │   ├── main.py                 # FastAPI app, /health
 │   ├── config.py               # Pydantic Settings
 │   ├── dependencies.py         # wrapper, caches, SessionStore singleton
-│   ├── sessions/               # in-process Session + ConversationHistory + store
-│   │   ├── compression/        # window peel, anchors, cumulative summary
-│   │   └── tier_resolver.py    # audience tier for conversational v3
-│   ├── routers/estimations.py  # POST /api/v1/estimate + GET history
-│   ├── routers/sessions.py     # POST /sessions + GET inspect + /estimate + /estimate-acb
+│   ├── rates.py                # rate card + weekly bands
+│   ├── utils.py                # package root path
+│   ├── sessions/               # in-process Session + history + store + compression
+│   ├── routers/                # /estimate, /sessions, /ingestion
 │   ├── prompts/                # estimation/v1|v2|v3 + metadata + conversation_summary + critic
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
-│   ├── services/
-│   │   ├── llm_service.py      # estimate_oneshot() only
-│   │   ├── conversational.py   # session path: window + metadata, caches off
-│   │   ├── acb.py              # Actor-Critic-Boss orchestration
-│   │   ├── boss.py
-│   │   ├── critic.py
-│   │   ├── attachments.py      # Camino B: local PDF/DOCX text extraction
-│   │   ├── metadata_extractor.py  # second-pass ProjectMetadata, fail-open
-│   │   ├── llm_wrapper.py
-│   │   ├── cache.py            # exact-match Redis
-│   │   └── history.py          # Postgres log of one-shot /estimate rows
-│   └── schemas/                # estimation + acb + critic
-├── evals/                      # golden dataset, metrics, CLI runner (actor / acb)
+│   ├── services/               # oneshot, conversational, ACB, attachments, history, prompt_boundary
+│   ├── schemas/                # estimation + acb + critic + ingestion
+│   ├── ingestion/              # catalog, loaders, parsers, cleaning, pii, orchestrator
+│   └── persistence/            # jobs + mappings repos
+├── data/                       # catalog.yaml + seed
+├── alembic/                    # estimations + session6 tables
+├── alembic.ini
+├── evals/                      # golden dataset, metrics, CLI runner + stress/
+├── tests/
+├── scripts/                    # preflight_s06, demo_cleaning, demo_pii
+├── docs/                       # oneshot sequence + session notes
 ├── streamlit_app.py            # New + Conversational + Recent
 ├── Dockerfile
 ├── docker-compose.yml
@@ -417,3 +414,60 @@ PYTHONPATH=src:. uv run python scripts/demo_cleaning_s06.py
 PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
 ```
 
+### Ingestion DFD
+
+```mermaid
+  flowchart TB
+      subgraph DISK["Disco"]
+          YAML["catalog.yaml"]
+          SEED["data/seed\nbudgets/*.json\ntranscripts/*.txt\nrate_card.xlsx"]
+      end
+      subgraph BOOT["Boot FastAPI"]
+          LOADCAT["load_catalog + Pydantic"]
+          LOG["log catalog_loaded\n(o catalog_load_failed, no crash)"]
+          ALEMBIC["Alembic tables:\ningestion_jobs\npseudonym_mappings"]
+      end
+      YAML --> LOADCAT --> LOG
+      YAML --> ALEMBIC
+      subgraph HTTP["POST /api/v1/ingestion/runs  —  SÍ cableado"]
+          REQ["JSON {source_name}"]
+          GATE{"¿existe?\n¿decision=include?\n¿DATABASE_URL?"}
+          JOBP["INSERT job pending → 202"]
+          BG["BackgroundTask\n(sesión DB propia)"]
+          ORCH["ingest_source"]
+          FS["FileSystemLoader\nlocation ∩ format"]
+          PARSE{"ParserRegistry"}
+          JSONP["BudgetJsonParser\nJSON → markdown Document"]
+          TXTP["TranscriptTxtParser\ntagged → 1 doc/turno\nlegacy → 1 doc/párrafo"]
+          MEM["list[Document]  en memoria"]
+          JOBC["job completed + count\no failed + error"]
+          GET["GET /jobs/{id}"]
+      end
+      REQ --> GATE
+      GATE -->|404 unknown / 400 not-include / 503 no DB| ERR["HTTP error"]
+      GATE -->|include| JOBP --> BG --> ORCH
+      SEED --> FS
+      ORCH --> FS --> PARSE
+      PARSE -->|json| JSONP --> MEM
+      PARSE -->|txt| TXTP --> MEM
+      PARSE -->|xlsx| NOP["KeyError: no parser\n→ job failed"]
+      MEM --> JOBC --> GET
+      subgraph OFF["Host / librería  —  NO en el POST"]
+          INSPECT["inspect: facts del seed\nfile_count, size, formats"]
+          ARCH["architecture:\nCAG AND de 4 constraints\n→ CAG | Hybrid | RAG"]
+          CLEAN["clean_budget_records\nnulls, EUR, dates, numbers, dedup"]
+          POL["validate_with_policy\nPandera lazy=True"]
+          PART["valid / quarantined / discarded"]
+          PII["Presidio es_core_news_md\n+ BUDGET_ID / CLIENT_CODE"]
+          PSEUDO["HMAC + Faker consistente\nmapping_store"]
+          PRE["preflight_s06: 8 checks"]
+      end
+      SEED --> INSPECT
+      YAML --> ARCH
+      SEED -.->|JSON crudo, no Document.text| CLEAN --> POL --> PART
+      SEED -.->|texto de transcripción| PII --> PSEUDO
+      PSEUDO -.->|prod, no demo| MAP["pseudonym_mappings\n(hash, nunca plaintext)"]
+      PRE --> YAML
+      PRE --> SEED
+      PRE --> ALEMBIC
+```
