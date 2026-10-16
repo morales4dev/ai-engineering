@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import yaml
+from pydantic import ValidationError
 
 from ingestion.catalog.models import DataCatalog
 
@@ -21,12 +22,25 @@ def load_catalog(path: str | Path) -> DataCatalog:
     return DataCatalog.model_validate(raw)
 
 
+def format_catalog_errors(exc: ValidationError) -> str:
+    """One line per field. The CLI prints this instead of a Pydantic traceback."""
+    lines = ["Catalog inválido:"]
+    for err in exc.errors():
+        loc = ".".join(str(part) for part in err["loc"])
+        lines.append(f"  {loc}: {err['msg']}")
+    return "\n".join(lines)
+
+
 def _main(argv: list[str]) -> int:
     """CLI: ``python -m ingestion.catalog.loader data/catalog/catalog.yaml``."""
     if len(argv) != 2:
         print("usage: python -m ingestion.catalog.loader <path.yaml>")
         return 1
-    catalog = load_catalog(argv[1])
+    try:
+        catalog = load_catalog(argv[1])
+    except ValidationError as exc:
+        print(format_catalog_errors(exc), file=sys.stderr)
+        return 1
     included = catalog.included_sources()
     print(f"Catalog version: {catalog.version}")
     print(f"Sources total:  {len(catalog.sources)}")

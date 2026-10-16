@@ -114,6 +114,29 @@ def test_name_must_be_snake_case():
         )
 
 
+def test_cli_prints_field_errors_not_traceback(tmp_path, capsys):
+    path = _write_catalog(
+        tmp_path,
+        """
+        version: "1.0.0"
+        sources:
+          - name: broken_json
+            location: budgets
+            format: json
+            quality: {completeness: 4, consistency: 3, actuality: 5, reliability: 4}
+            sensitivity: {has_pii: true, pii_flags: ["PERSON"]}
+            decision:
+        """,
+    )
+    from ingestion.catalog.loader import _main
+
+    assert _main(["loader", str(path)]) == 1
+    err = capsys.readouterr().err
+    assert "Catalog inválido" in err
+    assert "decision" in err
+    assert "pydantic_core" not in err
+
+
 def test_find_returns_source_or_none(tmp_path):
     path = _write_catalog(tmp_path, _VALID_BODY)
     catalog = load_catalog(path)
