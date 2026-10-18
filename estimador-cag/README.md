@@ -11,7 +11,7 @@ CAG (Cache Augmented Generation) injects relevant context directly into the LLM 
 That is a good first stage because:
 
 - It is simple to implement and debug
-- It needs no extra infrastructure (embeddings, vector stores)
+- CAG itself needs no extra infrastructure; embeddings live on a separate endpoint (`POST /embeddings/ingest`), not on the CAG path
 - It works well when the context volume is small (a handful of examples)
 
 Later modules of the Master are expected to evolve this kind of service toward **RAG** (Retrieval Augmented Generation) with a vector store when the example set grows.
@@ -66,12 +66,12 @@ uv run streamlit run streamlit_app.py          # New / Conversational / Recent �
 
 ## Logs
 
-### Histórico
+### History
 ```bash
 docker logs estimator
 ```
 
-### En vivo, siguiente submit
+### Live, next submit
 ```bash
 docker logs -f estimator       
 ```
@@ -249,11 +249,11 @@ Each session estimate resolves an audience **tier** (`executive` / `pm` / `devel
 
 `POST /sessions/{id}/estimate-acb` is the same multipart as `/estimate`, then Actor → Critic → Boss (accept / iterate / synthesize, `BOSS_MAX_ITERATIONS=3`). Response adds `acb` (`iterations`, `final_decision`, `iterations_run`). Intermediate actor drafts are discarded; the session stores one turn (enriched transcript + final assistant). Critic fail-open: accept with review confidence 0. Caches stay off. `{"detail": "session_not_found"}` on a missing id.
 
-### Camino B (local PDF/DOCX)
+### Path B (local PDF/DOCX)
 
 Attachments are extracted **in the API** with `pypdf` and `python-docx` (`src/services/attachments.py`). Dispatch is by filename extension: only `.pdf` and `.docx`. No filename or empty upload: ignored. Unsupported type → 415. Broken file → 422. Text is appended after the form `transcript` as `--- attachment: filename ---`. `transcript` stays 20–2000 characters; extracted text is extra, truncated per file at `MAX_ATTACHMENT_CHARS` (60000), not rejected with 413.
 
-Camino A (provider Files API) is out of scope. Local extract keeps the same text path for OpenAI and Anthropic, and we own the truncation. Chunking / retrieval is module 3.
+Path A (provider Files API) is out of scope. Local extract keeps the same text path for OpenAI and Anthropic, and we own the truncation. Chunking / retrieval is module 3.
 
 ### Metadata extractor
 
@@ -281,13 +281,14 @@ estimador-cag/
 │   ├── services/               # oneshot, conversational, ACB, attachments, history, prompt_boundary
 │   ├── schemas/                # estimation + acb + critic + ingestion
 │   ├── ingestion/              # catalog, loaders, parsers, cleaning, pii, orchestrator
+│   ├── embedding_pipeline/     # chunker + embedder + POST /embeddings/ingest
 │   └── persistence/            # jobs + mappings repos
-├── data/                       # catalog.yaml + seed
+├── data/                       # catalog.yaml + seed + budgets_sample.json
 ├── alembic/                    # estimations + session6 tables
 ├── alembic.ini
 ├── evals/                      # golden dataset, metrics, CLI runner + stress/
 ├── tests/
-├── scripts/                    # preflight_s06, demo_cleaning, demo_pii
+├── scripts/                    # preflight_s06, demo_cleaning, demo_pii, compare.py
 ├── docs/                       # oneshot sequence + session notes
 ├── streamlit_app.py            # New + Conversational + Recent
 ├── Dockerfile
@@ -306,15 +307,15 @@ estimador-cag/
 curl -X POST http://localhost:8000/api/v1/estimate \
   -H "Content-Type: application/json" \
   -d '{
-    "description": "En la reunión con el equipo de marketing, el cliente explicó que necesita una landing page con formulario de contacto, integración con su CRM actual (HubSpot), y una sección de blog con editor WYSIWYG. El plazo ideal sería tenerlo listo en 4 semanas. El diseño ya existe en Figma.",
+    "description": "In the meeting with the marketing team, the client explained they need a landing page with a contact form, integration with their current CRM (HubSpot), and a blog section with a WYSIWYG editor. The ideal deadline would be 4 weeks. The design already exists in Figma.",
     "project_type": "web_saas",
     "detail_level": "medium",
     "output_format": "phases_table"
-  }' -o salida.json
+  }' -o output.json
 
 # Optional: POST /api/v1/estimate?prompt_version=v2  (default is v1)
 
-jq '.result' salida.json
+jq '.result' output.json
 
 ### Conversational — two turns (API must already be running)
 
@@ -361,6 +362,8 @@ uv run streamlit run streamlit_app.py          # New / Conversational / Recent
 ## Ingestion
 
 `POST /api/v1/ingestion/runs` catalogs, loads, parses, and writes a job row. It does not clean or pseudonymize.
+
+That job row is the only persistence on this path: `job_id`, `source_name`, `status`, `documents_count`, timestamps in `ingestion_jobs`. It survives the request; `GET /api/v1/ingestion/jobs/{id}` reads it later. The parsed content does not. The orchestrator builds a `list[Document]` in memory (Pydantic, not an ORM table), writes `len(documents)` onto the job, and returns the list. The BackgroundTask never stores that return value. When the task ends, the documents are gone. There is no `documents` table.
 
 ```bash
 cd estimador-cag
@@ -418,29 +421,29 @@ PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
 
 ```mermaid
   flowchart TB
-      subgraph DISK["Disco"]
+      subgraph DISK["Disk"]
           YAML["catalog.yaml"]
           SEED["data/seed\nbudgets/*.json\ntranscripts/*.txt\nrate_card.xlsx"]
       end
       subgraph BOOT["Boot FastAPI"]
           LOADCAT["load_catalog + Pydantic"]
-          LOG["log catalog_loaded\n(o catalog_load_failed, no crash)"]
+          LOG["log catalog_loaded\n(or catalog_load_failed, no crash)"]
           ALEMBIC["Alembic tables:\ningestion_jobs\npseudonym_mappings"]
       end
       YAML --> LOADCAT --> LOG
       YAML --> ALEMBIC
-      subgraph HTTP["POST /api/v1/ingestion/runs  —  SÍ cableado"]
+      subgraph HTTP["POST /api/v1/ingestion/runs  —  wired"]
           REQ["JSON {source_name}"]
-          GATE{"¿existe?\n¿decision=include?\n¿DATABASE_URL?"}
+          GATE{"exists?\ndecision=include?\nDATABASE_URL?"}
           JOBP["INSERT job pending → 202"]
-          BG["BackgroundTask\n(sesión DB propia)"]
+          BG["BackgroundTask\n(own DB session)"]
           ORCH["ingest_source"]
           FS["FileSystemLoader\nlocation ∩ format"]
           PARSE{"ParserRegistry"}
           JSONP["BudgetJsonParser\nJSON → markdown Document"]
-          TXTP["TranscriptTxtParser\ntagged → 1 doc/turno\nlegacy → 1 doc/párrafo"]
-          MEM["list[Document]  en memoria"]
-          JOBC["job completed + count\no failed + error"]
+          TXTP["TranscriptTxtParser\ntagged → 1 doc/turn\nlegacy → 1 doc/paragraph"]
+          MEM["list[Document]  in memory"]
+          JOBC["job completed + count\nor failed + error"]
           GET["GET /jobs/{id}"]
       end
       REQ --> GATE
@@ -452,22 +455,93 @@ PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
       PARSE -->|txt| TXTP --> MEM
       PARSE -->|xlsx| NOP["KeyError: no parser\n→ job failed"]
       MEM --> JOBC --> GET
-      subgraph OFF["Host / librería  —  NO en el POST"]
-          INSPECT["inspect: facts del seed\nfile_count, size, formats"]
-          ARCH["architecture:\nCAG AND de 4 constraints\n→ CAG | Hybrid | RAG"]
+      subgraph OFF["Host / library  —  NOT on the POST"]
+          INSPECT["inspect: seed facts\nfile_count, size, formats"]
+          ARCH["architecture:\nCAG AND of 4 constraints\n→ CAG | Hybrid | RAG"]
           CLEAN["clean_budget_records\nnulls, EUR, dates, numbers, dedup"]
           POL["validate_with_policy\nPandera lazy=True"]
           PART["valid / quarantined / discarded"]
           PII["Presidio es_core_news_md\n+ BUDGET_ID / CLIENT_CODE"]
-          PSEUDO["HMAC + Faker consistente\nmapping_store"]
+          PSEUDO["HMAC + consistent Faker\nmapping_store"]
           PRE["preflight_s06: 8 checks"]
       end
       SEED --> INSPECT
       YAML --> ARCH
-      SEED -.->|JSON crudo, no Document.text| CLEAN --> POL --> PART
-      SEED -.->|texto de transcripción| PII --> PSEUDO
-      PSEUDO -.->|prod, no demo| MAP["pseudonym_mappings\n(hash, nunca plaintext)"]
+      SEED -.->|raw JSON, not Document.text| CLEAN --> POL --> PART
+      SEED -.->|transcript text| PII --> PSEUDO
+      PSEUDO -.->|prod, not demo| MAP["pseudonym_mappings\n(hash, never plaintext)"]
       PRE --> YAML
       PRE --> SEED
       PRE --> ALEMBIC
 ```
+
+## Embeddings pipeline
+
+First step toward semantic search: turn historical budgets (JSON) into vectors. The new module lives in `src/embedding_pipeline/` and exposes a single endpoint. **Nothing is persisted yet** — vectors are generated in memory and returned over HTTP; persistence in pgvector comes in Session 08.
+
+`POST /embeddings/ingest` does not read `data/seed/`, does not call the ingestion pipeline, and does not write Postgres, Redis, or files. The client sends `{"budgets": [...]}` in the body. The router chunks → OpenAI embeddings → returns `chunks` + `stats` in the HTTP response. Drop the JSON or kill the process and the vectors are gone. Same contract as `src/embedding_pipeline/__init__.py`.
+
+Pieces:
+
+- `chunker.py` (`JSONStructuralChunker`) — **structural** chunking: one budget component = one chunk. Each chunk is prepended with a context header from the parent budget (project, sector, technology) so it does not lose track of whom it belongs to. Token counting with `tiktoken`.
+- `embedder.py` (`OpenAIEmbedder`) — calls `text-embedding-3-small` (1536 dims) in **batches** of 100, with exponential retry (1s/2s/4s) on `RateLimitError` and per-batch logging.
+- `router.py` — orchestrates `chunk → embed → stats`.
+
+How to debug (cwd `estimador-cag/`, `PYTHONPATH=src`):
+
+```
+  import json
+  from pathlib import Path
+  from embedding_pipeline.schemas import Budget
+  from embedding_pipeline.chunker import JSONStructuralChunker
+  raw = json.loads(Path('data/budgets_sample.json').read_text())
+  budgets = [Budget.model_validate(b) for b in raw]
+  chunks = JSONStructuralChunker().chunk(budgets)
+  print('budgets', len(budgets))
+  print('chunks', len(chunks))
+  print('first_id', chunks[0].chunk_id)
+  print('tokens0', chunks[0].token_count)
+```
+
+### New endpoint
+
+```
+POST /embeddings/ingest
+  Input  (IngestRequest):  {"budgets": [ <Budget>, ... ]}
+  Output (IngestResponse): {"chunks": [ <EmbeddedChunk>, ... ], "stats": {...}}
+  200 OK · 422 Pydantic validation · 500 embeddings API error (generic message, detail in logs)
+```
+
+It shows up in Swagger (`http://localhost:8000/docs`) and can be invoked from there with the sample data.
+
+From the command line, feeding the 15 example budgets (`data/budgets_sample.json` is a **JSON array**; the endpoint expects `{"budgets": [...]}`):
+
+```bash
+cd estimador-cag
+
+# httpie (wraps the array in the "budgets" field)
+http POST :8000/embeddings/ingest budgets:=@data/budgets_sample.json
+
+# equivalent curl
+curl -s -X POST http://localhost:8000/embeddings/ingest \
+  -H 'Content-Type: application/json' \
+  -d "{\"budgets\": $(cat data/budgets_sample.json)}" | python -m json.tool | head -40
+```
+
+Do not POST `data/seed/budgets/*.json` here — that schema (`client_name`, `phases[]`) is not `Budget` and will 422.
+
+### CLI script `compare.py`
+
+Embeddings sanity check: embeds two texts and returns their cosine similarity (computed by hand, no numpy). Reuses `OpenAIEmbedder`.
+
+```bash
+# host
+cd estimador-cag
+uv run python scripts/compare.py --text-a "..." --text-b "..."
+
+# container (scripts/ is bind-mounted in docker-compose.yml):
+docker compose exec estimator python scripts/compare.py --text-a "..." --text-b "..."
+```
+
+
+

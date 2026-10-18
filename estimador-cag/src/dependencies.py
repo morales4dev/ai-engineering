@@ -8,6 +8,8 @@ from openai import OpenAI
 
 from cache.semantic import EstimationSemanticCache
 from config import get_settings
+from embedding_pipeline.chunker import JSONStructuralChunker
+from embedding_pipeline.embedder import OpenAIEmbedder
 from ingestion.catalog import DataCatalog, load_catalog
 from ingestion.loaders.filesystem import FileSystemLoader
 from ingestion.parsers.registry import ParserRegistry, default_registry
@@ -42,6 +44,24 @@ def get_openai_client() -> OpenAI | None:
     if not settings.OPENAI_API_KEY:
         return None
     return OpenAI(api_key=settings.OPENAI_API_KEY)
+
+
+@lru_cache
+def get_chunker() -> JSONStructuralChunker:
+    """Stateless structural chunker for the embedding pipeline (Session 7)."""
+    return JSONStructuralChunker()
+
+
+@lru_cache
+def get_embedder() -> OpenAIEmbedder | None:
+    """OpenAI embedder for the embedding pipeline. ``None`` when no API key is
+    configured (mirrors ``get_semantic_cache``); the router maps that to a 500."""
+    settings = get_settings()
+    client = get_openai_client()
+    if client is None:
+        log.warning("embedder_disabled", reason="no_openai_key")
+        return None
+    return OpenAIEmbedder(client=client, model=settings.EMBEDDING_MODEL)
 
 
 @lru_cache
