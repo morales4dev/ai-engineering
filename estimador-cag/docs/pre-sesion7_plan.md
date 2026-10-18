@@ -298,13 +298,13 @@ Student pastes the three `Cosine similarity: …` lines and a 3–5 line comment
 
 | # | Title | OK |
 |---|-------|----|
-| 1 | `tiktoken>=0.7.0` + lock + image rebuild | [ ] |
-| 2 | Copy `embedding_pipeline/` (minus SANITY_CHECK), import rewrite | [ ] |
-| 3 | Wire `main.py` + `get_chunker` / `get_embedder` | [ ] |
-| 4 | Sample JSON + `compare.py` (option 1 sys.path) + scripts volume | [ ] |
-| 5 | README Sesión 7 | [ ] |
-| 6 | STOP — student runs live ingest; agent guides only | [ ] |
-| 7 | STOP — student runs three pairs → `SANITY_CHECK.md` | [ ] |
+| 1 | `tiktoken>=0.7.0` + lock + image rebuild | [x] |
+| 2 | Copy `embedding_pipeline/` (minus SANITY_CHECK), import rewrite | [x] |
+| 3 | Wire `main.py` + `get_chunker` / `get_embedder` | [x] |
+| 4 | Sample JSON + `compare.py` (option 1 sys.path) + scripts volume | [x] |
+| 5 | README Sesión 7 | [x] |
+| 6 | STOP — student runs live ingest; agent guides only | [x] |
+| 7 | STOP — student runs three pairs → `SANITY_CHECK.md` | [x] |
 
 ## Locked (was open questions)
 

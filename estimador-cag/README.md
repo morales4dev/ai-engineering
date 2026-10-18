@@ -543,5 +543,7 @@ uv run python scripts/compare.py --text-a "..." --text-b "..."
 docker compose exec estimator python scripts/compare.py --text-a "..." --text-b "..."
 ```
 
+The three validation pairs from the exercise are in [`src/embedding_pipeline/SANITY_CHECK.md`](src/embedding_pipeline/SANITY_CHECK.md).
+
 
 
