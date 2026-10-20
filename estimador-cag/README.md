@@ -128,7 +128,7 @@ Streamlit is the HTTP client of the estimator API. It never talks to SQL, Redis,
 Needs the API running. Three tabs:
 
 - **New estimation** — one-shot. Submit sends `description` plus the three enums as JSON to `POST /api/v1/estimate` and paints `result` (summary, phases, totals, confidence). A 400 from input guardrails is shown as `reason` + `message`.
-- **Conversational** — brought forward so the session API can be used without Swagger. Entering the tab calls `POST /sessions` once and keeps `session_id` in `st.session_state`. The caption states the API default prompt is **v3**. The form has an optional audience-tier select (`auto` omits the field) and two submits: **Generate estimation** → `POST /sessions/{id}/estimate`, **Estimate with review** → `POST /sessions/{id}/estimate-acb`. If the body has `acb`, an expander **Review trail** shows iterations. **Inspect session** sits outside the form and `GET`s the session JSON into a **Session inspect** expander (spinner, not the flashy wait). Submit does not GET. 404 on estimate restarts the session and retries the POST; 404 on inspect starts a new session, keeps `conv_result` / `conv_inspect`, and does not retry the GET. The API extracts attachment text locally (pypdf / python-docx). Caches stay off and nothing is written to Postgres. Each turn sends a rebuilt system prompt (current `project_metadata`) plus a sliding window of prior user/assistant pairs (max 6). `project_metadata` is extracted after the estimate and returned in the response. Leaving the tab does not drop the session. **New conversation** confirms and creates another `session_id` (also clears inspect).
+- **Conversational** — brought forward so the session API can be used without Swagger. Entering the tab calls `POST /sessions` once and keeps `session_id` in `st.session_state`. The caption states the API default prompt is **v3**. The form has an optional audience-tier select (`auto` omits the field) and two submits: **Generate estimation** → `POST /sessions/{id}/estimate`, **Estimate with review** → `POST /sessions/{id}/estimate-acb`. If the body has `acb`, an expander **Review trail** shows iterations. **Inspect session** sits outside the form and `GET`s the session JSON into a **Session inspect** expander (spinner, not the flashy wait). Submit does not GET. 404 on estimate restarts the session and retries the POST; 404 on inspect starts a new session, keeps `conv_result` / `conv_inspect`, and does not retry the GET. The API extracts attachment text locally (pypdf / python-docx). Caches stay off and nothing is written to Postgres. Each turn sends a rebuilt system prompt (current `project_metadata`) plus a sliding window of prior user/assistant pairs (max 6). On an empty session the extractor primes facts before the estimate; after every successful estimate it runs again. The response carries `project_metadata`. Leaving the tab does not drop the session. **New conversation** confirms and creates another `session_id` (also clears inspect).
 - **Recent** — last 20 rows via `GET /api/v1/estimations`; reopen via `GET /api/v1/estimations/{id}` (one-shot history only).
 
 While a POST is in flight the UI rotates phase labels (Discovery, Design, Implementation, QA, Launch) — wait UX, not SSE.
@@ -197,6 +197,10 @@ sequenceDiagram
                 In-->>API: reason, message
                 API-->>UI: 400
             else ok
+                opt metadata empty
+                    API->>Ext: prime from transcript, no result
+                    Ext-->>API: seeded or previous if fail-open
+                end
                 API->>Tier: transcript, metadata, override
                 Tier-->>API: tier, rule
                 alt /estimate
@@ -257,11 +261,11 @@ Path A (provider Files API) is out of scope. Local extract keeps the same text p
 
 ### Metadata extractor
 
-After a successful estimate, a second Instructor call (`METADATA_EXTRACTOR_MODEL`, default `gpt-4o-mini`) reads the enriched transcript + `EstimationResult` + previous metadata and returns a partial `ProjectMetadata`. Scalars: non-null wins. Technologies: case-insensitive union.
+Same Instructor call (`METADATA_EXTRACTOR_MODEL`, default `gpt-4o-mini`), two moments. If metadata is still empty, `prime_metadata_if_empty` runs **before** the estimate (transcript only, no `EstimationResult`) so turn 1 already has facts in `<project_metadata>`. After a successful estimate it runs again with the enriched transcript + `EstimationResult` + previous metadata and returns a partial `ProjectMetadata`. Scalars: non-null wins. Technologies: case-insensitive union.
 
-Fail-open: if that call fails, it is logged and the previous metadata is kept. The estimate already succeeded; a facts refresh must not 502 the user.
+Fail-open on either call: logged, previous metadata kept. A facts refresh must not 502 the user.
 
-Why a second call instead of asking the estimator to also maintain the object: the window will forget turn 1. Facts have to live in a slot that is re-injected every turn, not only in the dropped messages.
+Why a slot instead of asking the estimator to also maintain the object: the window will forget turn 1. Facts have to live outside the message array and be re-injected every turn.
 
 ## Project layout
 
@@ -383,6 +387,7 @@ curl -sS http://localhost:8000/api/v1/ingestion/jobs/<job_id>
 ```
 
 ```bash
+# 400 — in the catalog as review / exclude, so no job is created
 curl -sS -X POST http://localhost:8000/api/v1/ingestion/runs \
   -H 'Content-Type: application/json' \
   -d '{"source_name":"transcripciones_txt"}'
@@ -391,6 +396,7 @@ curl -sS -X POST http://localhost:8000/api/v1/ingestion/runs \
   -H 'Content-Type: application/json' \
   -d '{"source_name":"rate_card_xlsx"}'
 
+# 404 — not in the catalog
 curl -sS -X POST http://localhost:8000/api/v1/ingestion/runs \
   -H 'Content-Type: application/json' \
   -d '{"source_name":"no_existe"}'
@@ -431,7 +437,6 @@ PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
           ALEMBIC["Alembic tables:\ningestion_jobs\npseudonym_mappings"]
       end
       YAML --> LOADCAT --> LOG
-      YAML --> ALEMBIC
       subgraph HTTP["POST /api/v1/ingestion/runs  —  wired"]
           REQ["JSON {source_name}"]
           GATE{"exists?\ndecision=include?\nDATABASE_URL?"}

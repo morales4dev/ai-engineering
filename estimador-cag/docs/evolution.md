@@ -1,6 +1,6 @@
 # Evolución del estimador-cag
 
-Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas auxiliares que acabaron mergeadas ahí. HEAD de referencia: `69860cb` (2026-10-10, `session_05_forense` tratado como mergeado).
+Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas auxiliares que acabaron mergeadas ahí. HEAD de referencia: `2bf8454` (2026-10-19, `session-07/pre-exercise` mergeado).
 
 | Columna | Significado |
 |---|---|
@@ -19,7 +19,10 @@ Nombres de evento (como en las ramas, salvo `v2` y `sesion-02`, que no fueron ra
 - `pre_sesion_04` — templates Jinja, contrato tipado, Streamlit HTTP, limpieza SSE
 - `session_04_forense` — port live de la sesión 4 (Instructor, guardrails, caches, historial)
 - `pre_sesion_05` — path conversational (sesiones in-memory, Camino B, window, metadata)
-- `session_05_forense` — port live de la sesión 5 (inspect, compression, tier/v3, ACB)
+- `session_05_forense` — port live de la sesión 5 (inspect, compression, tier/v3, ACB; luego mejoras de totales / rates / prime)
+- `pre_sesion_06` — golden evals + `TurnObservation` + stress (rama `pre-session-06`)
+- `session_06_forense` — port live de la sesión 6 (catálogo, ingesta HTTP, cleaning/PII off-path)
+- `pre_sesion_07` — pipeline de embeddings in-memory (rama `session-07/pre-exercise`)
 
 No entra `session1/` (ejercicios sueltos, no son el estimador).
 
@@ -85,3 +88,22 @@ No entra `session1/` (ejercicios sueltos, no son el estimador).
 | session_05_forense         | [x]     | `POST /sessions/{id}/estimate-acb` (Actor-Critic-Boss) |                    |
 | session_05_forense         | [x]     | UI Conversational: inspect, tier override, Review trail |                    |
 | session_05_forense         | [x]     | One-shot sequence a `docs/oneshot-sequence.mmd`+`.svg`; conversational queda inline |                    |
+| session_05_forense         | [x]     | `EstimationResult`: `total_cost_eur` y `total_duration_weeks` se sobrescriben con la suma de fases (secuencial, clamp 104) |                    |
+| session_05_forense         | [x]     | Tarjeta única `rates.py` (`T × W × DEV_WEEK_EUR`) inyectada en los prompts |                    |
+| session_05_forense         | [x]     | Critic: fuera `math_error`; ya no audita aritmética |                    |
+| session_05_forense         | [x]     | `prime_metadata_if_empty` antes del primer estimate (fail-open). El extractor de después se conserva |                    |
+| pre_sesion_06              | [x]     | Golden evals CLI (`evals.run`, 16 casos, `--mode actor\|acb`). TestClient o `--http`. Pega a `/sessions`, no al one-shot |                    |
+| pre_sesion_06              | [x]     | Wrapper: `tokens_in` / `tokens_out` / `cost_usd` desde usage real (`create_with_completion`) |                    |
+| pre_sesion_06              | [x]     | `TurnObservation` en `POST /sessions/{id}/estimate` (`response.observation`). ACB lo deja `None` |                    |
+| pre_sesion_06              | [x]     | Stress CAG: `evals.stress` (3 escenarios × tamaños de adjunto × repeats → CSV). No pytest |                    |
+| session_06_forense         | [x]     | Esquema via Alembic (no `create_all`). Compose: `alembic upgrade head` al arrancar |                    |
+| session_06_forense         | [x]     | Tablas `ingestion_jobs` + `pseudonym_mappings`. `estimations` pasa al mismo `Base` |                    |
+| session_06_forense         | [x]     | Compose: Postgres `postgres:16-alpine` → `pgvector/pgvector:pg16`. Monta `alembic/` + `data/` |                    |
+| session_06_forense         | [x]     | Catálogo YAML al boot (fail-open: `catalog_load_failed`, no tumba la API) |                    |
+| session_06_forense         | [x]     | `POST /api/v1/ingestion/runs` + `GET /api/v1/ingestion/jobs/{id}`: 202 + job; BackgroundTask; documentos solo en memoria. 404 unknown / 400 not-include / 503 no DB. El POST no limpia ni seudonimiza |                    |
+| session_06_forense         | [x]     | Parsers registrados: json + txt. No hay parser xlsx |                    |
+| session_06_forense         | [x]     | Cleaning + Pandera (`valid` / `quarantined` / `discarded`): librería + demo host, no va en el POST |                    |
+| session_06_forense         | [x]     | PII Presidio + HMAC/Faker (`pseudonym_mappings`): librería + demo host, no va en el POST |                    |
+| session_06_forense         | [x]     | CLI `ingestion.architecture`: CAG viable = AND de 4 constraints → `CAG` / `Hybrid` / `RAG`. No está en el POST |                    |
+| pre_sesion_07              | [x]     | `POST /embeddings/ingest`: body `{budgets}` → chunk estructural + embed OpenAI → `chunks` + `stats`. Nada se persiste. No lee `data/seed/` ni llama a ingesta |                    |
+| pre_sesion_07              | [x]     | `compare.py`: cosine a mano entre dos textos (reusa `OpenAIEmbedder`). Compose monta `scripts/` |                    |
