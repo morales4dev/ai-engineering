@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from typing import Any, TypeVar
 
@@ -21,9 +22,21 @@ T = TypeVar("T", bound=BaseModel)
 log = structlog.get_logger()
 
 
+_DATED_SUFFIX = re.compile(r"-\d{8}$")
+
+
 def _normalise_model_name(model: str) -> str:
     """Strip provider prefixes like ``anthropic/`` that LiteLLM may emit."""
     return model.split("/", 1)[1] if "/" in model else model
+
+
+def _catalog_model_name(model: str) -> str:
+    """Price-table key: prefix off, then a trailing ``-YYYYMMDD`` snapshot if present.
+
+    ``claude-haiku-4-5-20251001`` and a future ``-20260301`` share one row.
+    ``claude-sonnet-4-5`` is untouched (``4-5`` is the version, not a date).
+    """
+    return _DATED_SUFFIX.sub("", _normalise_model_name(model))
 
 
 def _provider_from_model(model: str) -> str:
@@ -40,14 +53,12 @@ MODEL_COSTS: dict[str, dict[str, float]] = {
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4o": {"input": 2.50, "output": 10.00},
     "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
-    "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
     "claude-sonnet-4-5": {"input": 3.00, "output": 15.00},
 }
 
 
 def _estimate_cost(model: str, tokens_in: int, tokens_out: int) -> float:
-    base = _normalise_model_name(model)
-    costs = MODEL_COSTS.get(base) or MODEL_COSTS.get(model) or {"input": 0.0, "output": 0.0}
+    costs = MODEL_COSTS.get(_catalog_model_name(model)) or {"input": 0.0, "output": 0.0}
     return round((tokens_in * costs["input"] + tokens_out * costs["output"]) / 1_000_000, 6)
 
 

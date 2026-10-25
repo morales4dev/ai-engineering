@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from config import Settings, get_settings
 from dependencies import get_runtime_config
-from services.llm_wrapper import MODEL_COSTS, _provider_from_model
+from services.llm_wrapper import MODEL_COSTS, _catalog_model_name, _provider_from_model
 from services.runtime_config import (
     MODEL_KEYS,
     RuntimeConfigUnavailable,
@@ -83,7 +83,7 @@ def update_models(
             raise HTTPException(status_code=422, detail=f"Unknown model key: {key}")
         if value is None:
             continue  # reset is always valid
-        if value not in MODEL_COSTS:
+        if _catalog_model_name(value) not in MODEL_COSTS:
             raise HTTPException(status_code=422, detail=f"Model '{value}' is not in the catalog")
         if value not in available:
             key_field = PROVIDER_KEY_FIELDS.get(_provider_from_model(value), "API key")

@@ -509,6 +509,15 @@ def _render_result(body: dict) -> None:
         ]
     )
 
+    observation = body.get("observation")
+    if isinstance(observation, dict) and observation:
+        with st.expander("Turn observation"):
+            st.caption(
+                "API call telemetry for this turn — not the project Cost € above. "
+                "ACB and one-shot do not send this object."
+            )
+            st.json(observation)
+
 
 def _render_review_trail(acb: dict) -> None:
     with st.expander("Review trail"):
