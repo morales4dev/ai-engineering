@@ -9,8 +9,8 @@ When useful: PYTHONPATH=src:. uv run python scripts/demo_cleaning_s06.py
 Teaching script, not an endpoint and not a test. Reads the 6 JSON files under
 data/seed/budgets, runs cleaning then Pandera policy, prints the partition
 report. Does not call FastAPI, does not write Postgres, does not enter
-ingest_source. Lidr used this so the live session did not have to type the
-same calls in a REPL (the interactive ``python`` prompt).
+ingest_source. Same calls you would type in an interactive ``python`` prompt,
+already sequenced so you can re-run the demo without retyping them.
 
 Expected story:
 

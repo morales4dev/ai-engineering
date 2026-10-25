@@ -2,7 +2,7 @@
 
 AI-powered software project estimation service using a **Cache Augmented Generation (CAG)** architecture.
 
-The design and reference implementation this project follows come from the LiDR / Master **estimator** service (`ai-engineering-lidr/estimator`). This repo is a parallel student implementation with the same CAG approach.
+The design and reference implementation this project follows come from the Master **estimator** service (`ai-engineering-lidr/estimator`). This repo is a parallel student implementation with the same CAG approach.
 
 ## What is CAG and why use it
 
@@ -61,7 +61,7 @@ Compose sets `REDIS_URL=redis://redis:6379` for the API container. When you run 
 Streamlit still runs on the host (not inside Compose):
 
 ```bash
-uv run streamlit run streamlit_app.py          # New / Conversational / Recent — API must be up
+uv run streamlit run streamlit_app.py          # New / Conversational / Recent / Chunking Lab — API must be up
 ```
 
 ## Logs
@@ -278,23 +278,23 @@ estimador-cag/
 │   ├── rates.py                # rate card + weekly bands
 │   ├── utils.py                # package root path
 │   ├── sessions/               # in-process Session + history + store + compression
-│   ├── routers/                # /estimate, /sessions, /ingestion
+│   ├── routers/                # /estimate, /sessions, /ingestion, /embeddings, /config
 │   ├── prompts/                # estimation/v1|v2|v3 + metadata + conversation_summary + critic
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
 │   ├── services/               # oneshot, conversational, ACB, attachments, history, prompt_boundary
 │   ├── schemas/                # estimation + acb + critic + ingestion
 │   ├── ingestion/              # catalog, loaders, parsers, cleaning, pii, orchestrator
-│   ├── embedding_pipeline/     # chunker + embedder + POST /embeddings/ingest
+│   ├── generation/rag/         # chunking + embed + compare lab
 │   └── persistence/            # jobs + mappings repos
-├── data/                       # catalog.yaml + seed + budgets_sample.json
+├── data/                       # catalog.yaml + seed + budgets_sample.json + test_queries.json
 ├── alembic/                    # estimations + session6 tables
 ├── alembic.ini
 ├── evals/                      # golden dataset, metrics, CLI runner + stress/
 ├── tests/
-├── scripts/                    # preflight_s06, demo_cleaning, demo_pii, compare.py
+├── scripts/                    # preflight_s06, demo_cleaning, demo_pii, compare.py, compare_chunkers.py
 ├── docs/                       # oneshot sequence + session notes
-├── streamlit_app.py            # New + Conversational + Recent
+├── streamlit_app.py            # New + Conversational + Recent + Chunking Lab + Ajustes
 ├── Dockerfile
 ├── docker-compose.yml
 ├── pyproject.toml
@@ -361,7 +361,7 @@ PYTHONPATH=src:. uv run python -m evals.run --mode actor --http http://localhost
 ```
 
 ### Form HTTP client (API must already be running)
-uv run streamlit run streamlit_app.py          # New / Conversational / Recent
+uv run streamlit run streamlit_app.py          # New / Conversational / Recent / Chunking Lab
 
 ## Ingestion
 
@@ -482,23 +482,23 @@ PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
 
 ## Embeddings pipeline
 
-First step toward semantic search: turn historical budgets (JSON) into vectors. The new module lives in `src/embedding_pipeline/` and exposes a single endpoint. **Nothing is persisted yet** — vectors are generated in memory and returned over HTTP; persistence in pgvector comes in Session 08.
+First step toward semantic search: turn historical budgets (JSON) into vectors. The lab lives in `src/generation/rag/` and exposes `POST /embeddings/ingest` and `POST /embeddings/compare` via `src/routers/embeddings.py`. **Ingest is still in-memory** — vectors are generated and returned over HTTP. Compare history is a separate table (`chunking_comparisons`).
 
-`POST /embeddings/ingest` does not read `data/seed/`, does not call the ingestion pipeline, and does not write Postgres, Redis, or files. The client sends `{"budgets": [...]}` in the body. The router chunks → OpenAI embeddings → returns `chunks` + `stats` in the HTTP response. Drop the JSON or kill the process and the vectors are gone. Same contract as `src/embedding_pipeline/__init__.py`.
+`POST /embeddings/ingest` does not read `data/seed/`, does not call the ingestion pipeline, and does not write Postgres, Redis, or files. The client sends `{"budgets": [...]}` in the body. The router chunks → OpenAI embeddings → returns `chunks` + `stats` in the HTTP response. Drop the JSON or kill the process and the vectors are gone. Same contract as `src/generation/rag/__init__.py`.
 
 Pieces:
 
-- `chunker.py` (`JSONStructuralChunker`) — **structural** chunking: one budget component = one chunk. Each chunk is prepended with a context header from the parent budget (project, sector, technology) so it does not lose track of whom it belongs to. Token counting with `tiktoken`.
-- `embedder.py` (`OpenAIEmbedder`) — calls `text-embedding-3-small` (1536 dims) in **batches** of 100, with exponential retry (1s/2s/4s) on `RateLimitError` and per-batch logging.
-- `router.py` — orchestrates `chunk → embed → stats`.
+- `generation/rag/chunking/structural.py` (`JSONStructuralChunker`) — **structural** chunking: one budget component = one chunk. Each chunk is prepended with a context header from the parent budget (project, sector, technology) so it does not lose track of whom it belongs to. Token counting with `tiktoken`.
+- `generation/rag/embedding/embedder.py` (`OpenAIEmbedder`) — calls `text-embedding-3-small` (1536 dims) in **batches** of 100, with exponential retry (1s/2s/4s) on `RateLimitError` and per-batch logging.
+- `routers/embeddings.py` — orchestrates `chunk → embed → stats` and `/compare`.
 
 How to debug (cwd `estimador-cag/`, `PYTHONPATH=src`):
 
 ```
   import json
   from pathlib import Path
-  from embedding_pipeline.schemas import Budget
-  from embedding_pipeline.chunker import JSONStructuralChunker
+  from generation.rag.schemas import Budget
+  from generation.rag.chunking.structural import JSONStructuralChunker
   raw = json.loads(Path('data/budgets_sample.json').read_text())
   budgets = [Budget.model_validate(b) for b in raw]
   chunks = JSONStructuralChunker().chunk(budgets)
@@ -519,7 +519,7 @@ POST /embeddings/ingest
 
 It shows up in Swagger (`http://localhost:8000/docs`) and can be invoked from there with the sample data.
 
-From the command line, feeding the 15 example budgets (`data/budgets_sample.json` is a **JSON array**; the endpoint expects `{"budgets": [...]}`):
+From the command line, feeding the 17 example budgets (`data/budgets_sample.json` is a **JSON array**; the endpoint expects `{"budgets": [...]}`):
 
 ```bash
 cd estimador-cag
@@ -535,6 +535,101 @@ curl -s -X POST http://localhost:8000/embeddings/ingest \
 
 Do not POST `data/seed/budgets/*.json` here — that schema (`client_name`, `phases[]`) is not `Budget` and will 422.
 
+### Chunking strategy comparison
+
+Eight chunking strategies behind one interface (`src/generation/rag/chunking/base.py::Chunker`): `structural`, `fixed_size`, `recursive`, `sentence_window`, `semantic`, `propositional`, `contextual_retrieval`, `hierarchical`. The seven extras live in `src/generation/rag/chunking/strategies/`; structural stays in `chunking/structural.py`.
+
+```
+POST /embeddings/compare
+  Input:  {"budgets": [...], "queries": [...], "strategies": [...], "top_k": 3}
+  Output: {"stats_per_strategy": {...}, "queries_per_strategy": {...}}
+```
+
+`budgets` come in the request (FastAPI never opens `data/budgets_sample.json`). Optional `queries`, `strategies`, `top_k` (1–10, default 3). Empty `strategies` = all eight. Empty `queries` = stats only, no playground.
+
+Output is stats + top-k cosine, judge by eye — not recall@k. 400 unknown strategy; 500 missing key / embedder down / compare error (generic client message, detail in logs).
+
+What each strategy spends when you send queries (playground):
+
+| Strategy | While chunking | Plus embeddings for top-k |
+|---|---|---|
+| `structural`, `fixed_size`, `recursive`, `sentence_window`, `hierarchical` | Python only (`sentence_window` uses NLTK) | yes |
+| `semantic` | embeddings (breakpoint pass) | yes |
+| `propositional` | OpenAI LLM | yes |
+| `contextual_retrieval` | Anthropic LLM | yes |
+
+Two curls. cwd `estimador-cag/`. Both use the 17-row sample and the six demo strings in `data/test_queries.json` (canned queries, not gold labels).
+
+**1 — embeddings only** (six strategies: the five Python chunkers + `semantic`). No LLM.
+
+```bash
+cd estimador-cag
+curl -s -X POST http://localhost:8000/embeddings/compare \
+  -H 'Content-Type: application/json' \
+  -d "{\"budgets\": $(cat data/budgets_sample.json), \"queries\": $(cat data/test_queries.json), \"strategies\": [\"structural\", \"fixed_size\", \"recursive\", \"sentence_window\", \"hierarchical\", \"semantic\"], \"top_k\": 3}"
+```
+
+**2 — all eight** (adds `propositional` + `contextual_retrieval`). Embeddings + LLM. Needs `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`.
+
+```bash
+cd estimador-cag
+curl -s -X POST http://localhost:8000/embeddings/compare \
+  -H 'Content-Type: application/json' \
+  -d "{\"budgets\": $(cat data/budgets_sample.json), \"queries\": $(cat data/test_queries.json), \"top_k\": 3}"
+```
+
+Omit `strategies` on purpose so the server uses `ALL_STRATEGIES`.
+
+A successful POST is persisted fail-open (table `chunking_comparisons`). The response body stays `CompareResponse` — no `id` in that JSON. Reopen is HTTP, not a second compare:
+
+```
+GET /embeddings/comparisons
+  last 20, newest first. Fields: id, created_at, strategies, queries, top_k,
+  corpus_label, corpus_count, duration_ms, cost_total_usd (derived; not a column).
+  No response_payload.
+
+GET /embeddings/comparisons/{id}
+  same list fields plus `response` (stored CompareResponse: stats + playground).
+  200 / 404 / 503
+```
+
+```bash
+# list (no playground payload)
+curl -s http://localhost:8000/embeddings/comparisons
+
+# reopen one row (stats + playground as stored)
+curl -s http://localhost:8000/embeddings/comparisons/1
+```
+
+`corpus_label` is optional on the POST. Omitted → stored as `budgets_sample`.
+
+### CLI script `compare_chunkers.py`
+
+Same `ChunkingComparator` as the POST, in-process (no HTTP). **This CLI does read** `data/budgets_sample.json` and, with `--queries all`, `data/test_queries.json`. Full flags in the script docstring.
+
+```bash
+# host
+cd estimador-cag
+uv run python scripts/compare_chunkers.py --strategies structural,recursive --show-stats --show-cost
+uv run python scripts/compare_chunkers.py --strategies structural \
+  --queries "OAuth authentication for fintech mobile app" --show-top-k 3 --limit-budgets 1
+
+# all six canned queries (embeddings-only strategies)
+uv run python scripts/compare_chunkers.py \
+  --strategies structural,fixed_size,recursive,sentence_window,hierarchical,semantic \
+  --queries all --show-stats --show-top-k 3
+
+# container (service name: estimator)
+docker compose exec estimator python scripts/compare_chunkers.py --strategies structural --show-stats
+
+# Matryoshka: native 1536 vs truncated 768
+uv run python scripts/compare_chunkers.py --models small-1536,small-768
+```
+
+`--strategies all` includes the two LLM chunkers (costs API). `--output …` can write a Markdown report; we do not keep a committed `COMPARISON_REPORT.md`.
+
+`semantic`, `propositional` and `contextual_retrieval` call external APIs while chunking (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`) and report that cost on `chunking_done`. `sentence_window` uses NLTK (`punkt` / `punkt_tab`, lazy download). The CLI does not persist; only `POST /embeddings/compare` writes history.
+
 ### CLI script `compare.py`
 
 Embeddings sanity check: embeds two texts and returns their cosine similarity (computed by hand, no numpy). Reuses `OpenAIEmbedder`.
@@ -548,7 +643,7 @@ uv run python scripts/compare.py --text-a "..." --text-b "..."
 docker compose exec estimator python scripts/compare.py --text-a "..." --text-b "..."
 ```
 
-The three validation pairs from the exercise are in [`src/embedding_pipeline/SANITY_CHECK.md`](src/embedding_pipeline/SANITY_CHECK.md).
+The three validation pairs from the exercise are in [`src/generation/rag/SANITY_CHECK.md`](src/generation/rag/SANITY_CHECK.md).
 
 
 

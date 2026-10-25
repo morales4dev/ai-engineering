@@ -22,7 +22,6 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str | None = None
     LLM_TIMEOUT: int = 30
     PRIMARY_MODEL: str = "gpt-4o-mini"
-    FALLBACK_MODEL: str = "claude-haiku-4-5-20251001"
     REDIS_URL: str = "redis://localhost:6379"
     CACHE_TTL: int = 86400
     EMBEDDING_MODEL: str = "text-embedding-3-small"
@@ -44,6 +43,14 @@ class Settings(BaseSettings):
     CONVERSATIONAL_PROMPT_VERSION: str = "v3"
     CRITIC_MODEL: str = "gpt-4o-mini"
     BOSS_MAX_ITERATIONS: int = 3
+    # --- Session 7 live fields (chunking strategies that call external APIs) ---
+    # LLM that decomposes a component into atomic propositions (one call per
+    # component). A small/cheap model is enough.
+    PROPOSITIONAL_CHUNKER_MODEL: str = "gpt-4o-mini"
+    # Claude model used by Contextual Retrieval to situate each chunk inside its
+    # parent budget. Prompt caching makes the (large) parent document cheap to
+    # reuse across the chunks of the same budget.
+    CONTEXTUAL_CHUNKER_MODEL: str = "claude-sonnet-4-5"
     APP_ENV: Literal["development", "staging", "production"] = "development"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"
 

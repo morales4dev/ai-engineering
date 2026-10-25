@@ -3,7 +3,7 @@
 Two requests share an entry only when:
 
 1. Their **bucket** matches
-   (``prompt_version:project_type:detail_level:output_format``).
+   (``prompt_version:project_type:detail_level:output_format:model``).
 2. Cosine similarity of the description embeddings is ≥ ``threshold``.
 
 ``log_only=True`` still looks up and logs the score, but never serves a hit.
@@ -83,21 +83,25 @@ class EstimationSemanticCache:
             log.debug("semantic_index_create_skipped", error=str(exc)[:120])
 
     @staticmethod
-    def bucket_for(request: EstimationRequest, prompt_version: str) -> str:
+    def bucket_for(request: EstimationRequest, prompt_version: str, model: str) -> str:
+        # The model is part of the bucket (like the exact cache key): a hit
+        # produced by one model must never be served while another is active —
+        # critical now that the primary model can change at runtime.
         return (
             f"{prompt_version}"
             f":{request.project_type.value}"
             f":{request.detail_level.value}"
             f":{request.output_format.value}"
+            f":{model}"
         )
 
     def lookup(
-        self, request: EstimationRequest, prompt_version: str
+        self, request: EstimationRequest, prompt_version: str, model: str
     ) -> EstimationResult | None:
         from redisvl.query import VectorQuery
         from redisvl.query.filter import Tag
 
-        bucket = self.bucket_for(request, prompt_version)
+        bucket = self.bucket_for(request, prompt_version, model)
         embedding = self.vectorizer.embed(request.description)
 
         query = VectorQuery(
@@ -144,8 +148,9 @@ class EstimationSemanticCache:
         request: EstimationRequest,
         result: EstimationResult,
         prompt_version: str,
+        model: str,
     ) -> None:
-        bucket = self.bucket_for(request, prompt_version)
+        bucket = self.bucket_for(request, prompt_version, model)
         embedding = self.vectorizer.embed(request.description)
         payload = [
             {

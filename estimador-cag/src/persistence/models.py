@@ -1,11 +1,12 @@
 """SQLAlchemy ORM models.
 
-One ``DeclarativeBase`` for Alembic. Three tables:
+One ``DeclarativeBase`` for Alembic. Four tables:
 
 * ``estimations`` — successful one-shot ``/estimate`` rows (was ``create_all``).
 * ``pseudonym_mappings`` — reversible PII mapping keyed by
   ``(entity_type, original_hash)``.
 * ``ingestion_jobs`` — book-keeping for ``POST /ingestion/runs``.
+* ``chunking_comparisons`` — successful ``POST /embeddings/compare`` rows.
 """
 from __future__ import annotations
 
@@ -86,4 +87,29 @@ class IngestionJobRow(Base):
     )
     finished_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+
+class ChunkingComparisonRow(Base):
+    __tablename__ = "chunking_comparisons"
+    __table_args__ = (Index("idx_chunking_comparisons_created_at", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    strategies: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    queries: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    top_k: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    corpus_label: Mapped[str] = mapped_column(
+        String, nullable=False, default="budgets_sample"
+    )
+    corpus_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    response_payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )

@@ -31,7 +31,7 @@ for candidate in (ROOT / "src", ROOT):
 from openai import OpenAI  # noqa: E402
 
 from config import get_settings  # noqa: E402
-from embedding_pipeline.embedder import OpenAIEmbedder  # noqa: E402
+from generation.rag.embedding.embedder import OpenAIEmbedder  # noqa: E402
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import threading
 import time
@@ -38,12 +39,219 @@ API_BASE_URL = settings.ESTIMATOR_API_BASE_URL.rstrip("/")
 ESTIMATE_ENDPOINT = f"{API_BASE_URL}/api/v1/estimate"
 HISTORY_ENDPOINT = f"{API_BASE_URL}/api/v1/estimations"
 SESSIONS_ENDPOINT = f"{API_BASE_URL}/sessions"
+COMPARE_ENDPOINT = f"{API_BASE_URL}/embeddings/compare"
+COMPARISONS_ENDPOINT = f"{API_BASE_URL}/embeddings/comparisons"
+CONFIG_ENDPOINT = f"{API_BASE_URL}/api/v1/config/models"
+COMPARE_TIMEOUT_SECONDS = 600
+
+# Same six canned strings as data/test_queries.json. Hardcoded: they are demo
+# questions, not the corpus. Judge by eye — no gold labels.
+_DEMO_QUERIES = [
+    "OAuth authentication for fintech mobile app",
+    "real-time inventory synchronization",
+    "GDPR compliance and audit logging",
+    "database performance optimization",
+    "frontend dashboard with charts",
+    "payment gateway integration",
+]
+
+# Mirrors Lidr Rag::Strategy catalog (names + defaults + cost badges).
+_STRATEGY_CATALOG = (
+    {
+        "name": "structural",
+        "label": "Structural",
+        "description": "One budget component = one chunk, with a context header.",
+        "cost_tier": "free",
+        "needs_key": None,
+        "default": True,
+    },
+    {
+        "name": "fixed_size",
+        "label": "Fixed size",
+        "description": "Fixed 512-token windows with overlap — the degenerate baseline.",
+        "cost_tier": "free",
+        "needs_key": None,
+        "default": True,
+    },
+    {
+        "name": "recursive",
+        "label": "Recursive",
+        "description": "Hierarchical separators (paragraph → line → sentence).",
+        "cost_tier": "free",
+        "needs_key": None,
+        "default": True,
+    },
+    {
+        "name": "sentence_window",
+        "label": "Sentence window",
+        "description": "One sentence per chunk, ±2-sentence window in metadata.",
+        "cost_tier": "free",
+        "needs_key": None,
+        "default": False,
+    },
+    {
+        "name": "hierarchical",
+        "label": "Hierarchical",
+        "description": "Two indexed levels: parent (budget) and children (components).",
+        "cost_tier": "free",
+        "needs_key": None,
+        "default": False,
+    },
+    {
+        "name": "semantic",
+        "label": "Semantic",
+        "description": "Cuts where inter-sentence embedding similarity drops.",
+        "cost_tier": "cheap",
+        "needs_key": "openai",
+        "default": False,
+    },
+    {
+        "name": "propositional",
+        "label": "Propositional",
+        "description": "An LLM splits each component into atomic propositions.",
+        "cost_tier": "expensive",
+        "needs_key": "openai",
+        "default": False,
+    },
+    {
+        "name": "contextual_retrieval",
+        "label": "Contextual retrieval",
+        "description": "Claude situates each chunk inside the parent budget.",
+        "cost_tier": "expensive",
+        "needs_key": "anthropic",
+        "default": False,
+    },
+)
+
+# Runtime-configurable knobs (no FALLBACK_MODEL: this wrapper does not retry).
+_MODEL_KNOB_CATALOG = (
+    {
+        "key": "PRIMARY_MODEL",
+        "label": "Primary model",
+        "description": "Every estimation call (one-shot, conversation, ACB actor).",
+    },
+    {
+        "key": "CRITIC_MODEL",
+        "label": "Critic (ACB)",
+        "description": "Read-only auditor in the Actor-Critic-Boss loop.",
+    },
+    {
+        "key": "METADATA_EXTRACTOR_MODEL",
+        "label": "Metadata extractor",
+        "description": "Extracts project_name / tech / scope once per conversational turn.",
+    },
+    {
+        "key": "COMPRESSION_MODEL",
+        "label": "History compression",
+        "description": "Cumulative summarizer for conversational memory.",
+    },
+    {
+        "key": "PROPOSITIONAL_CHUNKER_MODEL",
+        "label": "Propositional chunker",
+        "description": "Splits components into atomic propositions (Chunking Lab).",
+    },
+    {
+        "key": "CONTEXTUAL_CHUNKER_MODEL",
+        "label": "Contextual chunker",
+        "description": "Claude situates each chunk inside the parent budget (Chunking Lab).",
+    },
+)
 
 WAIT_PHASES = ("Discovery", "Design", "Implementation", "QA", "Launch")
 WAIT_PHASE_SECONDS = 2
 
 
 _TIER_OPTIONS = ("auto", "executive", "pm", "developer", "default")
+
+
+def _init_lab_state() -> None:
+    st.session_state.setdefault("lab_budgets", None)
+    st.session_state.setdefault("lab_corpus_label", None)
+    st.session_state.setdefault("lab_result", None)
+
+
+def _parse_budget_array(raw_text: str) -> list[dict]:
+    from generation.rag.schemas import Budget
+
+    data = json.loads(raw_text)
+    if not isinstance(data, list):
+        raise ValueError("JSON must be an array of Budget objects.")
+    return [Budget.model_validate(item).model_dump(mode="json") for item in data]
+
+
+def _strategy_badge(entry: dict) -> str:
+    bits = [entry["label"]]
+    if entry["cost_tier"] == "expensive":
+        bits.append("$ · lento")
+    elif entry["cost_tier"] == "cheap":
+        bits.append("$")
+    if entry["needs_key"]:
+        bits.append(f"{entry['needs_key']}_key")
+    return " · ".join(bits)
+
+
+def _render_compare_result(payload: dict) -> None:
+    """Paint stats, cost bars and playground from a CompareResponse dict."""
+    stats = payload.get("stats_per_strategy") or {}
+    playground = payload.get("queries_per_strategy") or {}
+
+    if stats:
+        st.subheader("Stats per strategy")
+        rows = []
+        for name, item in stats.items():
+            td = item.get("token_distribution") or {}
+            rows.append(
+                {
+                    "Strategy": name,
+                    "n": item.get("n_chunks"),
+                    "min": td.get("min"),
+                    "p50": td.get("p50"),
+                    "p95": td.get("p95"),
+                    "max": td.get("max"),
+                    "orphans": item.get("n_orphan_chunks"),
+                    "obese": item.get("n_obese_chunks"),
+                    "cost $": item.get("ingestion_cost_usd"),
+                    "seconds": item.get("ingestion_seconds"),
+                }
+            )
+        st.dataframe(rows, hide_index=True, use_container_width=True)
+        st.caption("Orphans: chunks < 20 tokens. Obese: chunks > 800 tokens.")
+
+        costs = {name: float(item.get("ingestion_cost_usd") or 0.0) for name, item in stats.items()}
+        st.subheader("Ingestion cost")
+        if max(costs.values(), default=0.0) == 0.0:
+            st.caption("All selected strategies are free at chunk time (no extra LLM / embed pass).")
+        else:
+            st.bar_chart(costs)
+
+    if not playground:
+        st.caption("No playground — this run had no queries.")
+        return
+
+    st.subheader("Playground · top-k by query")
+    st.caption(
+        "Judge by eye. These phrases are canned demos (same as `data/test_queries.json`), "
+        "not gold labels. Example: “OAuth authentication…” often ranks "
+        "`BUD-2024-001::AUTH-001` first on structural — AUTH-001 is a real component_id "
+        "in the sample, not a made-up id."
+    )
+    by_query: dict[str, dict[str, list]] = {}
+    for strategy, results in playground.items():
+        for qr in results:
+            by_query.setdefault(qr.get("query", ""), {})[strategy] = qr.get("top_k") or []
+
+    for query, per_strategy in by_query.items():
+        with st.expander(query, expanded=True):
+            cols = st.columns(min(2, max(1, len(per_strategy))))
+            for index, (strategy, tops) in enumerate(per_strategy.items()):
+                with cols[index % len(cols)]:
+                    st.markdown(f"**{strategy}**")
+                    for rank, top in enumerate(tops, 1):
+                        chunk_id = top.get("chunk_id", "")
+                        cosine = top.get("cosine", 0.0)
+                        badge = " · parent" if chunk_id.endswith("::parent") else ""
+                        st.markdown(f"{rank}. `{chunk_id}`{badge} · **{cosine:.4f}**")
+                        st.caption(top.get("text_preview") or "")
 
 
 def _init_conversational_state() -> None:
@@ -301,6 +509,15 @@ def _render_result(body: dict) -> None:
         ]
     )
 
+    observation = body.get("observation")
+    if isinstance(observation, dict) and observation:
+        with st.expander("Turn observation"):
+            st.caption(
+                "API call telemetry for this turn — not the project Cost € above. "
+                "ACB and one-shot do not send this object."
+            )
+            st.json(observation)
+
 
 def _render_review_trail(acb: dict) -> None:
     with st.expander("Review trail"):
@@ -321,12 +538,15 @@ def _render_review_trail(acb: dict) -> None:
 
 
 _init_conversational_state()
+_init_lab_state()
 
 st.title("Software estimation")
-st.caption("One-shot form, a conversational session, or a saved estimation from the API history.")
+st.caption(
+    "One-shot form, a conversational session, a saved estimation, the chunking lab, or Ajustes."
+)
 
-new_tab, conv_tab, history_tab = st.tabs(
-    ["New estimation", "Conversational", "Recent"],
+new_tab, conv_tab, history_tab, lab_tab, ajustes_tab = st.tabs(
+    ["New estimation", "Conversational", "Recent", "Chunking Lab", "Ajustes"],
     on_change="rerun",
 )
 
@@ -551,11 +771,255 @@ with history_tab:
                     st.markdown(f"**Description:** {body['description']}")
                 _render_result(body)
 
+with lab_tab:
+    st.subheader("Chunking Lab")
+    st.caption(
+        "POST /embeddings/compare · GET /embeddings/comparisons. HTTP only. "
+        "FastAPI never reads the sample file — you upload or load it here."
+    )
+
+    sample_path = Path.cwd() / "data" / "budgets_sample.json"
+    uploaded = st.file_uploader("Corpus (JSON array of Budget)", type=["json"])
+    if uploaded is not None:
+        try:
+            st.session_state.lab_budgets = _parse_budget_array(
+                uploaded.getvalue().decode("utf-8")
+            )
+            st.session_state.lab_corpus_label = uploaded.name
+        except Exception as exc:  # noqa: BLE001 — show parse errors in the tab
+            st.error(f"Could not parse upload: {exc}")
+    if sample_path.is_file():
+        if st.button("Use data/budgets_sample.json"):
+            try:
+                st.session_state.lab_budgets = _parse_budget_array(
+                    sample_path.read_text(encoding="utf-8")
+                )
+                st.session_state.lab_corpus_label = "budgets_sample.json"
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"Could not read sample: {exc}")
+    else:
+        st.caption("No `data/budgets_sample.json` in the Streamlit cwd.")
+
+    if st.session_state.lab_budgets:
+        st.caption(
+            f"Corpus ready: `{st.session_state.lab_corpus_label}` · "
+            f"{len(st.session_state.lab_budgets)} budgets"
+        )
+    else:
+        st.caption("No corpus loaded yet.")
+
+    selected: list[str] = []
+    for entry in _STRATEGY_CATALOG:
+        checked = st.checkbox(
+            _strategy_badge(entry),
+            value=entry["default"],
+            help=entry["description"],
+            key=f"lab_strat_{entry['name']}",
+        )
+        if checked:
+            selected.append(entry["name"])
+
+    chosen_queries = st.multiselect(
+        "Demo queries (chips from test_queries.json — not gold answers)",
+        options=_DEMO_QUERIES,
+        default=[],
+    )
+    top_k = st.slider("top_k", min_value=1, max_value=10, value=3)
+
+    if st.button("Compare strategies", type="primary"):
+        if not st.session_state.lab_budgets:
+            st.error("Load a corpus first (upload or sample shortcut).")
+        elif not selected:
+            st.error("Pick at least one strategy.")
+        else:
+            payload = {
+                "budgets": st.session_state.lab_budgets,
+                "queries": chosen_queries,
+                "strategies": selected,
+                "top_k": top_k,
+                "corpus_label": st.session_state.lab_corpus_label or "budgets_sample",
+            }
+            try:
+                with st.spinner(f"Comparing (timeout {COMPARE_TIMEOUT_SECONDS}s)…"):
+                    response = httpx.post(
+                        COMPARE_ENDPOINT,
+                        json=payload,
+                        timeout=httpx.Timeout(float(COMPARE_TIMEOUT_SECONDS), connect=10.0),
+                    )
+                    response.raise_for_status()
+                st.session_state.lab_result = response.json()
+            except httpx.HTTPStatusError as exc:
+                _show_http_error(exc)
+            except httpx.HTTPError as exc:
+                st.error(f"Could not reach `{COMPARE_ENDPOINT}`: {exc}")
+
+    if st.session_state.lab_result:
+        _render_compare_result(st.session_state.lab_result)
+
+    st.subheader("History")
+    st.caption("GET /embeddings/comparisons · reopen does not run compare again.")
+    try:
+        listing = httpx.get(
+            COMPARISONS_ENDPOINT, timeout=httpx.Timeout(15.0, connect=5.0)
+        )
+        listing.raise_for_status()
+        comparisons = listing.json().get("items") or []
+    except httpx.HTTPStatusError as exc:
+        _show_http_error(exc)
+        comparisons = []
+    except httpx.HTTPError as exc:
+        st.error(f"Could not reach history at `{COMPARISONS_ENDPOINT}`: {exc}")
+        comparisons = []
+
+    if not comparisons:
+        st.caption("No saved comparisons yet.")
+    else:
+        st.table(
+            [
+                {
+                    "Id": item.get("id"),
+                    "Created": item.get("created_at", ""),
+                    "Strategies": ", ".join(item.get("strategies") or []),
+                    "Queries": len(item.get("queries") or []),
+                    "top_k": item.get("top_k"),
+                    "Corpus": item.get("corpus_label", ""),
+                    "n": item.get("corpus_count"),
+                    "Cost $": item.get("cost_total_usd"),
+                    "ms": item.get("duration_ms"),
+                }
+                for item in comparisons
+            ]
+        )
+        labels = {
+            f"#{item['id']} · {item.get('corpus_label', '')} · "
+            f"{', '.join(item.get('strategies') or [])}": item["id"]
+            for item in comparisons
+        }
+        chosen = st.selectbox("Open a comparison", options=list(labels))
+        if st.button("Open comparison", type="primary"):
+            comparison_id = labels[chosen]
+            try:
+                detail = httpx.get(
+                    f"{COMPARISONS_ENDPOINT}/{comparison_id}",
+                    timeout=httpx.Timeout(15.0, connect=5.0),
+                )
+                detail.raise_for_status()
+                body = detail.json()
+            except httpx.HTTPStatusError as exc:
+                _show_http_error(exc)
+            except httpx.HTTPError as exc:
+                st.error(f"Could not load comparison {comparison_id}: {exc}")
+            else:
+                st.session_state.lab_result = body.get("response") or {}
+                st.rerun()
+
+with ajustes_tab:
+    st.subheader("Ajustes")
+    st.caption(
+        "GET/PUT /api/v1/config/models. Overrides live in Redis "
+        "(`estimator:runtime_config`) and apply on the next LLM call — "
+        "no .env edit, no container recreate. «Por defecto» restores the .env value."
+    )
+
+    try:
+        catalog_resp = httpx.get(
+            CONFIG_ENDPOINT, timeout=httpx.Timeout(15.0, connect=5.0)
+        )
+        catalog_resp.raise_for_status()
+        catalog = catalog_resp.json()
+    except httpx.HTTPStatusError as exc:
+        _show_http_error(exc)
+        catalog = None
+    except httpx.HTTPError as exc:
+        st.error(f"Could not reach `{CONFIG_ENDPOINT}`: {exc}")
+        catalog = None
+
+    if catalog is not None:
+        snapshot = catalog.get("models") or {}
+        available = list(catalog.get("available_models") or [])
+        primary = (snapshot.get("PRIMARY_MODEL") or {}).get("effective")
+        if primary:
+            st.caption(f"Effective primary: `{primary}`")
+
+        with st.form("ajustes_form"):
+            chosen: dict[str, str] = {}
+            rows = []
+            for entry in _MODEL_KNOB_CATALOG:
+                item = snapshot.get(entry["key"]) or {}
+                default = item.get("default") or ""
+                effective = item.get("effective") or default
+                overridden = bool(item.get("overridden"))
+                default_label = f"Por defecto ({default})"
+                options = [default_label]
+                for model in available:
+                    if model not in options:
+                        options.append(model)
+                if overridden and effective not in options:
+                    options.append(effective)
+                current = effective if overridden else default_label
+                chosen[entry["key"]] = st.selectbox(
+                    entry["label"],
+                    options=options,
+                    index=options.index(current) if current in options else 0,
+                    help=f"{entry['description']} · `{entry['key']}`",
+                    key=f"ajustes_{entry['key']}",
+                )
+                rows.append(
+                    {
+                        "Knob": entry["label"],
+                        "Key": entry["key"],
+                        "Effective": effective,
+                        "Default": default,
+                        "State": "override" if overridden else "default",
+                    }
+                )
+            st.dataframe(rows, hide_index=True, use_container_width=True)
+            st.markdown(f"**EMBEDDING_MODEL** (read-only): `{catalog.get('embedding_model')}`")
+            st.caption(catalog.get("embedding_model_note") or "")
+            saved = st.form_submit_button("Guardar", type="primary")
+
+        if saved:
+            payload: dict[str, str | None] = {}
+            for entry in _MODEL_KNOB_CATALOG:
+                selected = chosen[entry["key"]]
+                item = snapshot.get(entry["key"]) or {}
+                default = item.get("default") or ""
+                if selected == f"Por defecto ({default})":
+                    payload[entry["key"]] = None
+                else:
+                    payload[entry["key"]] = selected
+            try:
+                put = httpx.put(
+                    CONFIG_ENDPOINT,
+                    json={"models": payload},
+                    timeout=httpx.Timeout(15.0, connect=5.0),
+                )
+                put.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                _show_http_error(exc)
+            except httpx.HTTPError as exc:
+                st.error(f"Could not save at `{CONFIG_ENDPOINT}`: {exc}")
+            else:
+                st.success("Models updated. The change applies on the next call.")
+                st.rerun()
+
+    st.caption(
+        "No automatic provider fallback. The catalog only lists models whose "
+        "provider key is configured."
+    )
+
 with st.sidebar:
     st.header("Service")
+    st.caption("Estimate")
     st.code(ESTIMATE_ENDPOINT, language="text")
+    st.caption("Recent")
     st.code(HISTORY_ENDPOINT, language="text")
+    st.caption("Sessions")
     st.code(SESSIONS_ENDPOINT, language="text")
-    st.markdown(f"**Primary model:** `{settings.PRIMARY_MODEL}`")
-    st.markdown(f"**Fallback model:** `{settings.FALLBACK_MODEL}`")
+    st.caption("Compare")
+    st.code(COMPARE_ENDPOINT, language="text")
+    st.caption("Comparisons")
+    st.code(COMPARISONS_ENDPOINT, language="text")
+    st.caption("Settings")
+    st.code(CONFIG_ENDPOINT, language="text")
     st.markdown(f"**Cache TTL:** `{settings.CACHE_TTL}s`")

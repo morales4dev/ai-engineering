@@ -23,6 +23,7 @@ Nombres de evento (como en las ramas, salvo `v2` y `sesion-02`, que no fueron ra
 - `pre_sesion_06` — golden evals + `TurnObservation` + stress (rama `pre-session-06`)
 - `session_06_forense` — port live de la sesión 6 (catálogo, ingesta HTTP, cleaning/PII off-path)
 - `pre_sesion_07` — pipeline de embeddings in-memory (rama `session-07/pre-exercise`)
+- `session_07_forense` — port live de la sesión 7 (lab de chunking, historial de comparaciones, Ajustes)
 
 No entra `session1/` (ejercicios sueltos, no son el estimador).
 
@@ -107,3 +108,6 @@ No entra `session1/` (ejercicios sueltos, no son el estimador).
 | session_06_forense         | [x]     | CLI `ingestion.architecture`: CAG viable = AND de 4 constraints → `CAG` / `Hybrid` / `RAG`. No está en el POST |                    |
 | pre_sesion_07              | [x]     | `POST /embeddings/ingest`: body `{budgets}` → chunk estructural + embed OpenAI → `chunks` + `stats`. Nada se persiste. No lee `data/seed/` ni llama a ingesta |                    |
 | pre_sesion_07              | [x]     | `compare.py`: cosine a mano entre dos textos (reusa `OpenAIEmbedder`). Compose monta `scripts/` |                    |
+| session_07_forense         | [x]     | Lab de chunking: ocho estrategias sobre el mismo corpus (`POST /embeddings/compare` + pestaña Chunking Lab: stats y playground a ojo). El corpus lo manda el cliente. CLI `compare_chunkers.py` |                    |
+| session_07_forense         | [x]     | Historial de comparaciones: se guarda el run y se reabre sin volver a ejecutarlo |                    |
+| session_07_forense         | [x]     | Ajustes: cambiar los modelos LLM en caliente. Embeddings no se tocan. Cambiar el primary no recicla la caché semántica de otro modelo |                    |

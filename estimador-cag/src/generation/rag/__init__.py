@@ -1,0 +1,11 @@
+"""Session 7 — RAG lab (`generation.rag`).
+
+Turns historical budget JSON into embedding vectors: a structural chunker
+(one budget component = one chunk) plus an OpenAI embedder. Vectors are
+produced in memory and returned over HTTP; persistence to a vector DB is
+Session 8 territory.
+
+The package also holds the Session 7 live comparison lab: ``Chunker`` ABC,
+seven extra strategies, cosine/percentile helpers, and ``ChunkingComparator``.
+``POST /embeddings/ingest`` still uses the structural chunker only.
+"""
