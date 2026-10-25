@@ -482,7 +482,7 @@ PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
 
 ## Embeddings pipeline
 
-First step toward semantic search: turn historical budgets (JSON) into vectors. The new module lives in `src/embedding_pipeline/` and exposes a single endpoint. **Nothing is persisted yet** — vectors are generated in memory and returned over HTTP; persistence in pgvector comes in Session 08.
+First step toward semantic search: turn historical budgets (JSON) into vectors. The new module lives in `src/embedding_pipeline/` and exposes `POST /embeddings/ingest` and `POST /embeddings/compare`. **Nothing is persisted yet** — vectors are generated in memory and returned over HTTP; persistence in pgvector comes in Session 08.
 
 `POST /embeddings/ingest` does not read `data/seed/`, does not call the ingestion pipeline, and does not write Postgres, Redis, or files. The client sends `{"budgets": [...]}` in the body. The router chunks → OpenAI embeddings → returns `chunks` + `stats` in the HTTP response. Drop the JSON or kill the process and the vectors are gone. Same contract as `src/embedding_pipeline/__init__.py`.
 
@@ -534,6 +534,43 @@ curl -s -X POST http://localhost:8000/embeddings/ingest \
 ```
 
 Do not POST `data/seed/budgets/*.json` here — that schema (`client_name`, `phases[]`) is not `Budget` and will 422.
+
+### Compare chunkers — `POST /embeddings/compare`
+
+Same body contract as Lidr: `budgets` in the request (FastAPI never opens `data/budgets_sample.json`). Optional `queries`, `strategies`, `top_k` (1–10, default 3). Empty `strategies` = all eight. Empty `queries` = stats only, no playground.
+
+Output: `stats_per_strategy` + `queries_per_strategy` (top-k cosine, judge by eye — not recall@k). 400 unknown strategy; 500 missing key / embedder down / compare error (generic client message, detail in logs).
+
+What each strategy spends when you send queries (playground):
+
+| Strategy | While chunking | Plus embeddings for top-k |
+|---|---|---|
+| `structural`, `fixed_size`, `recursive`, `sentence_window`, `hierarchical` | Python only (`sentence_window` uses NLTK) | yes |
+| `semantic` | embeddings (breakpoint pass) | yes |
+| `propositional` | OpenAI LLM | yes |
+| `contextual_retrieval` | Anthropic LLM | yes |
+
+Two curls. cwd `estimador-cag/`. Both use the 17-row sample and the six demo strings in `data/test_queries.json` (canned queries, not gold labels).
+
+**1 — embeddings only** (six strategies: the five Python chunkers + `semantic`). No LLM.
+
+```bash
+cd estimador-cag
+curl -s -X POST http://localhost:8000/embeddings/compare \
+  -H 'Content-Type: application/json' \
+  -d "{\"budgets\": $(cat data/budgets_sample.json), \"queries\": $(cat data/test_queries.json), \"strategies\": [\"structural\", \"fixed_size\", \"recursive\", \"sentence_window\", \"hierarchical\", \"semantic\"], \"top_k\": 3}"
+```
+
+**2 — all eight** (adds `propositional` + `contextual_retrieval`). Embeddings + LLM. Needs `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`.
+
+```bash
+cd estimador-cag
+curl -s -X POST http://localhost:8000/embeddings/compare \
+  -H 'Content-Type: application/json' \
+  -d "{\"budgets\": $(cat data/budgets_sample.json), \"queries\": $(cat data/test_queries.json), \"top_k\": 3}"
+```
+
+Omit `strategies` on purpose so the server uses `ALL_STRATEGIES`.
 
 ### CLI script `compare.py`
 
