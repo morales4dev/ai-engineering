@@ -292,7 +292,7 @@ estimador-cag/
 ├── alembic.ini
 ├── evals/                      # golden dataset, metrics, CLI runner + stress/
 ├── tests/
-├── scripts/                    # preflight_s06, demo_cleaning, demo_pii, compare.py
+├── scripts/                    # preflight_s06, demo_cleaning, demo_pii, compare.py, compare_chunkers.py
 ├── docs/                       # oneshot sequence + session notes
 ├── streamlit_app.py            # New + Conversational + Recent
 ├── Dockerfile
@@ -571,6 +571,28 @@ curl -s -X POST http://localhost:8000/embeddings/compare \
 ```
 
 Omit `strategies` on purpose so the server uses `ALL_STRATEGIES`.
+
+### CLI script `compare_chunkers.py`
+
+Same `ChunkingComparator` as the POST, in-process (no HTTP). **This CLI does read** `data/budgets_sample.json` and, with `--queries all`, `data/test_queries.json`. Full flags in the script docstring.
+
+```bash
+# host
+cd estimador-cag
+uv run python scripts/compare_chunkers.py --strategies structural,recursive --show-stats --show-cost
+uv run python scripts/compare_chunkers.py --strategies structural \
+  --queries "OAuth authentication for fintech mobile app" --show-top-k 3 --limit-budgets 1
+
+# all six canned queries (embeddings-only strategies)
+uv run python scripts/compare_chunkers.py \
+  --strategies structural,fixed_size,recursive,sentence_window,hierarchical,semantic \
+  --queries all --show-stats --show-top-k 3
+
+# container
+docker compose exec estimator python scripts/compare_chunkers.py --strategies structural --show-stats
+```
+
+`--strategies all` includes the two LLM chunkers (costs API). `--output …` can write a Markdown report; we do not keep a committed `COMPARISON_REPORT.md`.
 
 ### CLI script `compare.py`
 

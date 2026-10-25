@@ -284,7 +284,7 @@ README paths in the Sesión 7 section.
 | 1 | Deps + two settings + sample 17 + `test_queries.json` | [x] |
 | 2 | Lab package in `embedding_pipeline/` (keep SANITY_CHECK) | [x] |
 | 3 | Wire `POST /embeddings/compare` | [x] |
-| 4 | `compare_chunkers.py` (sys.path trap) | [ ] |
+| 4 | `compare_chunkers.py` (sys.path trap) | [x] |
 | 5 | README live section | [ ] |
 | 6 | Alembic `0002` + persist/list/show comparisons | [ ] |
 | 7 | Streamlit Chunking Lab tab | [ ] |
