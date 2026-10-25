@@ -61,7 +61,7 @@ Compose sets `REDIS_URL=redis://redis:6379` for the API container. When you run 
 Streamlit still runs on the host (not inside Compose):
 
 ```bash
-uv run streamlit run streamlit_app.py          # New / Conversational / Recent — API must be up
+uv run streamlit run streamlit_app.py          # New / Conversational / Recent / Chunking Lab — API must be up
 ```
 
 ## Logs
@@ -294,7 +294,7 @@ estimador-cag/
 ├── tests/
 ├── scripts/                    # preflight_s06, demo_cleaning, demo_pii, compare.py, compare_chunkers.py
 ├── docs/                       # oneshot sequence + session notes
-├── streamlit_app.py            # New + Conversational + Recent
+├── streamlit_app.py            # New + Conversational + Recent + Chunking Lab
 ├── Dockerfile
 ├── docker-compose.yml
 ├── pyproject.toml
@@ -361,7 +361,7 @@ PYTHONPATH=src:. uv run python -m evals.run --mode actor --http http://localhost
 ```
 
 ### Form HTTP client (API must already be running)
-uv run streamlit run streamlit_app.py          # New / Conversational / Recent
+uv run streamlit run streamlit_app.py          # New / Conversational / Recent / Chunking Lab
 
 ## Ingestion
 
