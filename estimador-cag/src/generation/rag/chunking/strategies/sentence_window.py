@@ -13,9 +13,9 @@ import time
 
 import nltk
 
-from embedding_pipeline.base import Chunker, count_tokens, emit_chunking_done
-from embedding_pipeline.chunker import component_metadata
-from embedding_pipeline.schemas import Budget, Chunk
+from generation.rag.chunking.base import Chunker, count_tokens, emit_chunking_done
+from generation.rag.chunking.structural import component_metadata
+from generation.rag.schemas import Budget, Chunk
 
 # Sentences of context kept on each side of the indexed sentence.
 WINDOW_SIZE = 2

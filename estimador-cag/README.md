@@ -278,14 +278,14 @@ estimador-cag/
 │   ├── rates.py                # rate card + weekly bands
 │   ├── utils.py                # package root path
 │   ├── sessions/               # in-process Session + history + store + compression
-│   ├── routers/                # /estimate, /sessions, /ingestion
+│   ├── routers/                # /estimate, /sessions, /ingestion, /embeddings, /config
 │   ├── prompts/                # estimation/v1|v2|v3 + metadata + conversation_summary + critic
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
 │   ├── services/               # oneshot, conversational, ACB, attachments, history, prompt_boundary
 │   ├── schemas/                # estimation + acb + critic + ingestion
 │   ├── ingestion/              # catalog, loaders, parsers, cleaning, pii, orchestrator
-│   ├── embedding_pipeline/     # ingest + compare + 8 chunkers (strategies/)
+│   ├── generation/rag/         # chunking + embed + compare lab
 │   └── persistence/            # jobs + mappings repos
 ├── data/                       # catalog.yaml + seed + budgets_sample.json + test_queries.json
 ├── alembic/                    # estimations + session6 tables
@@ -294,7 +294,7 @@ estimador-cag/
 ├── tests/
 ├── scripts/                    # preflight_s06, demo_cleaning, demo_pii, compare.py, compare_chunkers.py
 ├── docs/                       # oneshot sequence + session notes
-├── streamlit_app.py            # New + Conversational + Recent + Chunking Lab
+├── streamlit_app.py            # New + Conversational + Recent + Chunking Lab + Ajustes
 ├── Dockerfile
 ├── docker-compose.yml
 ├── pyproject.toml
@@ -482,23 +482,23 @@ PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
 
 ## Embeddings pipeline
 
-First step toward semantic search: turn historical budgets (JSON) into vectors. The new module lives in `src/embedding_pipeline/` and exposes `POST /embeddings/ingest` and `POST /embeddings/compare`. **Nothing is persisted yet** — vectors are generated in memory and returned over HTTP.
+First step toward semantic search: turn historical budgets (JSON) into vectors. The lab lives in `src/generation/rag/` and exposes `POST /embeddings/ingest` and `POST /embeddings/compare` via `src/routers/embeddings.py`. **Ingest is still in-memory** — vectors are generated and returned over HTTP. Compare history is a separate table (`chunking_comparisons`).
 
-`POST /embeddings/ingest` does not read `data/seed/`, does not call the ingestion pipeline, and does not write Postgres, Redis, or files. The client sends `{"budgets": [...]}` in the body. The router chunks → OpenAI embeddings → returns `chunks` + `stats` in the HTTP response. Drop the JSON or kill the process and the vectors are gone. Same contract as `src/embedding_pipeline/__init__.py`.
+`POST /embeddings/ingest` does not read `data/seed/`, does not call the ingestion pipeline, and does not write Postgres, Redis, or files. The client sends `{"budgets": [...]}` in the body. The router chunks → OpenAI embeddings → returns `chunks` + `stats` in the HTTP response. Drop the JSON or kill the process and the vectors are gone. Same contract as `src/generation/rag/__init__.py`.
 
 Pieces:
 
-- `chunker.py` (`JSONStructuralChunker`) — **structural** chunking: one budget component = one chunk. Each chunk is prepended with a context header from the parent budget (project, sector, technology) so it does not lose track of whom it belongs to. Token counting with `tiktoken`.
-- `embedder.py` (`OpenAIEmbedder`) — calls `text-embedding-3-small` (1536 dims) in **batches** of 100, with exponential retry (1s/2s/4s) on `RateLimitError` and per-batch logging.
-- `router.py` — orchestrates `chunk → embed → stats`.
+- `generation/rag/chunking/structural.py` (`JSONStructuralChunker`) — **structural** chunking: one budget component = one chunk. Each chunk is prepended with a context header from the parent budget (project, sector, technology) so it does not lose track of whom it belongs to. Token counting with `tiktoken`.
+- `generation/rag/embedding/embedder.py` (`OpenAIEmbedder`) — calls `text-embedding-3-small` (1536 dims) in **batches** of 100, with exponential retry (1s/2s/4s) on `RateLimitError` and per-batch logging.
+- `routers/embeddings.py` — orchestrates `chunk → embed → stats` and `/compare`.
 
 How to debug (cwd `estimador-cag/`, `PYTHONPATH=src`):
 
 ```
   import json
   from pathlib import Path
-  from embedding_pipeline.schemas import Budget
-  from embedding_pipeline.chunker import JSONStructuralChunker
+  from generation.rag.schemas import Budget
+  from generation.rag.chunking.structural import JSONStructuralChunker
   raw = json.loads(Path('data/budgets_sample.json').read_text())
   budgets = [Budget.model_validate(b) for b in raw]
   chunks = JSONStructuralChunker().chunk(budgets)
@@ -537,7 +537,7 @@ Do not POST `data/seed/budgets/*.json` here — that schema (`client_name`, `pha
 
 ### Chunking strategy comparison
 
-Eight chunking strategies behind one interface (`src/embedding_pipeline/base.py::Chunker`): `structural`, `fixed_size`, `recursive`, `sentence_window`, `semantic`, `propositional`, `contextual_retrieval`, `hierarchical`. The seven extras live in `src/embedding_pipeline/strategies/`; structural stays in `chunker.py`.
+Eight chunking strategies behind one interface (`src/generation/rag/chunking/base.py::Chunker`): `structural`, `fixed_size`, `recursive`, `sentence_window`, `semantic`, `propositional`, `contextual_retrieval`, `hierarchical`. The seven extras live in `src/generation/rag/chunking/strategies/`; structural stays in `chunking/structural.py`.
 
 ```
 POST /embeddings/compare
@@ -643,7 +643,7 @@ uv run python scripts/compare.py --text-a "..." --text-b "..."
 docker compose exec estimator python scripts/compare.py --text-a "..." --text-b "..."
 ```
 
-The three validation pairs from the exercise are in [`src/embedding_pipeline/SANITY_CHECK.md`](src/embedding_pipeline/SANITY_CHECK.md).
+The three validation pairs from the exercise are in [`src/generation/rag/SANITY_CHECK.md`](src/generation/rag/SANITY_CHECK.md).
 
 
 

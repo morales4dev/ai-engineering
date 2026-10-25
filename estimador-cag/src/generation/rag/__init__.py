@@ -1,4 +1,4 @@
-"""Session 7 — embedding pipeline.
+"""Session 7 — RAG lab (`generation.rag`).
 
 Turns historical budget JSON into embedding vectors: a structural chunker
 (one budget component = one chunk) plus an OpenAI embedder. Vectors are

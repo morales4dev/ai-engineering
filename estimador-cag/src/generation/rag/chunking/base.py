@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 import structlog
 import tiktoken
 
-from embedding_pipeline.schemas import Budget, Chunk
+from generation.rag.schemas import Budget, Chunk
 
 log = structlog.get_logger()
 

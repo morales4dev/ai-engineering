@@ -13,9 +13,9 @@ import time
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from embedding_pipeline.base import Chunker, count_tokens, emit_chunking_done
-from embedding_pipeline.chunker import serialize_budget
-from embedding_pipeline.schemas import Budget, Chunk
+from generation.rag.chunking.base import Chunker, count_tokens, emit_chunking_done
+from generation.rag.chunking.structural import serialize_budget
+from generation.rag.schemas import Budget, Chunk
 
 CHUNK_SIZE_TOKENS = 512
 OVERLAP_TOKENS = 80

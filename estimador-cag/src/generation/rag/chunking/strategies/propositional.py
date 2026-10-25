@@ -17,9 +17,9 @@ import structlog
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
-from embedding_pipeline.base import Chunker, count_tokens, emit_chunking_done
-from embedding_pipeline.chunker import component_metadata, render_component_text
-from embedding_pipeline.schemas import Budget, Chunk
+from generation.rag.chunking.base import Chunker, count_tokens, emit_chunking_done
+from generation.rag.chunking.structural import component_metadata, render_component_text
+from generation.rag.schemas import Budget, Chunk
 
 log = structlog.get_logger()
 

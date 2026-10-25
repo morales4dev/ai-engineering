@@ -23,10 +23,10 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from embedding_pipeline.base import Chunker
-from embedding_pipeline.embedder import OpenAIEmbedder
-from embedding_pipeline.schemas import Budget, Chunk
-from embedding_pipeline.similarity import cosine_similarity, percentile
+from generation.rag.chunking.base import Chunker
+from generation.rag.embedding.embedder import OpenAIEmbedder
+from generation.rag.schemas import Budget, Chunk
+from generation.rag.analysis.similarity import cosine_similarity, percentile
 
 # Degeneracy thresholds (tokens). Clearly labeled — the only knobs.
 ORPHAN_MAX_TOKENS = 20

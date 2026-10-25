@@ -171,7 +171,7 @@ def _init_lab_state() -> None:
 
 
 def _parse_budget_array(raw_text: str) -> list[dict]:
-    from embedding_pipeline.schemas import Budget
+    from generation.rag.schemas import Budget
 
     data = json.loads(raw_text)
     if not isinstance(data, list):

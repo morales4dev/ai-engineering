@@ -5,7 +5,7 @@ from fastapi import FastAPI
 # from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
-from embedding_pipeline.router import router as embeddings_router
+from routers.embeddings import router as embeddings_router
 from routers.config import router as config_router
 from routers.estimations import router as estimations_router
 from routers.ingestion import router as ingestion_router

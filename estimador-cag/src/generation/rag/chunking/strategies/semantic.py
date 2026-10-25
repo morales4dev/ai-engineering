@@ -15,9 +15,9 @@ import time
 from langchain_experimental.text_splitter import SemanticChunker as _LCSemanticChunker
 from langchain_openai import OpenAIEmbeddings
 
-from embedding_pipeline.base import Chunker, count_tokens, emit_chunking_done
-from embedding_pipeline.chunker import serialize_budget
-from embedding_pipeline.schemas import Budget, Chunk
+from generation.rag.chunking.base import Chunker, count_tokens, emit_chunking_done
+from generation.rag.chunking.structural import serialize_budget
+from generation.rag.schemas import Budget, Chunk
 
 # Breakpoint policy. "percentile" cuts when the inter-sentence distance is above
 # the Nth percentile of all distances in the document. 95 = only the sharpest

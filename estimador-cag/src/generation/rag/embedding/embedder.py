@@ -12,7 +12,7 @@ import time
 import structlog
 from openai import OpenAI, RateLimitError
 
-from embedding_pipeline.schemas import Chunk, EmbeddedChunk
+from generation.rag.schemas import Chunk, EmbeddedChunk
 
 log = structlog.get_logger()
 

@@ -9,10 +9,10 @@ from openai import OpenAI
 
 from cache.semantic import EstimationSemanticCache
 from config import get_settings
-from embedding_pipeline.base import Chunker
-from embedding_pipeline.chunker import JSONStructuralChunker
-from embedding_pipeline.embedder import OpenAIEmbedder
-from embedding_pipeline.strategies import (
+from generation.rag.chunking.base import Chunker
+from generation.rag.chunking.structural import JSONStructuralChunker
+from generation.rag.embedding.embedder import OpenAIEmbedder
+from generation.rag.chunking.strategies import (
     ContextualRetrievalChunker,
     FixedSizeChunker,
     HierarchicalChunker,

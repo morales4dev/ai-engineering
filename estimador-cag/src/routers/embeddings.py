@@ -12,16 +12,16 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 
 from dependencies import ALL_STRATEGIES, build_chunkers, get_chunker, get_embedder
-from embedding_pipeline.chunker import JSONStructuralChunker
-from embedding_pipeline.comparison import (
+from generation.rag.chunking.structural import JSONStructuralChunker
+from generation.rag.analysis.comparison import (
     ChunkingComparator,
     CompareRequest,
     CompareResponse,
     ComparisonDetail,
     ComparisonListResponse,
 )
-from embedding_pipeline.embedder import OpenAIEmbedder, estimated_cost_usd
-from embedding_pipeline.schemas import IngestRequest, IngestResponse, IngestStats
+from generation.rag.embedding.embedder import OpenAIEmbedder, estimated_cost_usd
+from generation.rag.schemas import IngestRequest, IngestResponse, IngestStats
 from services.comparisons import (
     ComparisonHistoryUnavailable,
     get_comparison,

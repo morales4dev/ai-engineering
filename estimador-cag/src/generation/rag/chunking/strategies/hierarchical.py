@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import time
 
-from embedding_pipeline.base import Chunker, count_tokens, emit_chunking_done
-from embedding_pipeline.chunker import (
+from generation.rag.chunking.base import Chunker, count_tokens, emit_chunking_done
+from generation.rag.chunking.structural import (
     component_metadata,
     render_component_text,
     serialize_budget,
 )
-from embedding_pipeline.schemas import Budget, Chunk
+from generation.rag.schemas import Budget, Chunk
 
 
 class HierarchicalChunker(Chunker):

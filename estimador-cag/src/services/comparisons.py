@@ -15,7 +15,7 @@ import structlog
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from embedding_pipeline.comparison import (
+from generation.rag.analysis.comparison import (
     CompareResponse,
     ComparisonDetail,
     ComparisonListItem,

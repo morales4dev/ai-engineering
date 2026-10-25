@@ -289,7 +289,7 @@ README paths in the Sesión 7 section.
 | 6 | Alembic `0002` + persist/list/show comparisons | [x] |
 | 7 | Streamlit Chunking Lab tab | [x] |
 | 8 | Runtime config FastAPI + Ajustes tab | [x] |
-| 9 | Move lab → `src/generation/rag/` (no EstimationService, no CAG) | [ ] |
+| 9 | Move lab → `src/generation/rag/` (no EstimationService, no CAG) | [x] |
 
 Next work is **step 1 only**.
 
