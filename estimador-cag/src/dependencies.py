@@ -2,14 +2,25 @@
 
 from functools import lru_cache
 
+import anthropic
 import redis
 import structlog
 from openai import OpenAI
 
 from cache.semantic import EstimationSemanticCache
 from config import get_settings
+from embedding_pipeline.base import Chunker
 from embedding_pipeline.chunker import JSONStructuralChunker
 from embedding_pipeline.embedder import OpenAIEmbedder
+from embedding_pipeline.strategies import (
+    ContextualRetrievalChunker,
+    FixedSizeChunker,
+    HierarchicalChunker,
+    PropositionalChunker,
+    RecursiveChunker,
+    SemanticChunker,
+    SentenceWindowChunker,
+)
 from ingestion.catalog import DataCatalog, load_catalog
 from ingestion.loaders.filesystem import FileSystemLoader
 from ingestion.parsers.registry import ParserRegistry, default_registry
@@ -62,6 +73,89 @@ def get_embedder() -> OpenAIEmbedder | None:
         log.warning("embedder_disabled", reason="no_openai_key")
         return None
     return OpenAIEmbedder(client=client, model=settings.EMBEDDING_MODEL)
+
+
+@lru_cache
+def get_anthropic_client() -> anthropic.Anthropic | None:
+    """Anthropic client for Contextual Retrieval. None without a key."""
+    settings = get_settings()
+    if not settings.ANTHROPIC_API_KEY:
+        return None
+    return anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+
+
+# --- Session 7 live: one factory per chunking strategy ---
+# Paid factories use @lru_cache + get_settings() (live-day). Runtime override is step 8.
+
+
+@lru_cache
+def get_fixed_size_chunker() -> FixedSizeChunker:
+    return FixedSizeChunker()
+
+
+@lru_cache
+def get_recursive_chunker() -> RecursiveChunker:
+    return RecursiveChunker()
+
+
+@lru_cache
+def get_sentence_window_chunker() -> SentenceWindowChunker:
+    return SentenceWindowChunker()
+
+
+@lru_cache
+def get_hierarchical_chunker() -> HierarchicalChunker:
+    return HierarchicalChunker()
+
+
+@lru_cache
+def get_semantic_chunker() -> SemanticChunker:
+    settings = get_settings()
+    return SemanticChunker(api_key=settings.OPENAI_API_KEY, model=settings.EMBEDDING_MODEL)
+
+
+@lru_cache
+def get_propositional_chunker() -> PropositionalChunker:
+    client = get_openai_client()
+    if client is None:
+        raise RuntimeError("PropositionalChunker requires OPENAI_API_KEY.")
+    return PropositionalChunker(client=client, model=get_settings().PROPOSITIONAL_CHUNKER_MODEL)
+
+
+@lru_cache
+def get_contextual_retrieval_chunker() -> ContextualRetrievalChunker:
+    client = get_anthropic_client()
+    if client is None:
+        raise RuntimeError("ContextualRetrievalChunker requires ANTHROPIC_API_KEY.")
+    return ContextualRetrievalChunker(client=client, model=get_settings().CONTEXTUAL_CHUNKER_MODEL)
+
+
+CHUNKER_FACTORIES = {
+    "structural": get_chunker,
+    "fixed_size": get_fixed_size_chunker,
+    "recursive": get_recursive_chunker,
+    "sentence_window": get_sentence_window_chunker,
+    "semantic": get_semantic_chunker,
+    "propositional": get_propositional_chunker,
+    "contextual_retrieval": get_contextual_retrieval_chunker,
+    "hierarchical": get_hierarchical_chunker,
+}
+ALL_STRATEGIES = list(CHUNKER_FACTORIES)
+
+
+def build_chunkers(names: list[str]) -> list[Chunker]:
+    """Instantiate the requested chunkers by name.
+
+    Raises ``KeyError`` for an unknown strategy and ``RuntimeError`` for a
+    strategy whose API key is missing (both mapped to HTTP errors by the router).
+    """
+    chunkers: list[Chunker] = []
+    for name in names:
+        factory = CHUNKER_FACTORIES.get(name)
+        if factory is None:
+            raise KeyError(name)
+        chunkers.append(factory())
+    return chunkers
 
 
 @lru_cache
