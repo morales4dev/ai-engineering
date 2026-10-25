@@ -6,6 +6,8 @@ failures to status codes. No business logic lives here.
 
 from __future__ import annotations
 
+import time
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -15,9 +17,17 @@ from embedding_pipeline.comparison import (
     ChunkingComparator,
     CompareRequest,
     CompareResponse,
+    ComparisonDetail,
+    ComparisonListResponse,
 )
 from embedding_pipeline.embedder import OpenAIEmbedder, estimated_cost_usd
 from embedding_pipeline.schemas import IngestRequest, IngestResponse, IngestStats
+from services.comparisons import (
+    ComparisonHistoryUnavailable,
+    get_comparison,
+    list_comparisons,
+    persist_comparison,
+)
 
 log = structlog.get_logger()
 
@@ -94,6 +104,7 @@ def compare(
         strategies=names,
         n_queries=len(request.queries),
     )
+    t0 = time.perf_counter()
     try:
         stats = comparator.compute_stats(request.budgets)
         queries = comparator.run_queries(request.budgets, request.queries, request.top_k)
@@ -106,4 +117,40 @@ def compare(
         )
         raise HTTPException(status_code=500, detail="Failed to run chunking comparison.") from exc
 
-    return CompareResponse(stats_per_strategy=stats, queries_per_strategy=queries)
+    body = CompareResponse(stats_per_strategy=stats, queries_per_strategy=queries)
+    persist_comparison(
+        strategies=names,
+        queries=request.queries,
+        top_k=request.top_k,
+        corpus_label=request.corpus_label or "budgets_sample",
+        corpus_count=len(request.budgets),
+        response=body,
+        duration_ms=round((time.perf_counter() - t0) * 1000),
+    )
+    return body
+
+
+@router.get("/comparisons", response_model=ComparisonListResponse)
+def list_saved_comparisons() -> ComparisonListResponse:
+    """Last 20 compares, newest first. No ``response_payload`` in the JSON."""
+    try:
+        return ComparisonListResponse(items=list_comparisons(limit=20))
+    except ComparisonHistoryUnavailable as exc:
+        log.warning("comparison_list_unavailable", error=str(exc)[:200])
+        raise HTTPException(
+            status_code=503, detail="Comparison history is unavailable"
+        ) from exc
+
+
+@router.get("/comparisons/{comparison_id}", response_model=ComparisonDetail)
+def show_saved_comparison(comparison_id: int) -> ComparisonDetail:
+    try:
+        item = get_comparison(comparison_id)
+    except ComparisonHistoryUnavailable as exc:
+        log.warning("comparison_show_unavailable", error=str(exc)[:200])
+        raise HTTPException(
+            status_code=503, detail="Comparison history is unavailable"
+        ) from exc
+    if item is None:
+        raise HTTPException(status_code=404, detail="Comparison not found")
+    return item

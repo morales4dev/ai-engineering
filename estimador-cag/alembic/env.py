@@ -21,7 +21,11 @@ if _SRC.is_dir():
     sys.path.insert(0, str(_SRC))
 
 from config import get_settings  # noqa: E402
-from persistence.models import Base, EstimationRow  # noqa: E402, F401
+from persistence.models import (  # noqa: E402, F401
+    Base,
+    ChunkingComparisonRow,
+    EstimationRow,
+)
 
 config = context.config
 

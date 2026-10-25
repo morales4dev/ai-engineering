@@ -34,7 +34,7 @@ def _provider_from_model(model: str) -> str:
     return "unknown"
 
 
-# Cost per 1M tokens (USD). Same table as Lidr session_06.
+# Cost per 1M tokens (USD).
 MODEL_COSTS: dict[str, dict[str, float]] = {
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4o": {"input": 2.50, "output": 10.00},
@@ -51,7 +51,12 @@ def _estimate_cost(model: str, tokens_in: int, tokens_out: int) -> float:
 
 
 def _tokens_from_raw(raw: Any) -> tuple[int, int]:
-    """Lidr free-text path: usage.prompt_tokens / usage.completion_tokens."""
+    """Count tokens billed on this call.
+
+    The provider reports them on ``raw.usage``: how many we sent (``prompt_tokens``)
+    and how many it wrote (``completion_tokens``). If that report is missing we
+    return 0 and 0 — the call still worked; we just cannot price it.
+    """
     usage = getattr(raw, "usage", None)
     tokens_in = getattr(usage, "prompt_tokens", 0) or 0
     tokens_out = getattr(usage, "completion_tokens", 0) or 0

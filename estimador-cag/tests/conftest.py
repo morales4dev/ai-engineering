@@ -126,7 +126,7 @@ class FakeLLMWrapper:
         return self._default_for(response_model), meta
 
     def complete_structured(self, *, system_prompt, user_message, response_model, **kwargs):
-        # Ours: metadata_extractor uses this; Lidr's extractor uses chat.
+        # Ours: metadata_extractor uses this; 
         return self.complete_structured_chat(
             messages=[
                 {"role": "system", "content": system_prompt},

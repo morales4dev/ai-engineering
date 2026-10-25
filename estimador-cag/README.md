@@ -2,7 +2,7 @@
 
 AI-powered software project estimation service using a **Cache Augmented Generation (CAG)** architecture.
 
-The design and reference implementation this project follows come from the LiDR / Master **estimator** service (`ai-engineering-lidr/estimator`). This repo is a parallel student implementation with the same CAG approach.
+The design and reference implementation this project follows come from the Master **estimator** service (`ai-engineering-lidr/estimator`). This repo is a parallel student implementation with the same CAG approach.
 
 ## What is CAG and why use it
 
@@ -535,7 +535,7 @@ curl -s -X POST http://localhost:8000/embeddings/ingest \
 
 Do not POST `data/seed/budgets/*.json` here — that schema (`client_name`, `phases[]`) is not `Budget` and will 422.
 
-### Chunking strategy comparison (live session)
+### Chunking strategy comparison
 
 Eight chunking strategies behind one interface (`src/embedding_pipeline/base.py::Chunker`): `structural`, `fixed_size`, `recursive`, `sentence_window`, `semantic`, `propositional`, `contextual_retrieval`, `hierarchical`. The seven extras live in `src/embedding_pipeline/strategies/`; structural stays in `chunker.py`.
 
@@ -580,6 +580,29 @@ curl -s -X POST http://localhost:8000/embeddings/compare \
 
 Omit `strategies` on purpose so the server uses `ALL_STRATEGIES`.
 
+A successful POST is persisted fail-open (table `chunking_comparisons`). The response body stays `CompareResponse` — no `id` in that JSON. Reopen is HTTP, not a second compare:
+
+```
+GET /embeddings/comparisons
+  last 20, newest first. Fields: id, created_at, strategies, queries, top_k,
+  corpus_label, corpus_count, duration_ms, cost_total_usd (derived; not a column).
+  No response_payload.
+
+GET /embeddings/comparisons/{id}
+  same list fields plus `response` (stored CompareResponse: stats + playground).
+  200 / 404 / 503
+```
+
+```bash
+# list (no playground payload)
+curl -s http://localhost:8000/embeddings/comparisons
+
+# reopen one row (stats + playground as stored)
+curl -s http://localhost:8000/embeddings/comparisons/1
+```
+
+`corpus_label` is optional on the POST. Omitted → stored as `budgets_sample`.
+
 ### CLI script `compare_chunkers.py`
 
 Same `ChunkingComparator` as the POST, in-process (no HTTP). **This CLI does read** `data/budgets_sample.json` and, with `--queries all`, `data/test_queries.json`. Full flags in the script docstring.
@@ -605,7 +628,7 @@ uv run python scripts/compare_chunkers.py --models small-1536,small-768
 
 `--strategies all` includes the two LLM chunkers (costs API). `--output …` can write a Markdown report; we do not keep a committed `COMPARISON_REPORT.md`.
 
-`semantic`, `propositional` and `contextual_retrieval` call external APIs while chunking (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`) and report that cost on `chunking_done`. `sentence_window` uses NLTK (`punkt` / `punkt_tab`, lazy download). Nothing is persisted.
+`semantic`, `propositional` and `contextual_retrieval` call external APIs while chunking (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`) and report that cost on `chunking_done`. `sentence_window` uses NLTK (`punkt` / `punkt_tab`, lazy download). The CLI does not persist; only `POST /embeddings/compare` writes history.
 
 ### CLI script `compare.py`
 

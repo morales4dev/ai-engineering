@@ -19,6 +19,7 @@ strategies like propositional or contextual_retrieval.
 from __future__ import annotations
 
 import time
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
@@ -67,11 +68,37 @@ class CompareRequest(BaseModel):
     # Empty = compare every registered strategy.
     strategies: list[str] = Field(default_factory=list)
     top_k: int = Field(default=3, ge=1, le=10)
+    # Omitted → persist default ``budgets_sample``.
+    corpus_label: str | None = None
 
 
 class CompareResponse(BaseModel):
     stats_per_strategy: dict[str, ChunkingStats]
     queries_per_strategy: dict[str, list[QueryResult]]
+
+
+class ComparisonListItem(BaseModel):
+    """GET /embeddings/comparisons row. No ``response_payload``."""
+
+    id: int
+    created_at: datetime
+    strategies: list[str]
+    queries: list[str]
+    top_k: int
+    corpus_label: str
+    corpus_count: int
+    duration_ms: int | None
+    cost_total_usd: float
+
+
+class ComparisonListResponse(BaseModel):
+    items: list[ComparisonListItem]
+
+
+class ComparisonDetail(ComparisonListItem):
+    """GET /embeddings/comparisons/{id}. List fields plus stored CompareResponse."""
+
+    response: CompareResponse
 
 
 def _preview(text: str, limit: int = 160) -> str:
