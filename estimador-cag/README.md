@@ -285,9 +285,9 @@ estimador-cag/
 │   ├── services/               # oneshot, conversational, ACB, attachments, history, prompt_boundary
 │   ├── schemas/                # estimation + acb + critic + ingestion
 │   ├── ingestion/              # catalog, loaders, parsers, cleaning, pii, orchestrator
-│   ├── embedding_pipeline/     # chunker + embedder + POST /embeddings/ingest
+│   ├── embedding_pipeline/     # ingest + compare + 8 chunkers (strategies/)
 │   └── persistence/            # jobs + mappings repos
-├── data/                       # catalog.yaml + seed + budgets_sample.json
+├── data/                       # catalog.yaml + seed + budgets_sample.json + test_queries.json
 ├── alembic/                    # estimations + session6 tables
 ├── alembic.ini
 ├── evals/                      # golden dataset, metrics, CLI runner + stress/
@@ -482,7 +482,7 @@ PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
 
 ## Embeddings pipeline
 
-First step toward semantic search: turn historical budgets (JSON) into vectors. The new module lives in `src/embedding_pipeline/` and exposes `POST /embeddings/ingest` and `POST /embeddings/compare`. **Nothing is persisted yet** — vectors are generated in memory and returned over HTTP; persistence in pgvector comes in Session 08.
+First step toward semantic search: turn historical budgets (JSON) into vectors. The new module lives in `src/embedding_pipeline/` and exposes `POST /embeddings/ingest` and `POST /embeddings/compare`. **Nothing is persisted yet** — vectors are generated in memory and returned over HTTP.
 
 `POST /embeddings/ingest` does not read `data/seed/`, does not call the ingestion pipeline, and does not write Postgres, Redis, or files. The client sends `{"budgets": [...]}` in the body. The router chunks → OpenAI embeddings → returns `chunks` + `stats` in the HTTP response. Drop the JSON or kill the process and the vectors are gone. Same contract as `src/embedding_pipeline/__init__.py`.
 
@@ -519,7 +519,7 @@ POST /embeddings/ingest
 
 It shows up in Swagger (`http://localhost:8000/docs`) and can be invoked from there with the sample data.
 
-From the command line, feeding the 15 example budgets (`data/budgets_sample.json` is a **JSON array**; the endpoint expects `{"budgets": [...]}`):
+From the command line, feeding the 17 example budgets (`data/budgets_sample.json` is a **JSON array**; the endpoint expects `{"budgets": [...]}`):
 
 ```bash
 cd estimador-cag
@@ -535,11 +535,19 @@ curl -s -X POST http://localhost:8000/embeddings/ingest \
 
 Do not POST `data/seed/budgets/*.json` here — that schema (`client_name`, `phases[]`) is not `Budget` and will 422.
 
-### Compare chunkers — `POST /embeddings/compare`
+### Chunking strategy comparison (live session)
 
-Same body contract as Lidr: `budgets` in the request (FastAPI never opens `data/budgets_sample.json`). Optional `queries`, `strategies`, `top_k` (1–10, default 3). Empty `strategies` = all eight. Empty `queries` = stats only, no playground.
+Eight chunking strategies behind one interface (`src/embedding_pipeline/base.py::Chunker`): `structural`, `fixed_size`, `recursive`, `sentence_window`, `semantic`, `propositional`, `contextual_retrieval`, `hierarchical`. The seven extras live in `src/embedding_pipeline/strategies/`; structural stays in `chunker.py`.
 
-Output: `stats_per_strategy` + `queries_per_strategy` (top-k cosine, judge by eye — not recall@k). 400 unknown strategy; 500 missing key / embedder down / compare error (generic client message, detail in logs).
+```
+POST /embeddings/compare
+  Input:  {"budgets": [...], "queries": [...], "strategies": [...], "top_k": 3}
+  Output: {"stats_per_strategy": {...}, "queries_per_strategy": {...}}
+```
+
+`budgets` come in the request (FastAPI never opens `data/budgets_sample.json`). Optional `queries`, `strategies`, `top_k` (1–10, default 3). Empty `strategies` = all eight. Empty `queries` = stats only, no playground.
+
+Output is stats + top-k cosine, judge by eye — not recall@k. 400 unknown strategy; 500 missing key / embedder down / compare error (generic client message, detail in logs).
 
 What each strategy spends when you send queries (playground):
 
@@ -588,11 +596,16 @@ uv run python scripts/compare_chunkers.py \
   --strategies structural,fixed_size,recursive,sentence_window,hierarchical,semantic \
   --queries all --show-stats --show-top-k 3
 
-# container
+# container (service name: estimator)
 docker compose exec estimator python scripts/compare_chunkers.py --strategies structural --show-stats
+
+# Matryoshka: native 1536 vs truncated 768
+uv run python scripts/compare_chunkers.py --models small-1536,small-768
 ```
 
 `--strategies all` includes the two LLM chunkers (costs API). `--output …` can write a Markdown report; we do not keep a committed `COMPARISON_REPORT.md`.
+
+`semantic`, `propositional` and `contextual_retrieval` call external APIs while chunking (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`) and report that cost on `chunking_done`. `sentence_window` uses NLTK (`punkt` / `punkt_tab`, lazy download). Nothing is persisted.
 
 ### CLI script `compare.py`
 
