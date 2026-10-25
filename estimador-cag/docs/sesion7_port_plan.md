@@ -282,7 +282,7 @@ README paths in the Sesión 7 section.
 | # | Title | OK |
 |---|---|---|
 | 1 | Deps + two settings + sample 17 + `test_queries.json` | [x] |
-| 2 | Lab package in `embedding_pipeline/` (keep SANITY_CHECK) | [ ] |
+| 2 | Lab package in `embedding_pipeline/` (keep SANITY_CHECK) | [x] |
 | 3 | Wire `POST /embeddings/compare` | [ ] |
 | 4 | `compare_chunkers.py` (sys.path trap) | [ ] |
 | 5 | README live section | [ ] |
