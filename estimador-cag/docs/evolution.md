@@ -23,6 +23,7 @@ Nombres de evento (como en las ramas, salvo `v2` y `sesion-02`, que no fueron ra
 - `pre_sesion_06` — golden evals + `TurnObservation` + stress (rama `pre-session-06`)
 - `session_06_forense` — port live de la sesión 6 (catálogo, ingesta HTTP, cleaning/PII off-path)
 - `pre_sesion_07` — pipeline de embeddings in-memory (rama `session-07/pre-exercise`)
+- `session_07_forense` — port live de la sesión 7 (lab de chunking, historial de comparaciones, Ajustes)
 
 No entra `session1/` (ejercicios sueltos, no son el estimador).
 
@@ -107,3 +108,11 @@ No entra `session1/` (ejercicios sueltos, no son el estimador).
 | session_06_forense         | [x]     | CLI `ingestion.architecture`: CAG viable = AND de 4 constraints → `CAG` / `Hybrid` / `RAG`. No está en el POST |                    |
 | pre_sesion_07              | [x]     | `POST /embeddings/ingest`: body `{budgets}` → chunk estructural + embed OpenAI → `chunks` + `stats`. Nada se persiste. No lee `data/seed/` ni llama a ingesta |                    |
 | pre_sesion_07              | [x]     | `compare.py`: cosine a mano entre dos textos (reusa `OpenAIEmbedder`). Compose monta `scripts/` |                    |
+| session_07_forense         | [x]     | Ocho estrategias de chunking + `POST /embeddings/compare` (el corpus va en el body; FastAPI no lee el sample) |                    |
+| session_07_forense         | [x]     | CLI `compare_chunkers.py` (host o contenedor). Queries demo, no gold |                    |
+| session_07_forense         | [x]     | Sample 17 presupuestos + `data/test_queries.json` |                    |
+| session_07_forense         | [x]     | Historial de comparaciones: tabla `chunking_comparisons` (Alembic `0002`) + `GET /embeddings/comparisons` list/show |                    |
+| session_07_forense         | [x]     | Pestaña Chunking Lab (HTTP only): stats, coste, playground, reopen |                    |
+| session_07_forense         | [x]     | `GET/PUT /api/v1/config/models` + pestaña Ajustes: override en caliente (Redis). Embeddings read-only |                    |
+| session_07_forense         | [x]     | Cache semántico: el bucket incluye el modelo efectivo (un cambio de primary no sirve el hit de otro) |                    |
+| session_07_forense         | [x]     | Sidebar alineado con el back: caption por endpoint; los modelos viven en Ajustes. Limpieza de leftover del fallback ya retirado en `session_04_forense` (no se reabre ese contrato) |                    |

@@ -59,7 +59,7 @@ def estimate_oneshot(request: EstimationRequest, version: str = "v1") -> Estimat
         return _persist_and_return(request, result, version, cached=True)
 
     if semantic is not None:
-        semantic_hit = semantic.lookup(request, version)
+        semantic_hit = semantic.lookup(request, version, wrapper.primary_model)
         if semantic_hit is not None:
             log.info("estimation_cache_hit", kind="semantic")
             return _persist_and_return(request, semantic_hit, version, cached=True)
@@ -73,7 +73,7 @@ def estimate_oneshot(request: EstimationRequest, version: str = "v1") -> Estimat
     result = enforce_scope_response(result)
     cache.set(cache_key, result.model_dump(mode="json"))
     if semantic is not None:
-        semantic.store(request, result, version)
+        semantic.store(request, result, version, wrapper.primary_model)
     log.info(
         "estimation_generated",
         prompt_version=version,

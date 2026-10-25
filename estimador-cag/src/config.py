@@ -22,7 +22,6 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str | None = None
     LLM_TIMEOUT: int = 30
     PRIMARY_MODEL: str = "gpt-4o-mini"
-    FALLBACK_MODEL: str = "claude-haiku-4-5-20251001"
     REDIS_URL: str = "redis://localhost:6379"
     CACHE_TTL: int = 86400
     EMBEDDING_MODEL: str = "text-embedding-3-small"

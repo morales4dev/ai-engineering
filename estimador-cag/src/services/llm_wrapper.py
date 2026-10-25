@@ -14,6 +14,7 @@ from services.prompt_boundary import (
     apply_untrusted_boundary,
     apply_untrusted_boundary_to_latest_user,
 )
+from services.runtime_config import RuntimeModelConfig
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -86,12 +87,23 @@ class LLMWrapper:
         anthropic_api_key: str | None,
         primary_model: str,
         timeout: int,
+        runtime_config: RuntimeModelConfig | None = None,
     ):
         self.openai_api_key = openai_api_key
         self.anthropic_api_key = anthropic_api_key
-        self.primary_model = primary_model
+        # Settings default: used when no runtime store is wired (tests).
+        self._initial_primary_model = primary_model
+        self._runtime_config = runtime_config
         self.timeout = timeout
         self._instructor = instructor.from_litellm(litellm.completion)
+
+    @property
+    def primary_model(self) -> str:
+        """The model every non-overridden call uses, resolved per call so a
+        runtime override (Ajustes) takes effect immediately."""
+        if self._runtime_config is not None:
+            return self._runtime_config.effective("PRIMARY_MODEL")
+        return self._initial_primary_model
 
     def complete_structured(
         self,

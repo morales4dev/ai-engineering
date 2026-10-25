@@ -14,6 +14,7 @@ import structlog
 from openai import OpenAI
 
 from config import get_settings
+from dependencies import get_runtime_config
 from guardrails.input import check_input
 from guardrails.output import enforce_scope_response
 from prompts.loader import render_conversational_prompt
@@ -46,11 +47,12 @@ def estimate_conversational(
     """Estimate against the session window. ``transcript`` is already enriched."""
     check_input(transcript, openai_client=openai_client)
     settings = get_settings()
+    runtime = get_runtime_config()
     prime_metadata_if_empty(
         session,
         transcript=transcript,
         llm_wrapper=wrapper,
-        model=settings.METADATA_EXTRACTOR_MODEL,
+        model=runtime.effective("METADATA_EXTRACTOR_MODEL"),
     )
 
     resolved_tier, rule = resolve_tier(
@@ -96,7 +98,7 @@ def estimate_conversational(
     apply_compression(
         session.history,
         llm_wrapper=wrapper,
-        compression_model=settings.COMPRESSION_MODEL,
+        compression_model=runtime.effective("COMPRESSION_MODEL"),
         anchor_detection_mode=settings.ANCHOR_DETECTION_MODE,
     )
     session.metadata = update_metadata(
@@ -104,7 +106,7 @@ def estimate_conversational(
         transcript=transcript,
         result=result,
         llm_wrapper=wrapper,
-        model=settings.METADATA_EXTRACTOR_MODEL,
+        model=runtime.effective("METADATA_EXTRACTOR_MODEL"),
     )
     observation = TurnObservation(
         turn_index=turn_index,

@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from config import get_settings
 from embedding_pipeline.router import router as embeddings_router
+from routers.config import router as config_router
 from routers.estimations import router as estimations_router
 from routers.ingestion import router as ingestion_router
 from routers.sessions import router as sessions_router
@@ -86,6 +87,7 @@ app.include_router(estimations_router)
 app.include_router(sessions_router)
 app.include_router(ingestion_router)
 app.include_router(embeddings_router)
+app.include_router(config_router)
 
 
 @app.get("/health")

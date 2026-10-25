@@ -41,6 +41,7 @@ HISTORY_ENDPOINT = f"{API_BASE_URL}/api/v1/estimations"
 SESSIONS_ENDPOINT = f"{API_BASE_URL}/sessions"
 COMPARE_ENDPOINT = f"{API_BASE_URL}/embeddings/compare"
 COMPARISONS_ENDPOINT = f"{API_BASE_URL}/embeddings/comparisons"
+CONFIG_ENDPOINT = f"{API_BASE_URL}/api/v1/config/models"
 COMPARE_TIMEOUT_SECONDS = 600
 
 # Same six canned strings as data/test_queries.json. Hardcoded: they are demo
@@ -119,6 +120,40 @@ _STRATEGY_CATALOG = (
         "cost_tier": "expensive",
         "needs_key": "anthropic",
         "default": False,
+    },
+)
+
+# Runtime-configurable knobs (no FALLBACK_MODEL: this wrapper does not retry).
+_MODEL_KNOB_CATALOG = (
+    {
+        "key": "PRIMARY_MODEL",
+        "label": "Primary model",
+        "description": "Every estimation call (one-shot, conversation, ACB actor).",
+    },
+    {
+        "key": "CRITIC_MODEL",
+        "label": "Critic (ACB)",
+        "description": "Read-only auditor in the Actor-Critic-Boss loop.",
+    },
+    {
+        "key": "METADATA_EXTRACTOR_MODEL",
+        "label": "Metadata extractor",
+        "description": "Extracts project_name / tech / scope once per conversational turn.",
+    },
+    {
+        "key": "COMPRESSION_MODEL",
+        "label": "History compression",
+        "description": "Cumulative summarizer for conversational memory.",
+    },
+    {
+        "key": "PROPOSITIONAL_CHUNKER_MODEL",
+        "label": "Propositional chunker",
+        "description": "Splits components into atomic propositions (Chunking Lab).",
+    },
+    {
+        "key": "CONTEXTUAL_CHUNKER_MODEL",
+        "label": "Contextual chunker",
+        "description": "Claude situates each chunk inside the parent budget (Chunking Lab).",
     },
 )
 
@@ -498,11 +533,11 @@ _init_lab_state()
 
 st.title("Software estimation")
 st.caption(
-    "One-shot form, a conversational session, a saved estimation, or the chunking lab."
+    "One-shot form, a conversational session, a saved estimation, the chunking lab, or Ajustes."
 )
 
-new_tab, conv_tab, history_tab, lab_tab = st.tabs(
-    ["New estimation", "Conversational", "Recent", "Chunking Lab"],
+new_tab, conv_tab, history_tab, lab_tab, ajustes_tab = st.tabs(
+    ["New estimation", "Conversational", "Recent", "Chunking Lab", "Ajustes"],
     on_change="rerun",
 )
 
@@ -869,13 +904,113 @@ with lab_tab:
                 st.session_state.lab_result = body.get("response") or {}
                 st.rerun()
 
+with ajustes_tab:
+    st.subheader("Ajustes")
+    st.caption(
+        "GET/PUT /api/v1/config/models. Overrides live in Redis "
+        "(`estimator:runtime_config`) and apply on the next LLM call — "
+        "no .env edit, no container recreate. «Por defecto» restores the .env value."
+    )
+
+    try:
+        catalog_resp = httpx.get(
+            CONFIG_ENDPOINT, timeout=httpx.Timeout(15.0, connect=5.0)
+        )
+        catalog_resp.raise_for_status()
+        catalog = catalog_resp.json()
+    except httpx.HTTPStatusError as exc:
+        _show_http_error(exc)
+        catalog = None
+    except httpx.HTTPError as exc:
+        st.error(f"Could not reach `{CONFIG_ENDPOINT}`: {exc}")
+        catalog = None
+
+    if catalog is not None:
+        snapshot = catalog.get("models") or {}
+        available = list(catalog.get("available_models") or [])
+        primary = (snapshot.get("PRIMARY_MODEL") or {}).get("effective")
+        if primary:
+            st.caption(f"Effective primary: `{primary}`")
+
+        with st.form("ajustes_form"):
+            chosen: dict[str, str] = {}
+            rows = []
+            for entry in _MODEL_KNOB_CATALOG:
+                item = snapshot.get(entry["key"]) or {}
+                default = item.get("default") or ""
+                effective = item.get("effective") or default
+                overridden = bool(item.get("overridden"))
+                default_label = f"Por defecto ({default})"
+                options = [default_label]
+                for model in available:
+                    if model not in options:
+                        options.append(model)
+                if overridden and effective not in options:
+                    options.append(effective)
+                current = effective if overridden else default_label
+                chosen[entry["key"]] = st.selectbox(
+                    entry["label"],
+                    options=options,
+                    index=options.index(current) if current in options else 0,
+                    help=f"{entry['description']} · `{entry['key']}`",
+                    key=f"ajustes_{entry['key']}",
+                )
+                rows.append(
+                    {
+                        "Knob": entry["label"],
+                        "Key": entry["key"],
+                        "Effective": effective,
+                        "Default": default,
+                        "State": "override" if overridden else "default",
+                    }
+                )
+            st.dataframe(rows, hide_index=True, use_container_width=True)
+            st.markdown(f"**EMBEDDING_MODEL** (read-only): `{catalog.get('embedding_model')}`")
+            st.caption(catalog.get("embedding_model_note") or "")
+            saved = st.form_submit_button("Guardar", type="primary")
+
+        if saved:
+            payload: dict[str, str | None] = {}
+            for entry in _MODEL_KNOB_CATALOG:
+                selected = chosen[entry["key"]]
+                item = snapshot.get(entry["key"]) or {}
+                default = item.get("default") or ""
+                if selected == f"Por defecto ({default})":
+                    payload[entry["key"]] = None
+                else:
+                    payload[entry["key"]] = selected
+            try:
+                put = httpx.put(
+                    CONFIG_ENDPOINT,
+                    json={"models": payload},
+                    timeout=httpx.Timeout(15.0, connect=5.0),
+                )
+                put.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                _show_http_error(exc)
+            except httpx.HTTPError as exc:
+                st.error(f"Could not save at `{CONFIG_ENDPOINT}`: {exc}")
+            else:
+                st.success("Models updated. The change applies on the next call.")
+                st.rerun()
+
+    st.caption(
+        "No automatic provider fallback. The catalog only lists models whose "
+        "provider key is configured."
+    )
+
 with st.sidebar:
     st.header("Service")
+    st.caption("Estimate")
     st.code(ESTIMATE_ENDPOINT, language="text")
+    st.caption("Recent")
     st.code(HISTORY_ENDPOINT, language="text")
+    st.caption("Sessions")
     st.code(SESSIONS_ENDPOINT, language="text")
+    st.caption("Compare")
     st.code(COMPARE_ENDPOINT, language="text")
+    st.caption("Comparisons")
     st.code(COMPARISONS_ENDPOINT, language="text")
-    st.markdown(f"**Primary model:** `{settings.PRIMARY_MODEL}`")
-    st.markdown(f"**Fallback model:** `{settings.FALLBACK_MODEL}`")
+    st.caption("Settings")
+    st.code(CONFIG_ENDPOINT, language="text")
     st.markdown(f"**Cache TTL:** `{settings.CACHE_TTL}s`")

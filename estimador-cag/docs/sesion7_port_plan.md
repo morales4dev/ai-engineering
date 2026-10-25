@@ -62,7 +62,7 @@ Entry points **at plan start**:
 - Do not edit `docs/evolution.md` unless asked.
 - Do not copy `uv.lock`. `uv lock` / `uv sync` after `pyproject.toml`. Compose is how we run (`pyproject.toml` is not bind-mounted). Step 1 ends with `docker compose up --build`. Do not `down -v`.
 - Do not copy Lidr `Settings.validate_at_least_one_api_key`. We still boot without keys.
-- Do not copy Lidr LiteLLM Router / auto-fallback. Our wrapper stays direct. `FALLBACK_MODEL` remains a stored knob (UI + Redis) even if the wrapper does not use it — same as today’s `.env.example`.
+- Do not copy Lidr LiteLLM Router / auto-fallback. Our wrapper stays direct. No `FALLBACK_MODEL` field (not in Settings, `.env`, `MODEL_KEYS`, or Ajustes).
 - Persist compare after a 200, fail-open (log + still return the body), same grain as `persist_estimation`. Streamlit still paints the live result.
 - `POST /embeddings/ingest` stays in-memory. No pgvector. No `POST /search`.
 - Scripts volume already mounted (pre-s7). Keep it.
@@ -288,7 +288,7 @@ README paths in the Sesión 7 section.
 | 5 | README live section | [x] |
 | 6 | Alembic `0002` + persist/list/show comparisons | [x] |
 | 7 | Streamlit Chunking Lab tab | [x] |
-| 8 | Runtime config FastAPI + Ajustes tab | [ ] |
+| 8 | Runtime config FastAPI + Ajustes tab | [x] |
 | 9 | Move lab → `src/generation/rag/` (no EstimationService, no CAG) | [ ] |
 
 Next work is **step 1 only**.
