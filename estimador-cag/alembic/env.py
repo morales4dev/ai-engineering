@@ -28,7 +28,7 @@ from persistence.models import (  # noqa: E402, F401
     ChunkingComparisonRow,
     EstimationRow,
 )
-import generation.rag.store.models  # noqa: E402, F401 — register S8 tables on Base.metadata
+import generation.rag.store.models  # noqa: E402, F401 — register store tables on Base.metadata
 
 # Teach reflection about the ``vector`` column type. Without this,
 # ``alembic check`` / autogenerate against a DB that already has vector

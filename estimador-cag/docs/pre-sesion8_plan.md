@@ -41,6 +41,7 @@ Entry points **at plan start**:
 - ORM attribute `metadata_` mapped to column `"metadata"` (SQLAlchemy reserved name). The PDF does not mention this; without it the model breaks.
 - `chunk_type` is written by the store as `"budget_component"`. Our chunker has no such field.
 - 409 body is the PDF’s top-level shape `{"detail": "Document already ingested", "document_id": N}`. Use `JSONResponse`, not `HTTPException` (that nests `document_id`).
+- `IngestResponse` is Lidr’s four persist fields **plus** `stats` (`IngestStats`: `total_budgets`, `total_chunks`, `total_tokens`, `estimated_cost_usd`). No vectors. One ingest = one budget so `total_budgets` is 1. Lidr’s HTTP tests assert the four-field body; when we copy them, add `stats`.
 - No new `Settings` fields. `OPENAI_API_KEY` / `EMBEDDING_MODEL` / `DATABASE_URL` already exist.
 - Do not copy `session_08_live` (HNSW, halfvec, filters, hybrid, tuning).
 - Do not copy Lidr `ARCHITECTURE.md`, `uv.lock`, `docker-compose.yml`, `output_examples.txt`.
@@ -251,13 +252,13 @@ Student pastes the terminal output (or a 3–5 line note if it 500s). Then, if a
 | 1 | `asyncpg` + `pgvector` + `greenlet` + lock + rebuild. Delete leftover `src/alembic.ini`. No compose edit | [x] |
 | 2 | `store/` + Alembic `0003` + `env.py` vector registration | [x] |
 | 3 | Async engine (derived URL) + DI factories | [x] |
-| 4 | Ingest persist contract + `RagIngestService` + router 409 | [ ] |
+| 4 | Ingest persist contract + `RagIngestService` + router 409 | [x] |
 | 5 | `POST /search` + retriever | [ ] |
 | 6 | Three Lidr tests, import rewrite | [ ] |
 | 7 | `query_examples.py` + README (next to `compare.py` + Sesión 8 block) | [ ] |
 | 8 | STOP — student runs the script → `output_examples.txt` | [ ] |
 
-Next work is **step 4 only**.
+Next work is **step 5 only**.
 
 ## Out of this plan
 

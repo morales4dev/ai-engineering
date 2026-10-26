@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models for the vector store (Session 8).
+"""SQLAlchemy ORM models for the vector store.
 
 Two tables, a real one-to-many:
 
@@ -14,12 +14,11 @@ Design notes (defended in the README):
   columns; whatever the chunker enriches (sector, technologies, hours) goes to
   JSONB, queryable via the GIN index without a migration per new key.
 * ``embedding`` is **nullable**: it allows inserting a chunk first and filling
-  the vector later (async ingestion, future sessions). Session 8 ingests
-  chunk+embedding atomically and never exercises that path.
+  the vector later. Current ingest writes chunk+embedding atomically and
+  never exercises that path.
 * ``Vector(1536)`` is hardcoded to ``text-embedding-3-small``'s dimensionality;
   changing it means re-embedding the whole corpus, so it is not configuration.
-* **No vector index on purpose** — the live session adds HNSW and measures the
-  before/after against this sequential-scan baseline.
+* **No vector index on purpose** — sequential scan is the baseline.
 
 ``metadata`` is a reserved attribute on SQLAlchemy declarative models, so the
 Python attribute is ``metadata_`` mapped onto the ``"metadata"`` column.

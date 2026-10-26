@@ -1,19 +1,17 @@
-"""Session 8 — pgvector extension + documents/chunks tables.
+"""pgvector extension + documents/chunks tables.
 
 Revision ID: 0003_session8_pgvector
 Revises: 0002_chunking_comparisons
 Create Date: 2026-10-26 00:00:00
 
-Deliberately NO vector index (HNSW / IVFFlat): the sequential scan is the
-baseline the live session measures the index impact against. The non-vector
-indexes (FK, chunk_type, GIN on metadata) ARE created here because they are
-plain relational hygiene, not the subject of the live demo.
+Deliberately NO vector index (HNSW / IVFFlat): sequential scan is the
+baseline. The non-vector indexes (FK, chunk_type, GIN on metadata) ARE
+created here because they are plain relational hygiene.
 
-``ix_documents_source_path`` is a plain (non-unique) index, literal to the
-exercise statement; uniqueness of ``source_path`` is enforced by the
-application-level duplicate check that returns 409. That check-then-insert is
-not race-proof under concurrent identical ingests — acceptable at teaching
-scale, and a nice discussion hook for the live session.
+``ix_documents_source_path`` is a plain (non-unique) index; uniqueness of
+``source_path`` is enforced by the application-level duplicate check that
+returns 409. That check-then-insert is not race-proof under concurrent
+identical ingests.
 """
 
 from __future__ import annotations
@@ -67,8 +65,8 @@ def upgrade() -> None:
         ),
         sa.Column("chunk_type", sa.String(length=50), nullable=False),
         sa.Column("content", sa.Text, nullable=False),
-        # Nullable: leaves the door open to insert-now-embed-later ingestion
-        # (future sessions). Session 8 always writes chunk+vector atomically.
+        # Nullable: leaves the door open to insert-now-embed-later ingestion.
+        # Current ingest always writes chunk+vector atomically.
         sa.Column("embedding", Vector(1536), nullable=True),
         sa.Column(
             "metadata",

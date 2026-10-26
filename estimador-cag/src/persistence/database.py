@@ -5,8 +5,8 @@ FastAPI ``Depends`` and returns 503 when ``DATABASE_URL`` is unset.
 
 Two stacks coexist on purpose:
 
-* **Sync (psycopg)** — Session 6 / 7 jobs. ``get_engine`` / ``get_session``.
-* **Async (asyncpg)** — Session 8 RAG ingest / search.
+* **Sync (psycopg)** — ingestion jobs and compare history. ``get_engine`` / ``get_session``.
+* **Async (asyncpg)** — RAG ingest / search.
 
 Both read the same ``Settings.DATABASE_URL``. The async stack swaps the
 driver token in code so compose stays on ``postgresql+psycopg://``.
@@ -50,7 +50,7 @@ def _async_database_url() -> str:
     """Derive the asyncpg URL from ``Settings.DATABASE_URL``.
 
     The canonical URL uses the sync driver (``postgresql+psycopg://``) because
-    Alembic and the Session 6 repositories run synchronously. The RAG store
+    Alembic and the sync repositories run synchronously. The RAG store
     swaps the driver token instead of introducing a second env var.
     """
     url = get_settings().DATABASE_URL or ""

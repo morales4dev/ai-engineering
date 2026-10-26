@@ -21,6 +21,7 @@ from generation.rag.chunking.strategies import (
     SemanticChunker,
     SentenceWindowChunker,
 )
+from generation.rag.ingest_service import RagIngestService
 from generation.rag.store.repository import ChunkStore
 from ingestion.catalog import DataCatalog, load_catalog
 from ingestion.loaders.filesystem import FileSystemLoader
@@ -74,7 +75,7 @@ def get_openai_client() -> OpenAI | None:
 
 @lru_cache
 def get_chunker() -> JSONStructuralChunker:
-    """Stateless structural chunker for the embedding pipeline (Session 7)."""
+    """Stateless structural chunker for the embedding pipeline."""
     return JSONStructuralChunker()
 
 
@@ -90,9 +91,6 @@ def get_embedder() -> OpenAIEmbedder | None:
     return OpenAIEmbedder(client=client, model=settings.EMBEDDING_MODEL)
 
 
-# --- Session 8: pgvector persistence + semantic search ---------------------
-
-
 @lru_cache
 def get_chunk_store() -> ChunkStore:
     """Stateless async data-access layer over documents/chunks."""
@@ -100,10 +98,8 @@ def get_chunk_store() -> ChunkStore:
 
 
 @lru_cache
-def get_rag_ingest_service():
+def get_rag_ingest_service() -> RagIngestService | None:
     """Chunk → embed → persist. ``None`` without an embedder or async DB."""
-    from generation.rag.ingest_service import RagIngestService
-
     embedder = get_embedder()
     session_factory = get_async_session_factory()
     if embedder is None or session_factory is None:
@@ -141,7 +137,6 @@ def get_anthropic_client() -> anthropic.Anthropic | None:
     return anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 
-# --- Session 7 live: one factory per chunking strategy ---
 # Propositional / contextual are NOT @lru_cache: rebuilt per compare so a
 # runtime model override takes effect on the next run.
 

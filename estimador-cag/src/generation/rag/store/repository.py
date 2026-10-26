@@ -66,9 +66,9 @@ class ChunkStore:
 
         Cosine over L2/inner product: OpenAI embeddings are normalized so the
         ranking would be equivalent, but cosine keeps us aligned with the RAG
-        literature AND with the ``vector_cosine_ops`` operator class of the
-        HNSW index the live session adds — operator/index mismatch makes
-        Postgres silently ignore the index.
+        literature and with the ``vector_cosine_ops`` operator class of an
+        HNSW index — operator/index mismatch makes Postgres silently ignore
+        the index.
         """
         distance = ChunkRow.embedding.cosine_distance(query_vector)
         stmt = (
