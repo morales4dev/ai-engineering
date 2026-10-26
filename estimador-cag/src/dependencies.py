@@ -21,9 +21,11 @@ from generation.rag.chunking.strategies import (
     SemanticChunker,
     SentenceWindowChunker,
 )
+from generation.rag.store.repository import ChunkStore
 from ingestion.catalog import DataCatalog, load_catalog
 from ingestion.loaders.filesystem import FileSystemLoader
 from ingestion.parsers.registry import ParserRegistry, default_registry
+from persistence.database import get_async_session_factory
 from services.cache import EstimationCache
 from services.llm_wrapper import LLMWrapper
 from services.runtime_config import RuntimeModelConfig
@@ -86,6 +88,48 @@ def get_embedder() -> OpenAIEmbedder | None:
         log.warning("embedder_disabled", reason="no_openai_key")
         return None
     return OpenAIEmbedder(client=client, model=settings.EMBEDDING_MODEL)
+
+
+# --- Session 8: pgvector persistence + semantic search ---------------------
+
+
+@lru_cache
+def get_chunk_store() -> ChunkStore:
+    """Stateless async data-access layer over documents/chunks."""
+    return ChunkStore()
+
+
+@lru_cache
+def get_rag_ingest_service():
+    """Chunk → embed → persist. ``None`` without an embedder or async DB."""
+    from generation.rag.ingest_service import RagIngestService
+
+    embedder = get_embedder()
+    session_factory = get_async_session_factory()
+    if embedder is None or session_factory is None:
+        return None
+    return RagIngestService(
+        chunker=get_chunker(),
+        embedder=embedder,
+        session_factory=session_factory,
+        store=get_chunk_store(),
+    )
+
+
+@lru_cache
+def get_semantic_retriever():
+    """Query-side counterpart of the ingest service. Same ``None`` contract."""
+    from generation.rag.retriever import SemanticRetriever
+
+    embedder = get_embedder()
+    session_factory = get_async_session_factory()
+    if embedder is None or session_factory is None:
+        return None
+    return SemanticRetriever(
+        embedder=embedder,
+        session_factory=session_factory,
+        store=get_chunk_store(),
+    )
 
 
 @lru_cache
