@@ -255,10 +255,10 @@ Student pastes the terminal output (or a 3–5 line note if it 500s). Then, if a
 | 4 | Ingest persist contract + `RagIngestService` + router 409 | [x] |
 | 5 | `POST /search` + retriever | [x] |
 | 6 | Three Lidr tests, import rewrite | [x] |
-| 7 | `query_examples.py` + README (next to `compare.py` + Sesión 8 block) | [ ] |
+| 7 | `query_examples.py` + README (next to `compare.py` + Sesión 8 block) | [x] |
 | 8 | STOP — student runs the script → `output_examples.txt` | [ ] |
 
-Next work is **step 7 only**.
+Next work is **step 8** (student runs the script).
 
 ## Out of this plan
 

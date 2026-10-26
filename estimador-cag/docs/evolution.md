@@ -1,6 +1,6 @@
 # Evolución del estimador-cag
 
-Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas auxiliares que acabaron mergeadas ahí. HEAD de referencia: `2bf8454` (2026-10-19, `session-07/pre-exercise` mergeado).
+Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas de trabajo (`pre-session-08` incluida).
 
 | Columna | Significado |
 |---|---|
@@ -24,6 +24,7 @@ Nombres de evento (como en las ramas, salvo `v2` y `sesion-02`, que no fueron ra
 - `session_06_forense` — port live de la sesión 6 (catálogo, ingesta HTTP, cleaning/PII off-path)
 - `pre_sesion_07` — pipeline de embeddings in-memory (rama `session-07/pre-exercise`)
 - `session_07_forense` — port live de la sesión 7 (lab de chunking, historial de comparaciones, Ajustes)
+- `pre_sesion_08` — persistencia pgvector + búsqueda semántica (rama `pre-session-08`)
 
 No entra `session1/` (ejercicios sueltos, no son el estimador).
 
@@ -106,8 +107,12 @@ No entra `session1/` (ejercicios sueltos, no son el estimador).
 | session_06_forense         | [x]     | Cleaning + Pandera (`valid` / `quarantined` / `discarded`): librería + demo host, no va en el POST |                    |
 | session_06_forense         | [x]     | PII Presidio + HMAC/Faker (`pseudonym_mappings`): librería + demo host, no va en el POST |                    |
 | session_06_forense         | [x]     | CLI `ingestion.architecture`: CAG viable = AND de 4 constraints → `CAG` / `Hybrid` / `RAG`. No está en el POST |                    |
-| pre_sesion_07              | [x]     | `POST /embeddings/ingest`: body `{budgets}` → chunk estructural + embed OpenAI → `chunks` + `stats`. Nada se persiste. No lee `data/seed/` ni llama a ingesta |                    |
+| pre_sesion_07              | []      | `POST /embeddings/ingest`: body `{budgets}` → chunk estructural + embed OpenAI → `chunks` + `stats`. Nada se persiste. No lee `data/seed/` ni llama a ingesta | pre_sesion_08      |
 | pre_sesion_07              | [x]     | `compare.py`: cosine a mano entre dos textos (reusa `OpenAIEmbedder`). Compose monta `scripts/` |                    |
 | session_07_forense         | [x]     | Lab de chunking: ocho estrategias sobre el mismo corpus (`POST /embeddings/compare` + pestaña Chunking Lab: stats y playground a ojo). El corpus lo manda el cliente. CLI `compare_chunkers.py` |                    |
 | session_07_forense         | [x]     | Historial de comparaciones: se guarda el run y se reabre sin volver a ejecutarlo |                    |
 | session_07_forense         | [x]     | Ajustes: cambiar los modelos LLM en caliente. Embeddings no se tocan. Cambiar el primary no recicla la caché semántica de otro modelo |                    |
+| pre_sesion_08              | [x]     | `POST /embeddings/ingest` persiste un presupuesto por petición (`source_path`, `document_type`, `content`) en Postgres + pgvector. Una transacción; 409 si ya estaba. Respuesta: ids + `stats`, no vectores |                    |
+| pre_sesion_08              | [x]     | `POST /search`: k-NN por distancia coseno sobre el corpus persistido. Sin índice vectorial |                    |
+| pre_sesion_08              | [x]     | `query_examples.py`: ingesta idempotente del sample + 5 queries (match directo, reformulación, fuera de dominio, ambigua, específica). `compare.py` se queda |                    |
+| pre_sesion_08              | [x]     | Schema: tablas `documents` + `chunks`, metadata JSONB, `embedding` nullable `vector(1536)`, sin índice vectorial |                    |
