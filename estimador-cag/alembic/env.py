@@ -12,7 +12,9 @@ from logging.config import fileConfig
 from pathlib import Path
 
 from alembic import context
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import engine_from_config, pool
+from sqlalchemy.dialects.postgresql.base import ischema_names
 
 _ROOT = Path(__file__).resolve().parents[1]
 _SRC = _ROOT / "src"
@@ -26,6 +28,12 @@ from persistence.models import (  # noqa: E402, F401
     ChunkingComparisonRow,
     EstimationRow,
 )
+import generation.rag.store.models  # noqa: E402, F401 — register S8 tables on Base.metadata
+
+# Teach reflection about the ``vector`` column type. Without this,
+# ``alembic check`` / autogenerate against a DB that already has vector
+# columns cannot map them back and produces inconsistent diffs.
+ischema_names["vector"] = Vector
 
 config = context.config
 
