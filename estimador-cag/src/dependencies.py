@@ -22,6 +22,7 @@ from generation.rag.chunking.strategies import (
     SentenceWindowChunker,
 )
 from generation.rag.ingest_service import RagIngestService
+from generation.rag.retriever import SemanticRetriever
 from generation.rag.store.repository import ChunkStore
 from ingestion.catalog import DataCatalog, load_catalog
 from ingestion.loaders.filesystem import FileSystemLoader
@@ -113,10 +114,8 @@ def get_rag_ingest_service() -> RagIngestService | None:
 
 
 @lru_cache
-def get_semantic_retriever():
+def get_semantic_retriever() -> SemanticRetriever | None:
     """Query-side counterpart of the ingest service. Same ``None`` contract."""
-    from generation.rag.retriever import SemanticRetriever
-
     embedder = get_embedder()
     session_factory = get_async_session_factory()
     if embedder is None or session_factory is None:
