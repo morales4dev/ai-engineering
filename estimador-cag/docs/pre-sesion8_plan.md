@@ -13,7 +13,7 @@ This file is the handoff. Closed plans (`sesion7_port_plan.md`, `pre-sesion7_pla
 | Layout | Lidr `estimator/app/…`. Ours `estimador-cag/src/…`. |
 | Service name | Both Compose services are `estimator`. The PDF says `ai_service`. That name is in neither repo. README/commands use `estimator`. |
 | Already shipped | S07 ingest (in-memory, body `{budgets}`), S07 live compare + `chunking_comparisons`, Alembic sync (`0000` → `0001` → `0002_chunking_comparisons`), `pgvector/pgvector:pg16` in compose, `sqlalchemy>=2.0` + `alembic>=1.13` + `psycopg[binary]`, `DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/estimator`, scripts volume, `compare.py`. |
-| Not in tree | `generation/rag/store/`, `ingest_service.py`, `retriever.py`, `routers/search.py`, `asyncpg`, `pgvector`, `greenlet`, `query_examples.py`, `output_examples.txt`. |
+| Not in tree | `generation/rag/store/`, `ingest_service.py`, `retriever.py`, `routers/search.py`, `asyncpg`, `pgvector`, `greenlet`, `query_examples.py`, `output_examples.txt`, `README-session-08.md`. |
 
 Entry points **at plan start**:
 
@@ -25,7 +25,7 @@ Entry points **at plan start**:
 - `pyproject.toml` — no `asyncpg`, no `pgvector`, no `greenlet`.
 - `scripts/` — `compare.py` + `compare_chunkers.py` + s06 demos. No `query_examples.py`.
 - `README.md` — Embeddings section still says ingest is in-memory. `compare.py` documented at the end of that section. No Sesión 8 block.
-- Leftover: empty untracked `src/alembic.ini` (0 bytes). Delete in step 1. Do not `alembic init`.
+- Do not `alembic init`.
 
 ## Locked
 
@@ -35,18 +35,18 @@ Entry points **at plan start**:
 - Dual stack (we need this): S06/S07 jobs stay on sync `psycopg`. RAG ingest/search use **one async SQLAlchemy session** (`asyncpg`). One `DATABASE_URL`; the async engine swaps `+psycopg` → `+asyncpg` in code. Do not put `postgresql+asyncpg://` in compose. Declare `greenlet>=3.0` ourselves: our lock resolves SQLAlchemy 2.1, which does not pull it. Lidr’s 2.0 lock does. `store/__init__.py` re-exports `ChunkStore` (straight copy); that import is fine once greenlet is in the image.
 - Keep our lazy `None` if `DATABASE_URL` unset. Do not copy Lidr `database.py` wholesale (they always build the engine).
 - `compare.py` stays. Add `scripts/query_examples.py`. Document it in the README next to `compare.py`.
-- Bring Lidr’s three S08 tests (HTTP fakes + model metadata). Rewrite imports. No live Postgres fixtures.
-- `output_examples.txt`: student runs the script; the agent does not invent distances and does not paste Lidr’s file.
+- Bring Lidr’s three S08 tests (HTTP fakes + model metadata). Rewrite imports. No live Postgres fixtures. Lidr’s ingest HTTP test asserts the four-field body; add `stats` when we copy it.
+- Deliverable is the code + `output_examples.txt` (student-run numbers) + `README-session-08.md` (the four schema answers). The agent does not invent distances and does not paste Lidr’s `output_examples.txt`.
 - `source_path` index is **not** unique. 409 is check-then-insert (not race-proof). No vector index. `embedding` nullable. `Vector(1536)`.
 - ORM attribute `metadata_` mapped to column `"metadata"` (SQLAlchemy reserved name). The PDF does not mention this; without it the model breaks.
 - `chunk_type` is written by the store as `"budget_component"`. Our chunker has no such field.
 - 409 body is the PDF’s top-level shape `{"detail": "Document already ingested", "document_id": N}`. Use `JSONResponse`, not `HTTPException` (that nests `document_id`).
-- `IngestResponse` is Lidr’s four persist fields **plus** `stats` (`IngestStats`: `total_budgets`, `total_chunks`, `total_tokens`, `estimated_cost_usd`). No vectors. One ingest = one budget so `total_budgets` is 1. Lidr’s HTTP tests assert the four-field body; when we copy them, add `stats`.
+- `IngestResponse` is Lidr’s four persist fields **plus** `stats` (`IngestStats`: `total_budgets`, `total_chunks`, `total_tokens`, `estimated_cost_usd`). Keep `IngestStats`. No vectors. One ingest = one budget so `total_budgets` is 1.
 - No new `Settings` fields. `OPENAI_API_KEY` / `EMBEDDING_MODEL` / `DATABASE_URL` already exist.
 - Do not copy `session_08_live` (HNSW, halfvec, filters, hybrid, tuning).
 - Do not copy Lidr `ARCHITECTURE.md`, `uv.lock`, `docker-compose.yml`, `output_examples.txt`.
-- Do not edit `docs/evolution.md` unless asked.
-- Do not rewrite CAG / Streamlit / `/embeddings/compare` / `chunking_comparisons` / S06 ingestion.
+- Update `docs/evolution.md`: add the `pre_sesion_08` event and the four S08 rows; mark the S07 in-memory ingest as superseded by this contract.
+- Do not rewrite CAG / Streamlit / `/embeddings/compare` / `chunking_comparisons` / S06 ingestion. The comparison-lab docstrings (`analysis/comparison.py`, `chunking/strategies/__init__.py`) stay about compute + `chunking_comparisons`; they do not write `documents` / `chunks`.
 - Import rewrite: drop `app.`. Do not write `from src.…`.
 - Step 1 ends with `docker compose up --build` from `estimador-cag/`. Do not `down -v`.
 
@@ -82,14 +82,14 @@ Entry points **at plan start**:
 | `generation/rag/store/__init__.py` | re-exports | Copy, rewrite imports |
 | `generation/rag/ingest_service.py` | chunk → embed → persist, one txn | Copy |
 | `generation/rag/retriever.py` | embed query + SQL k-NN | Copy (the S08 file, not the S07_live stub) |
-| `generation/rag/schemas.py` | new ingest + `Search*` | **Patch ours.** Keep `Budget` / `Chunk` / `EmbeddedChunk`. Replace `IngestRequest` / `IngestResponse`. Drop unused `IngestStats`. Add `SearchRequest` / `SearchHit` / `SearchResponse`. |
+| `generation/rag/schemas.py` | new ingest + `Search*` | **Patch ours.** Keep `Budget` / `Chunk` / `EmbeddedChunk` / `IngestStats`. Replace `IngestRequest` / `IngestResponse` (persist fields + `stats`). Add `SearchRequest` / `SearchHit` / `SearchResponse`. |
 | `api/embeddings.py` | persist ingest, 409 | **Patch** `src/routers/embeddings.py`. Do not copy the file (ours also has compare / list / show). |
 | `api/search.py` | `POST /search` | Copy → `src/routers/search.py` |
 | `foundation/persistence/database.py` | dual stack | **Do not copy.** Patch ours (lazy `None`, add async derivation). |
 | `alembic/env.py` | register `vector` + import store models | **Patch ours.** Keep the host/container `sys.path` dance and the “raise if no `DATABASE_URL`”. |
 | `alembic/versions/0002_session8_pgvector.py` | extension + two tables | Copy **schema**. File is `0003_session8_pgvector.py`. `down_revision = "0002_chunking_comparisons"`. `revision = "0003_session8_pgvector"`. |
 | `scripts/query_examples.py` | 5 queries + idempotent ingest | Copy → `scripts/query_examples.py`. Commands use `estimator`. |
-| `tests/test_embeddings_ingest_persist.py` | HTTP fakes | Copy + import rewrite |
+| `tests/test_embeddings_ingest_persist.py` | HTTP fakes | Copy + import rewrite + `stats` on the 200 body |
 | `tests/test_search_endpoint.py` | HTTP fakes | Copy + import rewrite |
 | `tests/test_rag_store_models.py` | metadata introspection | Copy + import rewrite |
 | `pyproject.toml` | `asyncpg>=0.29`, `pgvector>=0.3` | Same two lines, plus `greenlet>=3.0` (ours; see Locked) |
@@ -117,10 +117,9 @@ Entry points **at plan start**:
 
 ---
 
-## Step 1 — Deps, leftover, rebuild
+## Step 1 — Deps + rebuild
 
-- Delete untracked empty `estimador-cag/src/alembic.ini`.
-- `pyproject.toml`: add `asyncpg>=0.29`, `pgvector>=0.3`, and `greenlet>=3.0` (comment: Session 8). `sqlalchemy` / `alembic` already there.
+- `pyproject.toml`: add `asyncpg>=0.29`, `pgvector>=0.3`, and `greenlet>=3.0`. `sqlalchemy` / `alembic` already there.
 - `cd estimador-cag && uv lock && uv sync`
 - `docker compose up --build` (do not `down -v`).
 
@@ -178,10 +177,11 @@ Patch `src/dependencies.py` (do not copy the file). Add Lidr’s three factories
 
 Copy-from: Lidr `ingest_service.py`; Lidr `schemas.py` ingest/search models; Lidr `api/embeddings.py` **ingest handler only**.
 
-- `src/generation/rag/schemas.py`: replace `IngestRequest` / `IngestResponse` with the PDF/Lidr persist contract (`source_path`, `document_type`, `content: Budget`). Drop `IngestStats` (nothing else uses it). Add `SearchRequest` / `SearchHit` / `SearchResponse` here (needed by step 5; fine to add now).
-- Copy `ingest_service.py`. Sync embedder stays sync; call it with `asyncio.to_thread`. One `async with session_factory() as session, session.begin()`. Duplicate → `DuplicateDocumentError`. Embed failure rolls back.
+- `src/generation/rag/schemas.py`: replace `IngestRequest` / `IngestResponse` with the persist contract (`source_path`, `document_type`, `content: Budget`) plus `stats` (`IngestStats`). Keep `IngestStats`. Add `SearchRequest` / `SearchHit` / `SearchResponse` here (needed by step 5; fine to add now).
+- Copy `ingest_service.py`. Sync embedder stays sync; call it with `asyncio.to_thread`. One `async with session_factory() as session, session.begin()`. Duplicate → `DuplicateDocumentError`. Embed failure rolls back. Response fills the four persist fields and `stats` (`total_budgets` is 1).
 - Patch `routers/embeddings.py` ingest only: `async`, `Depends(get_rag_ingest_service)`, 409 `JSONResponse` literal shape, 500 generic on other errors. **Leave** `/compare`, `/comparisons`, `/comparisons/{id}` untouched.
 - Patch `src/generation/rag/__init__.py` docstring: ingest now persists; vectors no longer travel over HTTP.
+- Patch the comparison-lab docstrings so they stay about compute + `chunking_comparisons` (`analysis/comparison.py`, `chunking/strategies/__init__.py`). They do not write `documents` / `chunks`.
 
 **Acceptance:** `GET /docs` shows the new ingest body. A body with `{budgets: […]}` 422s. A body missing `components` 422s before any service call. Do not fire a live ingest yet.
 
@@ -203,7 +203,7 @@ Copy-from: Lidr `retriever.py` (S08), `api/search.py`.
 
 Copy-from: the three Lidr files. Import rewrite. Do not copy Lidr `conftest.py`.
 
-- `tests/test_embeddings_ingest_persist.py`
+- `tests/test_embeddings_ingest_persist.py` — add `stats` on the 200 body
 - `tests/test_search_endpoint.py`
 - `tests/test_rag_store_models.py`
 
@@ -211,7 +211,7 @@ Copy-from: the three Lidr files. Import rewrite. Do not copy Lidr `conftest.py`.
 
 **Stop.** Tick. Wait.
 
-## Step 7 — `query_examples.py` + README
+## Step 7 — `query_examples.py` + README + evolution
 
 Copy-from: Lidr `scripts/query_examples.py`; Lidr README «Sesión 8» block.
 
@@ -224,14 +224,15 @@ Copy-from: Lidr `scripts/query_examples.py`; Lidr README «Sesión 8» block.
   - Keep the `compare.py` subsection. **Immediately after it**, document `query_examples.py` (same place, same style: host + `docker compose`).
   - Append a «Sesión 8» section: endpoints, one-transaction note, schema justifications (two tables, JSONB, cosine, no vector index, nullable embedding, `vector(1536)`), out of scope = live session. Paths = ours. Migration file = `0003_session8_pgvector.py`. Do not paste Lidr’s `ingestion_time_ms` / `output_examples.txt` numbers.
   - Do not rewrite the CAG intro (“CAG itself needs no extra infrastructure…”). That sentence is still true for the CAG path.
+- `docs/evolution.md`: add the `pre_sesion_08` event and the four S08 rows; mark the S07 in-memory ingest as superseded.
 
-Do not write `output_examples.txt`.
+Do not write `output_examples.txt` here.
 
 **Stop.** Tick. Wait.
 
-## Step 8 — STOP. Student runs the script
+## Step 8 — Student run + deliverable files
 
-Agent stops here. Do not `curl` ingest. Do not run `query_examples.py`. Do not start compose just to fire OpenAI. Guide only.
+Agent does not `curl` ingest, does not run `query_examples.py`, and does not start compose just to fire OpenAI. Guide only. The student runs the script; the numbers come from that run.
 
 **Guide (from `estimador-cag/`, stack up, `.env` with `OPENAI_API_KEY`):**
 
@@ -241,7 +242,10 @@ docker compose run --rm estimator python scripts/query_examples.py
 
 Expect: 17 budgets ingested (or skipped on 409 if re-run), then five blocks with `chunk_id`, `distance` to 4 decimals, `chunk_type`, ~120 chars of content.
 
-Student pastes the terminal output (or a 3–5 line note if it 500s). Then, if asked, land `estimador-cag/output_examples.txt` from **those** numbers. Do not use Lidr’s file.
+Land both files from that run:
+
+- `estimador-cag/output_examples.txt` — the terminal output, those numbers. Do not use Lidr’s file.
+- `estimador-cag/README-session-08.md` — the four schema answers (two tables, JSONB metadata, cosine, no vector index). Ours, not a Lidr port.
 
 ---
 
@@ -249,16 +253,16 @@ Student pastes the terminal output (or a 3–5 line note if it 500s). Then, if a
 
 | # | Title | OK |
 |---|---|---|
-| 1 | `asyncpg` + `pgvector` + `greenlet` + lock + rebuild. Delete leftover `src/alembic.ini`. No compose edit | [x] |
+| 1 | `asyncpg` + `pgvector` + `greenlet` + lock + rebuild. No compose edit | [x] |
 | 2 | `store/` + Alembic `0003` + `env.py` vector registration | [x] |
 | 3 | Async engine (derived URL) + DI factories | [x] |
-| 4 | Ingest persist contract + `RagIngestService` + router 409 | [x] |
+| 4 | Ingest persist contract + `stats` + `RagIngestService` + router 409 | [x] |
 | 5 | `POST /search` + retriever | [x] |
-| 6 | Three Lidr tests, import rewrite | [x] |
-| 7 | `query_examples.py` + README (next to `compare.py` + Sesión 8 block) | [x] |
-| 8 | STOP — student runs the script → `output_examples.txt` | [ ] |
+| 6 | Three Lidr tests, import rewrite, `stats` on the 200 body | [x] |
+| 7 | `query_examples.py` + README (next to `compare.py` + Sesión 8 block) + `evolution.md` | [x] |
+| 8 | Student run → `output_examples.txt` + `README-session-08.md` | [x] |
 
-Next work is **step 8** (student runs the script).
+Done. Deliverable is the code + `output_examples.txt` + `README-session-08.md`.
 
 ## Out of this plan
 
@@ -271,6 +275,5 @@ Next work is **step 8** (student runs the script).
 - Unique constraint on `source_path`.
 - Vector index of any kind.
 - Streamlit tab for search. Rails. `EstimationService`.
-- Editing `docs/evolution.md`.
 - Overwriting `SANITY_CHECK.md`.
 - Inventing distances or ingest timings.

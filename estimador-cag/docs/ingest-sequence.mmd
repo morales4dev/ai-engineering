@@ -1,0 +1,42 @@
+sequenceDiagram
+    actor Client
+    participant API as FastAPI /embeddings/ingest
+    participant Svc as RagIngestService
+    participant Store as ChunkStore
+    participant Chunker as JSONStructuralChunker
+    participant Emb as OpenAIEmbedder
+    participant PG as Postgres
+
+    Client->>API: POST source_path + document_type + content
+    alt invalid body
+        API-->>Client: 422
+    else no embedder or no async DB
+        API-->>Client: 500 Embedding service is not available
+    else ok
+        API->>Svc: ingest(...)
+        Svc->>Svc: begin one transaction
+        Svc->>Store: find_document_id(source_path)
+        Store->>PG: SELECT documents.id
+        PG-->>Store: id or none
+        alt already ingested
+            Svc-->>API: DuplicateDocumentError
+            API-->>Client: 409 detail + document_id
+        else new
+            Svc->>Chunker: chunk([budget])
+            Chunker-->>Svc: chunks
+            Svc->>Emb: embed_many (to_thread)
+            alt embed fails
+                Emb-->>Svc: error
+                Svc->>PG: ROLLBACK
+                Svc-->>API: error
+                API-->>Client: 500 Failed to generate embeddings
+            else embedded
+                Emb-->>Svc: vectors
+                Svc->>Store: persist_document_with_chunks
+                Store->>PG: INSERT documents + chunks
+                Svc->>PG: COMMIT
+                Svc-->>API: document_id, chunks_created, stats
+                API-->>Client: 200 IngestResponse
+            end
+        end
+    end

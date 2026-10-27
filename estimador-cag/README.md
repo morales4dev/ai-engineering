@@ -653,7 +653,13 @@ POST /embeddings/ingest   (now persists)
   200 OK · 409 {"detail": "Document already ingested", "document_id": N} · 422 · 500
   One transaction: if the embedder fails, rollback — no orphan documents.
   One ingest = one budget, so stats.total_budgets is 1.
+```
 
+Source: `docs/ingest-sequence.mmd`.
+
+![Ingest sequence](docs/ingest-sequence.svg)
+
+```
 POST /search
   Input:  {"query": "REST API with OAuth authentication", "k": 5}
   Output: {"query", "k", "search_time_ms",
@@ -661,17 +667,11 @@ POST /search
   k-NN by cosine distance (SQL <=> ). No vector index: sequential scan.
 ```
 
+Source: `docs/search-sequence.mmd`.
+
+![Search sequence](docs/search-sequence.svg)
+
 For the full sample + the five queries, use `query_examples.py` above. Do not invent distances here.
 
-### Schema decisions
-
-- **Two tables, not one.** One budget produces N chunks: a real one-to-many. A single table would copy document metadata onto every row and lose referential integrity. `ON DELETE CASCADE` drops the chunks when the budget goes; `documents` owns provenance (`source_path`, `ingested_at`), `chunks` owns the vectors.
-- **`metadata` as JSONB, not typed columns.** Stable fields (document type, chunk type, dates) stay typed; what the chunker may enrich (sector, technologies, hours) goes to JSONB. The GIN index can query arbitrary keys without a migration per key. Promote a key to a typed column only when it becomes a hot filter.
-- **`cosine_distance`, not L2 or inner product.** OpenAI embeddings are normalized, so ranking would match; cosine is the RAG convention and it stays aligned with the `vector_cosine_ops` operator class the live session will use for HNSW. If the query operator and the index opclass disagree, Postgres silently ignores the index and sequential-scans.
-- **No vector index yet (deliberate).** With 17 budgets / ~60 chunks a sequential scan is the baseline the live session measures HNSW against. Adding an index now would hide that comparison.
-- **`embedding` nullable.** Lets a later session insert the chunk and fill the vector afterwards. This session writes chunk + embedding in the same transaction.
-- **`vector(1536)` hardcoded.** That is `text-embedding-3-small`. Changing it means re-embedding the corpus; it is not a runtime setting.
-
-**Out of scope (live session):** vector indexes (HNSW / IVFFlat), SQL metadata filters, hybrid search (full-text + vector), Postgres tuning.
 
 
