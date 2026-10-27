@@ -21,9 +21,13 @@ from generation.rag.chunking.strategies import (
     SemanticChunker,
     SentenceWindowChunker,
 )
+from generation.rag.ingest_service import RagIngestService
+from generation.rag.retriever import SemanticRetriever
+from generation.rag.store.repository import ChunkStore
 from ingestion.catalog import DataCatalog, load_catalog
 from ingestion.loaders.filesystem import FileSystemLoader
 from ingestion.parsers.registry import ParserRegistry, default_registry
+from persistence.database import get_async_session_factory
 from services.cache import EstimationCache
 from services.llm_wrapper import LLMWrapper
 from services.runtime_config import RuntimeModelConfig
@@ -72,7 +76,7 @@ def get_openai_client() -> OpenAI | None:
 
 @lru_cache
 def get_chunker() -> JSONStructuralChunker:
-    """Stateless structural chunker for the embedding pipeline (Session 7)."""
+    """Stateless structural chunker for the embedding pipeline."""
     return JSONStructuralChunker()
 
 
@@ -89,6 +93,41 @@ def get_embedder() -> OpenAIEmbedder | None:
 
 
 @lru_cache
+def get_chunk_store() -> ChunkStore:
+    """Stateless async data-access layer over documents/chunks."""
+    return ChunkStore()
+
+
+@lru_cache
+def get_rag_ingest_service() -> RagIngestService | None:
+    """Chunk → embed → persist. ``None`` without an embedder or async DB."""
+    embedder = get_embedder()
+    session_factory = get_async_session_factory()
+    if embedder is None or session_factory is None:
+        return None
+    return RagIngestService(
+        chunker=get_chunker(),
+        embedder=embedder,
+        session_factory=session_factory,
+        store=get_chunk_store(),
+    )
+
+
+@lru_cache
+def get_semantic_retriever() -> SemanticRetriever | None:
+    """Query-side counterpart of the ingest service. Same ``None`` contract."""
+    embedder = get_embedder()
+    session_factory = get_async_session_factory()
+    if embedder is None or session_factory is None:
+        return None
+    return SemanticRetriever(
+        embedder=embedder,
+        session_factory=session_factory,
+        store=get_chunk_store(),
+    )
+
+
+@lru_cache
 def get_anthropic_client() -> anthropic.Anthropic | None:
     """Anthropic client for Contextual Retrieval. None without a key."""
     settings = get_settings()
@@ -97,7 +136,6 @@ def get_anthropic_client() -> anthropic.Anthropic | None:
     return anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 
-# --- Session 7 live: one factory per chunking strategy ---
 # Propositional / contextual are NOT @lru_cache: rebuilt per compare so a
 # runtime model override takes effect on the next run.
 

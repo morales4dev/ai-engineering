@@ -1,6 +1,6 @@
 """Chunking comparison framework.
 
-Two informal signals (formal recall@k / NDCG are Session 11):
+Two informal signals (not formal recall@k / NDCG):
 
 1. **Corpus stats** per strategy — how many chunks, the token distribution, and
    how many degenerate (orphan < 20 tok, obese > 800 tok). A glance tells you
@@ -9,7 +9,8 @@ Two informal signals (formal recall@k / NDCG are Session 11):
    chunks each strategy retrieves, with their similarity, ready to read on
    screen and judge by eye (binary relevance).
 
-Nothing is persisted; everything lives in memory. Persistence is Session 8.
+This module only computes. The HTTP handler persists the result to
+``chunking_comparisons``; it does not write ``documents`` / ``chunks``.
 
 Each strategy is chunked **once** per ``budgets`` object and the result memoized,
 so asking for both stats and queries never doubles the (expensive) LLM calls of

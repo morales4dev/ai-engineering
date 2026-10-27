@@ -278,21 +278,21 @@ estimador-cag/
 │   ├── rates.py                # rate card + weekly bands
 │   ├── utils.py                # package root path
 │   ├── sessions/               # in-process Session + history + store + compression
-│   ├── routers/                # /estimate, /sessions, /ingestion, /embeddings, /config
+│   ├── routers/                # /estimate, /sessions, /ingestion, /embeddings, /search, /config
 │   ├── prompts/                # estimation/v1|v2|v3 + metadata + conversation_summary + critic
 │   ├── guardrails/             # input check (exception) + output filter
 │   ├── cache/                  # semantic cache (bucket + cosine)
 │   ├── services/               # oneshot, conversational, ACB, attachments, history, prompt_boundary
 │   ├── schemas/                # estimation + acb + critic + ingestion
 │   ├── ingestion/              # catalog, loaders, parsers, cleaning, pii, orchestrator
-│   ├── generation/rag/         # chunking + embed + compare lab
+│   ├── generation/rag/         # chunking + embed + persist + search + compare lab
 │   └── persistence/            # jobs + mappings repos
 ├── data/                       # catalog.yaml + seed + budgets_sample.json + test_queries.json
-├── alembic/                    # estimations + session6 tables
+├── alembic/                    # estimations + session6 tables + documents/chunks
 ├── alembic.ini
 ├── evals/                      # golden dataset, metrics, CLI runner + stress/
 ├── tests/
-├── scripts/                    # preflight_s06, demo_cleaning, demo_pii, compare.py, compare_chunkers.py
+├── scripts/                    # preflight_s06, demo_cleaning, demo_pii, compare.py, compare_chunkers.py, query_examples.py
 ├── docs/                       # oneshot sequence + session notes
 ├── streamlit_app.py            # New + Conversational + Recent + Chunking Lab + Ajustes
 ├── Dockerfile
@@ -482,15 +482,15 @@ PYTHONPATH=src:. uv run python scripts/demo_pii_s06.py
 
 ## Embeddings pipeline
 
-First step toward semantic search: turn historical budgets (JSON) into vectors. The lab lives in `src/generation/rag/` and exposes `POST /embeddings/ingest` and `POST /embeddings/compare` via `src/routers/embeddings.py`. **Ingest is still in-memory** — vectors are generated and returned over HTTP. Compare history is a separate table (`chunking_comparisons`).
+First step toward semantic search: turn historical budgets (JSON) into vectors. The lab lives in `src/generation/rag/` and exposes `POST /embeddings/ingest` and `POST /embeddings/compare` via `src/routers/embeddings.py`. Session 07 ingest was in-memory (vectors returned over HTTP). **Since Session 8, ingest persists in pgvector** — see [Sesión 8](#sesión-8--vector-persistence-and-semantic-search). Compare history is a separate table (`chunking_comparisons`).
 
-`POST /embeddings/ingest` does not read `data/seed/`, does not call the ingestion pipeline, and does not write Postgres, Redis, or files. The client sends `{"budgets": [...]}` in the body. The router chunks → OpenAI embeddings → returns `chunks` + `stats` in the HTTP response. Drop the JSON or kill the process and the vectors are gone. Same contract as `src/generation/rag/__init__.py`.
+`POST /embeddings/ingest` does not read `data/seed/` and does not call the Session 6 ingestion pipeline. One request = one budget (`source_path`, `document_type`, `content`). Vectors stay in Postgres; the HTTP body is persist ids + `stats`, not the vectors. Same contract as `src/generation/rag/__init__.py`.
 
 Pieces:
 
 - `generation/rag/chunking/structural.py` (`JSONStructuralChunker`) — **structural** chunking: one budget component = one chunk. Each chunk is prepended with a context header from the parent budget (project, sector, technology) so it does not lose track of whom it belongs to. Token counting with `tiktoken`.
 - `generation/rag/embedding/embedder.py` (`OpenAIEmbedder`) — calls `text-embedding-3-small` (1536 dims) in **batches** of 100, with exponential retry (1s/2s/4s) on `RateLimitError` and per-batch logging.
-- `routers/embeddings.py` — orchestrates `chunk → embed → stats` and `/compare`.
+- `routers/embeddings.py` — persist ingest + `/compare`.
 
 How to debug (cwd `estimador-cag/`, `PYTHONPATH=src`):
 
@@ -508,30 +508,9 @@ How to debug (cwd `estimador-cag/`, `PYTHONPATH=src`):
   print('tokens0', chunks[0].token_count)
 ```
 
-### New endpoint
+### Ingest endpoint
 
-```
-POST /embeddings/ingest
-  Input  (IngestRequest):  {"budgets": [ <Budget>, ... ]}
-  Output (IngestResponse): {"chunks": [ <EmbeddedChunk>, ... ], "stats": {...}}
-  200 OK · 422 Pydantic validation · 500 embeddings API error (generic message, detail in logs)
-```
-
-It shows up in Swagger (`http://localhost:8000/docs`) and can be invoked from there with the sample data.
-
-From the command line, feeding the 17 example budgets (`data/budgets_sample.json` is a **JSON array**; the endpoint expects `{"budgets": [...]}`):
-
-```bash
-cd estimador-cag
-
-# httpie (wraps the array in the "budgets" field)
-http POST :8000/embeddings/ingest budgets:=@data/budgets_sample.json
-
-# equivalent curl
-curl -s -X POST http://localhost:8000/embeddings/ingest \
-  -H 'Content-Type: application/json' \
-  -d "{\"budgets\": $(cat data/budgets_sample.json)}" | python -m json.tool | head -40
-```
+> **Contract updated in Session 8.** The Session 07 body (`{"budgets": [...]}` → chunks + vectors over HTTP, nothing persisted) was replaced by one document per request. The persist contract, status codes, and schema live in [Sesión 8](#sesión-8--vector-persistence-and-semantic-search). Chunker and embedder are the same; what changed is what happens to the vectors.
 
 Do not POST `data/seed/budgets/*.json` here — that schema (`client_name`, `phases[]`) is not `Budget` and will 422.
 
@@ -644,6 +623,55 @@ docker compose exec estimator python scripts/compare.py --text-a "..." --text-b 
 ```
 
 The three validation pairs from the exercise are in [`src/generation/rag/SANITY_CHECK.md`](src/generation/rag/SANITY_CHECK.md).
+
+### CLI script `query_examples.py`
+
+Smoke test of the Session 8 path: idempotent ingest of `data/budgets_sample.json` (one document per budget; 409 is skipped) then five queries against `POST /search` (direct match, semantic reformulation, out-of-domain, ambiguous, highly specific). Top-5 hits, distance to 4 decimals, ~120-char content preview. Does not replace `compare.py`.
+
+```bash
+# host (API already on localhost:8000)
+cd estimador-cag
+uv run python scripts/query_examples.py
+
+# container (service name: estimator)
+docker compose run --rm estimator python scripts/query_examples.py
+```
+
+The script probes `localhost:8000` and `estimator:8000`, or uses `ESTIMATOR_BASE_URL` if set. Needs `OPENAI_API_KEY`. Re-runs skip already-ingested budgets.
+
+## Sesión 8 — Vector persistence and semantic search
+
+The Session 7 pipeline no longer returns vectors over HTTP. It persists them in Postgres + pgvector (`pgvector/pgvector:pg16`, already in compose). Schema is Alembic revision `alembic/versions/0003_session8_pgvector.py`: `vector` extension + tables `documents` and `chunks`. New pieces: `src/generation/rag/store/` (ORM + async repository), `src/generation/rag/ingest_service.py` (chunk → embed → persist), `src/generation/rag/retriever.py`, `POST /search`. The async stack sits next to the Session 6 sync one: one `DATABASE_URL`; the async engine swaps `+psycopg` → `+asyncpg` in code.
+
+### Endpoints
+
+```
+POST /embeddings/ingest   (now persists)
+  Input:  {"source_path": "...", "document_type": "historical_budget", "content": <Budget>}
+  Output: {"document_id", "chunks_created", "embedding_dimension", "ingestion_time_ms",
+           "stats": {"total_budgets", "total_chunks", "total_tokens", "estimated_cost_usd"}}
+  200 OK · 409 {"detail": "Document already ingested", "document_id": N} · 422 · 500
+  One transaction: if the embedder fails, rollback — no orphan documents.
+  One ingest = one budget, so stats.total_budgets is 1.
+```
+
+Source: `docs/ingest-sequence.mmd`.
+
+![Ingest sequence](docs/ingest-sequence.svg)
+
+```
+POST /search
+  Input:  {"query": "REST API with OAuth authentication", "k": 5}
+  Output: {"query", "k", "search_time_ms",
+           "results": [{chunk_id, document_id, chunk_type, content, distance, metadata}]}
+  k-NN by cosine distance (SQL <=> ). No vector index: sequential scan.
+```
+
+Source: `docs/search-sequence.mmd`.
+
+![Search sequence](docs/search-sequence.svg)
+
+For the full sample + the five queries, use `query_examples.py` above. Do not invent distances here.
 
 
 

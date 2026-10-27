@@ -1,0 +1,30 @@
+sequenceDiagram
+    actor Client
+    participant API as FastAPI /search
+    participant Ret as SemanticRetriever
+    participant Emb as OpenAIEmbedder
+    participant Store as ChunkStore
+    participant PG as Postgres
+
+    Client->>API: POST query + k
+    alt k out of bounds or empty query
+        API-->>Client: 422
+    else no embedder or no async DB
+        API-->>Client: 500 Embedding service is not available
+    else ok
+        API->>Ret: search(query, k)
+        Ret->>Emb: embed_one(query) (to_thread)
+        alt embed fails
+            Emb-->>Ret: error
+            Ret-->>API: error
+            API-->>Client: 500 Failed to run semantic search
+        else query vector
+            Emb-->>Ret: vector
+            Ret->>Store: search(vector, k)
+            Store->>PG: SELECT cosine_distance LIMIT k
+            PG-->>Store: rows (maybe empty)
+            Store-->>Ret: rows
+            Ret-->>API: results
+            API-->>Client: 200 SearchResponse
+        end
+    end

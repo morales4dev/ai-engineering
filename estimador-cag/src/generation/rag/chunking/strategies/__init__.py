@@ -1,4 +1,4 @@
-"""Chunking strategies for the Session 7 comparison.
+"""Chunking strategies for the comparison lab.
 
 Seven strategies behind the common :class:`generation.rag.chunking.base.Chunker`
 interface (the structural chunker lives in ``generation.rag.chunking.structural``).

@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from config import get_settings
 from routers.embeddings import router as embeddings_router
+from routers.search import router as search_router
 from routers.config import router as config_router
 from routers.estimations import router as estimations_router
 from routers.ingestion import router as ingestion_router
@@ -87,6 +88,7 @@ app.include_router(estimations_router)
 app.include_router(sessions_router)
 app.include_router(ingestion_router)
 app.include_router(embeddings_router)
+app.include_router(search_router)
 app.include_router(config_router)
 
 
