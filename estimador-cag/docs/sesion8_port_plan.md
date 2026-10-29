@@ -209,7 +209,7 @@ Copy-from: Lidr README «Live Session 08 — Indexación vectorial y operación�
 - Tuning sentence: our service is `postgres`, not `estimator-postgres`.
 - Keep Lidr’s canonical `pg_stat_user_indexes` query.
 - Entregable Lia: point at `docs/sesion8_ef_search.md` (lands in step 6).
-- In the existing Sesión 8 `/search` bullet («No vector index: sequential scan»), add one pointer: indexes are created by the operator (next section); Alembic `0003` still has none. Do not rewrite the rest of that section. Do not delete the historical «Fuera de scope» line; the new section is the live material.
+- In the existing Sesión 8 `/search` bullet («No vector index: sequential scan»), add one pointer: indexes are created by the operator (next section); Alembic `0003` still has none. Do not rewrite the rest of that section. Our README has no «Fuera de scope» line (Lidr’s pre-s8 section does). Do not invent one. The new Live section is the live material.
 - Do not rewrite `README-session-08.md`.
 
 **Acceptance:** new section is in `README.md`. Commands work if you type them from `estimador-cag/`. Pre-s8 contract text still true of the schema.
