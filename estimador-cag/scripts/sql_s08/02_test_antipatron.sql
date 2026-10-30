@@ -42,7 +42,7 @@ WHERE relname = 'chunks';
 
 -- ------------------------------------------------------------
 -- Variante con un vector externo (la query real del benchmark).
--- El script measure_baseline_s08.py imprime al final el literal pgvector
+-- El script scripts/s08/measure_baseline_s08.py imprime al final el literal pgvector
 -- de la primera query — sustituid <embedding_vector> por ese literal:
 --
 -- EXPLAIN ANALYZE

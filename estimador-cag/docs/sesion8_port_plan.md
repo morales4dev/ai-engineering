@@ -82,17 +82,17 @@ Entry points **at plan start**:
 | `from app.foundation.persistence.database import get_async_session_factory` | `from persistence.database import get_async_session_factory` |
 | `from query_examples import QUERIES` | same (sibling under `scripts/`) |
 
-sys.path on every `*_s08.py` that imports project packages (same as `compare_chunkers.py`):
+sys.path on every `*_s08.py` that imports project packages (same trap as `compare_chunkers.py`, one extra `.parent` because the lab lives in `scripts/s08/`):
 
 ```python
-ROOT = Path(__file__).resolve().parent.parent  # estimador-cag/ on host, /app in the container
+ROOT = Path(__file__).resolve().parent.parent.parent  # estimador-cag/ on host, /app in the container
 for candidate in (ROOT / "src", ROOT):
     if (candidate / "config.py").exists():
         sys.path.insert(0, str(candidate))
         break
 ```
 
-`s08_common.py` keeps Lidr’s `SCRIPTS_DIR` insert so `query_examples` resolves. Callers set the project path **before** importing `s08_common`.
+Python lab lives in `scripts/s08/` (not flat under `scripts/`). `s08_common.py` inserts `scripts/` (`parent.parent`) so `query_examples` still resolves. Callers set the project path **before** importing `s08_common`.
 
 `require_embedder()` message: `estimador-cag/.env` (not `estimator/.env`). Recreate command stays `docker compose up -d --force-recreate estimator`.
 
@@ -101,12 +101,12 @@ for candidate in (ROOT / "src", ROOT):
 | Lidr path | Role | Action |
 |---|---|---|
 | `estimator/docker-compose.yml` (shm + 5 `-c` only) | HNSW build tuning | **Patch** ours. Do not copy the file. Service name stays `postgres`. |
-| `scripts/s08_common.py` | Shared helpers + `QUERIES` | Copy → `scripts/s08_common.py`. Rewrite imports. Add `require_async_session_factory()`. |
-| `scripts/measure_baseline_s08.py` | SQL latency of `/search`’s SELECT | Copy + trap + rewrite |
-| `scripts/sweep_ef_search_s08.py` | `ef_search` vs recall | Copy + trap + rewrite |
-| `scripts/compare_indexes_s08.py` | vector vs halfvec, no drop | Copy + trap + rewrite. **Step 5 patches** the vector path. |
-| `scripts/report_index_sizes_s08.py` | sizes / `idx_scan` | Copy + trap + rewrite |
-| `scripts/insert_synthetic_chunks_s08.py` | real embeddings, `count` | Copy + trap + rewrite |
+| `scripts/s08_common.py` | Shared helpers + `QUERIES` | Copy → `scripts/s08/s08_common.py`. Rewrite imports. Add `require_async_session_factory()`. |
+| `scripts/measure_baseline_s08.py` | SQL latency of `/search`’s SELECT | Copy → `scripts/s08/`. Trap + rewrite |
+| `scripts/sweep_ef_search_s08.py` | `ef_search` vs recall | Copy → `scripts/s08/`. Trap + rewrite |
+| `scripts/compare_indexes_s08.py` | vector vs halfvec, no drop | Copy → `scripts/s08/`. Trap + rewrite. **Step 5 patches** the vector path. |
+| `scripts/report_index_sizes_s08.py` | sizes / `idx_scan` | Copy → `scripts/s08/`. Trap + rewrite |
+| `scripts/insert_synthetic_chunks_s08.py` | real embeddings, `count` | Copy → `scripts/s08/`. Trap + rewrite |
 | `scripts/sql_s08/01_create_hnsw.sql` | HNSW on `embedding` (`<=>`) | Copy. Adapt `psql` lines. Lead comment = what this index does. |
 | `scripts/sql_s08/02_test_antipatron.sql` | `<=>` vs `<->`, silent seq scan | Copy. Adapt `psql` lines. |
 | `scripts/sql_s08/03_create_halfvec.sql` | HNSW on `(embedding::halfvec(1536))` | Copy. Adapt `psql` lines. Lead comment = what this index does. |
@@ -184,9 +184,9 @@ The Python scripts measure the SQL that `/search` runs, sweep `ef_search`, compa
 
 Copy-from: Lidr `s08_common.py` + `measure_baseline_s08.py` + `sweep_ef_search_s08.py` + `compare_indexes_s08.py` + `report_index_sizes_s08.py` + `insert_synthetic_chunks_s08.py`.
 
-- Copy into `scripts/`. Import rewrite + sys.path trap (table above).
+- Copy into `scripts/s08/` (package). Import rewrite + sys.path trap (table above).
 - `s08_common.py`: keep `QUERIES` from `query_examples.py`. Add `require_async_session_factory()`: if `get_async_session_factory()` is `None`, print a short error and `SystemExit(1)`. Call it from every script that today does `session_factory = get_async_session_factory()` / `async with session_factory()`.
-- Docstrings: keep Lidr’s purpose (baseline = SQL time only; sweep = recall vs latency; compare = two expressions, nothing dropped; report = read-only; insert = real embeddings, not random). Usage lines stay `docker compose run --rm estimator python scripts/…`.
+- Docstrings: keep Lidr’s purpose (baseline = SQL time only; sweep = recall vs latency; compare = two expressions, nothing dropped; report = read-only; insert = real embeddings, not random). Usage lines: `docker compose run --rm estimator python scripts/s08/…`.
 - `compare_indexes_s08.py` in **this** step: copy as Lidr live-day (`via_vector_index` → `store.search`, `via_halfvec_index` → `halfvec_statement`). Step 5 patches it. Do not “fix” it early.
 - Do not add `rich` / `tabulate`. Tables stay `format_table`.
 
@@ -204,7 +204,7 @@ Copy-from: Lidr README «Live Session 08 — Indexación vectorial y operación�
 
 - Insert **after** our «Sesión 8 — Vector persistence and semantic search» (same place Lidr put it: after the pre-exercise block).
 - Title stays that. Not «Creating indexes» alone (halfvec, antipattern, monitoring, revert, Lia).
-- Tables: one row per script / SQL with the *para qué* from step 2–3 (not CREATE syntax).
+- Tables: one row per script / SQL with the *para qué* from step 2–3 (not CREATE syntax). Python scripts: `scripts/s08/<script>`.
 - `psql` examples: our commands (`postgres`, `-U postgres`, path `scripts/sql_s08/…`).
 - Tuning sentence: our service is `postgres`, not `estimator-postgres`.
 - Keep Lidr’s canonical `pg_stat_user_indexes` query.
@@ -229,7 +229,7 @@ Patch **our** `src/generation/rag/store/repository.py` (do not copy the file):
 - `search`: comment out (or delete) `ChunkRow.embedding.cosine_distance(...)`; use `cast(ChunkRow.embedding, HALFVEC(EMBEDDING_DIMENSIONS)).cosine_distance(query_vector)`.
 - **Docstring:** Lidr left «sequential scan» stale. Rewrite it: this is the halfvec expression so Postgres can use `chunks_embedding_halfvec_idx` when that index exists; without it, seq scan + cast. No new HTTP fields.
 
-Patch `scripts/compare_indexes_s08.py` (Lidr HEAD is inconsistent after `211602d`):
+Patch `scripts/s08/compare_indexes_s08.py` (Lidr HEAD is inconsistent after `211602d`):
 
 - `via_vector_index`: **do not** call `store.search`. Order by `ChunkRow.embedding.cosine_distance(vector)` (the expression `chunks_embedding_idx` was built on).
 - `via_halfvec_index`: `store.search(...)` (now the `/search` SELECT) **or** keep `halfvec_statement` — they are the same expression. Prefer `store.search` so the script says “this side is `/search`”.
@@ -241,7 +241,7 @@ Patch `99_revert_live_session.sql` “Qué NO toca”: drop «repository.py no s
 
 HTTP contract unchanged. No new test. No Alembic.
 
-**Acceptance:** `GET /docs` still shows the same `POST /search` body. `rg HALFVEC src/generation/rag/store/repository.py` hits the cast. `rg "via_vector_index" -A8 scripts/compare_indexes_s08.py` does not call `store.search`. Existing pytest still green (`test_search_endpoint` fakes the retriever; it does not see this SQL).
+**Acceptance:** `GET /docs` still shows the same `POST /search` body. `rg HALFVEC src/generation/rag/store/repository.py` hits the cast. `rg "via_vector_index" -A8 scripts/s08/compare_indexes_s08.py` does not call `store.search`. Existing pytest still green (`test_search_endpoint` fakes the retriever; it does not see this SQL).
 
 **Stop.** Tick. Wait.
 
@@ -255,13 +255,13 @@ Agent does not create indexes, does not insert synthetics, does not run `sweep_e
 
 ```bash
 # optional fatten (paid embeddings):
-docker compose run --rm estimator python scripts/insert_synthetic_chunks_s08.py 30000
+docker compose run --rm estimator python scripts/s08/insert_synthetic_chunks_s08.py 30000
 
 # indexes (psql, our names):
 docker compose exec -T postgres psql -U postgres -d estimator < scripts/sql_s08/01_create_hnsw.sql
 docker compose exec -T postgres psql -U postgres -d estimator < scripts/sql_s08/03_create_halfvec.sql
 
-docker compose run --rm estimator python scripts/sweep_ef_search_s08.py
+docker compose run --rm estimator python scripts/s08/sweep_ef_search_s08.py
 ```
 
 Land `docs/sesion8_ef_search.md` from **that** run:
@@ -282,7 +282,7 @@ The diary already has `session_07_forense` and `pre_sesion_08`. This step only a
 - Add rows, same grain as the other live events, `[x]`:
   - Compose `postgres`: `shm_size` + maintenance flags for HNSW builds
   - Operator SQL: `chunks_embedding_idx` (vector HNSW) + `chunks_embedding_halfvec_idx` (expression halfvec). Not Alembic
-  - Lab scripts `*_s08.py` / `sql_s08/` (baseline, sweep, compare, report, synthetics, revert)
+  - Lab scripts `s08/*_s08.py` / `sql_s08/` (baseline, sweep, compare, report, synthetics, revert)
   - `ChunkStore.search` / `POST /search` orders by the halfvec cast so it can use `chunks_embedding_halfvec_idx`
 - Intro line that still says «`pre-session-08` incluida»: extend to `session_08_forense`.
 - Do **not** edit `session_07_forense` or `pre_sesion_08` rows. Do not mark pre-s8 `/search` as withdrawn.
@@ -297,7 +297,7 @@ The diary already has `session_07_forense` and `pre_sesion_08`. This step only a
 |---|---|---|
 | 1 | Compose shm + five `-c` flags on `postgres`; recreate without `-v` | [x] |
 | 2 | `scripts/sql_s08/` (01–05 + 99), comments = purpose, `psql` names ours | [x] |
-| 3 | `s08_common` + five `*_s08.py` (trap, rewrite, `require_async_session_factory`) | [ ] |
+| 3 | `s08_common` + five `*_s08.py` (trap, rewrite, `require_async_session_factory`) | [x] |
 | 4 | README «Live Session 08» section + pointer from Sesión 8 | [ ] |
 | 5 | `211602d` halfvec in `search` + compare_indexes vector-path patch + revert comment | [ ] |
 | 6 | Student run → `docs/sesion8_ef_search.md` | [ ] |

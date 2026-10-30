@@ -7,7 +7,7 @@
 -- (tuplas muertas), REINDEX CONCURRENTLY (rebuild sin bloquear lecturas).
 --
 -- Contexto del directo: acabamos de insertar ~100 chunks sintéticos con
--- insert_synthetic_chunks_s08.py para simular el crecimiento del corpus.
+-- scripts/s08/insert_synthetic_chunks_s08.py para simular el crecimiento del corpus.
 -- Ahora toca el ciclo que mantiene la BBDD vectorial sana en producción.
 --
 -- OJO: REINDEX ... CONCURRENTLY y VACUUM no pueden ejecutarse dentro de una
