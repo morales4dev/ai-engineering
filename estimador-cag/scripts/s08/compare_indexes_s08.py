@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Vector vs halfvec, sin borrar nada. Lanza las mismas 5 queries por las dos expresiones SQL y enseña overlap y tiempos. En este paso el lado “vector” aún llama a `store.search` — así lo dejó Lidr el día del live; el arreglo es el paso 5.
+"""Vector vs halfvec, sin borrar nada. Lanza las mismas 5 queries por las dos expresiones SQL y enseña overlap y tiempos. El lado vector ordena por la columna (`<=>`); el lado halfvec es `/search` (el cast).
 """
 """Compare the full-precision HNSW index against the halfvec HNSW index.
 
@@ -12,10 +12,9 @@ How each index is forced (the clean, non-destructive way): Postgres only uses
 an index whose indexed expression matches the query, so
 
 * ``ORDER BY embedding <=> :q``                          → ``chunks_embedding_idx``
-  (full-precision ``vector_cosine_ops``), via the same ``ChunkStore.search``
-  the ``/search`` endpoint uses;
+  (full-precision ``vector_cosine_ops``), column ``<=>``;
 * ``ORDER BY (embedding::halfvec(1536)) <=> :q``         → ``chunks_embedding_halfvec_idx``
-  (``halfvec_cosine_ops``), the cast expression the index was built on.
+  (``halfvec_cosine_ops``), the ``/search`` SELECT / cast.
 
 No index is dropped. The script verifies the routing with ``EXPLAIN`` and
 prints which index each plan actually used.
@@ -41,8 +40,7 @@ for candidate in (ROOT / "src", ROOT):
         sys.path.insert(0, str(candidate))
         break
 
-from pgvector.sqlalchemy import HALFVEC  # noqa: E402
-from sqlalchemy import cast, select, text  # noqa: E402
+from sqlalchemy import select, text  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 from s08_common import (  # noqa: E402
@@ -64,7 +62,6 @@ WARMUP_RUNS = 1
 MEASURED_RUNS = 2
 VECTOR_INDEX = "chunks_embedding_idx"
 HALFVEC_INDEX = "chunks_embedding_halfvec_idx"
-EMBEDDING_DIMENSIONS = 1536
 
 
 async def assert_indexes_exist(session: AsyncSession) -> None:
@@ -83,9 +80,9 @@ async def assert_indexes_exist(session: AsyncSession) -> None:
         raise SystemExit(1)
 
 
-def halfvec_statement(vector: list[float]):
-    """Top-K ordered by the cast expression the halfvec index was built on."""
-    distance = cast(ChunkRow.embedding, HALFVEC(EMBEDDING_DIMENSIONS)).cosine_distance(vector)
+def vector_statement(vector: list[float]):
+    """Top-K ordered by the column expression ``chunks_embedding_idx`` was built on."""
+    distance = ChunkRow.embedding.cosine_distance(vector)
     return select(ChunkRow.id).order_by(distance).limit(K)
 
 
@@ -143,12 +140,12 @@ async def compare(queries: list[EmbeddedQuery]) -> None:
         for _, query, vector in queries:
 
             async def via_vector_index() -> list[int]:
-                results = await store.search(session, query_vector=vector, k=K)
-                return [row.id for row in results]
+                result = await session.execute(vector_statement(vector))
+                return [row.id for row in result]
 
             async def via_halfvec_index() -> list[int]:
-                result = await session.execute(halfvec_statement(vector))
-                return [row.id for row in result]
+                results = await store.search(session, query_vector=vector, k=K)
+                return [row.id for row in results]
 
             vector_ids, vector_ms = await timed_top_ids(session, via_vector_index)
             halfvec_ids, halfvec_ms = await timed_top_ids(session, via_halfvec_index)

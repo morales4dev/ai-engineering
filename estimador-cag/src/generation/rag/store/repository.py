@@ -8,11 +8,12 @@ everything back and leaves no orphan ``documents`` row.
 
 from __future__ import annotations
 
-from sqlalchemy import Row, select
+from pgvector.sqlalchemy import HALFVEC
+from sqlalchemy import Row, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from generation.rag.schemas import EmbeddedChunk
-from generation.rag.store.models import ChunkRow, DocumentRow
+from generation.rag.store.models import ChunkRow, DocumentRow, EMBEDDING_DIMENSIONS
 
 # The structural chunker emits one chunk per budget component; the vocabulary
 # is queryable thanks to the index on ``chunk_type`` (live-session filters).
@@ -62,15 +63,20 @@ class ChunkStore:
     async def search(
         self, session: AsyncSession, *, query_vector: list[float], k: int
     ) -> list[Row]:
-        """k nearest chunks by cosine distance (``<=>``), sequential scan.
+        """k nearest chunks by cosine distance (``<=>``) over the halfvec cast.
+
+        Orders by ``embedding::halfvec(1536)`` so Postgres can use
+        ``chunks_embedding_halfvec_idx`` when that index exists. Without it:
+        seq scan plus the cast. HTTP contract unchanged.
 
         Cosine over L2/inner product: OpenAI embeddings are normalized so the
         ranking would be equivalent, but cosine keeps us aligned with the RAG
-        literature and with the ``vector_cosine_ops`` operator class of an
-        HNSW index — operator/index mismatch makes Postgres silently ignore
-        the index.
+        literature and with the ``vector_cosine_ops`` / ``halfvec_cosine_ops``
+        operator classes of the HNSW indexes — operator/index mismatch makes
+        Postgres silently ignore the index.
         """
-        distance = ChunkRow.embedding.cosine_distance(query_vector)
+        # distance = ChunkRow.embedding.cosine_distance(query_vector)
+        distance = cast(ChunkRow.embedding, HALFVEC(EMBEDDING_DIMENSIONS)).cosine_distance(query_vector)
         stmt = (
             select(
                 ChunkRow.id,

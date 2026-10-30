@@ -20,7 +20,9 @@
 -- Qué NO toca:
 --   · los 30.000 chunks sintéticos del pre-flight ni los 60 reales,
 --   · el documento sintético que los agrupa,
---   · ningún archivo del repo ni migración Alembic (repository.py no se editó).
+--   · ningún archivo del repo ni migración Alembic.
+--     El revert solo dropea índices de BBDD; el SELECT halfvec en
+--     repository.py se queda (código).
 --
 -- Cómo ejecutarlo (desde estimador-cag/, AL TERMINAR el test run):
 --
