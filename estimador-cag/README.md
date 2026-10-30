@@ -665,6 +665,7 @@ POST /search
   Output: {"query", "k", "search_time_ms",
            "results": [{chunk_id, document_id, chunk_type, content, distance, metadata}]}
   k-NN by cosine distance (SQL <=> ). No vector index: sequential scan.
+  Indexes are created by the operator (next section); Alembic `0003` still has none.
 ```
 
 Source: `docs/search-sequence.mmd`.
@@ -672,6 +673,63 @@ Source: `docs/search-sequence.mmd`.
 ![Search sequence](docs/search-sequence.svg)
 
 For the full sample + the five queries, use `query_examples.py` above. Do not invent distances here.
+
+## Live Session 08 — Indexación vectorial y operación
+
+Material de la sesión en vivo que cierra el Módulo 3: cómo se **indexa** (HNSW), **optimiza** (halfvec) y **opera** (monitorización + mantenimiento) la base de datos vectorial construida en el previo. Foco exclusivo en la capa de datos — el retrieval llega en las Sesiones 09 y 10.
+
+### Scripts Python (`scripts/s08/`)
+
+Todos se ejecutan con `docker compose run --rm estimator python scripts/s08/<script>` (o `docker compose exec estimator python scripts/s08/<script>` con el stack levantado). Reutilizan la configuración, la sesión async y el embedder del proyecto; `scripts/s08/s08_common.py` es el módulo compartido (no es un script).
+
+| Script | Qué hace |
+|---|---|
+| `scripts/s08/measure_baseline_s08.py` | Cronómetro del SQL de `/search`. No pasa por HTTP. Embebe las queries una vez y mide solo el `SELECT`. Antes y después de crear el HNSW. Imprime al final el literal pgvector de la primera query para los demos en psql. |
+| `scripts/s08/sweep_ef_search_s08.py` | Barrido de `ef_search` [10, 20, 40, 80, 120, 200]. Contra un seq scan forzado (la verdad exacta) mide latencia y recall, y marca con ★ el valor que merece la pena. |
+| `scripts/s08/compare_indexes_s08.py` | Vector vs halfvec, sin borrar nada. Las mismas 5 queries por las dos expresiones SQL: top-5, overlap y tiempos. |
+| `scripts/s08/report_index_sizes_s08.py` | Radiografía de índices de `chunks`: tipo (btree/gin/hnsw), tamaño, `idx_scan`, último uso. Solo lectura. |
+| `scripts/s08/insert_synthetic_chunks_s08.py` | Engorda el corpus con embeddings **reales** (`count` posicional, default 100). Con `30000` el seq scan se nota. Limpieza: `DELETE FROM documents WHERE document_type = 'synthetic_test';` |
+
+### Snippets SQL (`scripts/sql_s08/`)
+
+Se ejecutan en psql, en este orden durante el directo. psql vive en el contenedor de Postgres (que no monta `scripts/`), así que: redirigir el archivo o pegar bloques.
+
+```bash
+# from estimador-cag/
+docker compose exec -T postgres psql -U postgres -d estimator \
+  < scripts/sql_s08/01_create_hnsw.sql
+docker compose exec postgres psql -U postgres -d estimator
+```
+
+| Orden | Snippet | Para qué |
+|---|---|---|
+| 1 | `01_create_hnsw.sql` | Índice `chunks_embedding_idx`: HNSW sobre `embedding` para que `ORDER BY embedding <=> …` pueda Index Scan. Operator class **debe** ser cosine (`<=>`). |
+| 2 | `02_test_antipatron.sql` | Prueba de que `<->` (L2) contra un índice cosine es un seq scan silencioso. No hay error. Defensa = `EXPLAIN ANALYZE` + `idx_scan`. |
+| 3 | `03_create_halfvec.sql` | Índice `chunks_embedding_halfvec_idx`: el mismo HNSW sobre `(embedding::halfvec(1536))`. La columna sigue `vector(1536)`. ~mitad de tamaño. Solo lo usan queries que ordenen por ese mismo cast. |
+| 4 | `04_monitoring_queries.sql` | Hábito de producción: `idx_scan` / tamaño / último uso. `idx_scan = 0` tras tráfico semántico ≈ desajuste operador/clase. |
+| 5 | `05_maintenance_cycle.sql` | Tras crecer el corpus: ANALYZE (stats del planner), VACUUM (tuplas muertas), REINDEX CONCURRENTLY (rebuild sin bloquear lecturas). |
+| 99 | `99_revert_live_session.sql` | Volver a la BBDD pre-flight: dropear ambos índices vectoriales, borrar los ~100 sintéticos extra, resetear `ef_search` y `pg_stat`. Conserva los 30k del pre-flight. No revierte código. |
+
+### Operational queries
+
+La query canónica de monitorización — para tenerla a mano siempre:
+
+```sql
+SELECT indexrelname, idx_scan, last_idx_scan,
+       pg_size_pretty(pg_relation_size(indexrelid)) AS size
+FROM pg_stat_user_indexes
+WHERE relname = 'chunks'
+ORDER BY idx_scan DESC;
+```
+
+Si un índice vectorial tiene `idx_scan = 0` después de servir queries semánticas: casi seguro el operador de la query no coincide con la operator class del índice (p. ej. `<->` contra `vector_cosine_ops`). Verificación de operator classes y estadísticas de tabla: en `scripts/sql_s08/04_monitoring_queries.sql`.
+
+El tuning de Postgres para builds de índices vive en `docker-compose.yml` (servicio `postgres`): `shm_size`, `shared_buffers`, `maintenance_work_mem`, `max_parallel_maintenance_workers`. Valores conservadores de desarrollo; en producción escalan con la RAM.
+
+### Entregable post-directo (a Lia)
+
+1. Repositorio actualizado: índice halfvec activo, flags de tuning en compose, queries de monitorización en el README.
+2. Documento corto con los números observados en **vuestro** barrido de `ef_search` (tabla del script) y la decisión razonada del valor adoptado: qué recall ganáis y qué latencia pagáis frente a las alternativas. Archivo: [`docs/sesion8_ef_search.md`](docs/sesion8_ef_search.md) (se rellena en el paso 6; no copiar los números de Lidr).
 
 
 

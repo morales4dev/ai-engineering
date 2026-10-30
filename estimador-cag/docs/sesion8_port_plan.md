@@ -298,7 +298,7 @@ The diary already has `session_07_forense` and `pre_sesion_08`. This step only a
 | 1 | Compose shm + five `-c` flags on `postgres`; recreate without `-v` | [x] |
 | 2 | `scripts/sql_s08/` (01–05 + 99), comments = purpose, `psql` names ours | [x] |
 | 3 | `s08_common` + five `*_s08.py` (trap, rewrite, `require_async_session_factory`) | [x] |
-| 4 | README «Live Session 08» section + pointer from Sesión 8 | [ ] |
+| 4 | README «Live Session 08» section + pointer from Sesión 8 | [x] |
 | 5 | `211602d` halfvec in `search` + compare_indexes vector-path patch + revert comment | [ ] |
 | 6 | Student run → `docs/sesion8_ef_search.md` | [ ] |
 | 7 | `evolution.md` event `session_08_forense` only | [ ] |
