@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Engordar el corpus con embeddings de verdad. Textos sintéticos, vectores reales de OpenAI (random no sirve para medir recall). Default 100; `30000` si quieres que el seq scan se note. Se borran con un `DELETE` por `document_type`.
-"""
-"""Insert synthetic chunks with REAL embeddings to simulate corpus growth.
+
+Insert synthetic chunks with REAL embeddings to simulate corpus growth.
 
 Live Session 08 — two uses:
 
@@ -209,7 +209,7 @@ def main() -> int:
         "count",
         type=int,
         nargs="?",
-        default=100,
+        default=30000,
         help="Number of chunks to insert (default: 100; use ~30000 for the pre-flight bulk).",
     )
     args = parser.parse_args()

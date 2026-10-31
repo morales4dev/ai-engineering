@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Radiografía de índices. Lista los índices de `chunks`: tipo (btree/gin/hnsw), tamaño, cuántas veces se usaron. Solo lectura.
-"""
-"""Report the state of every index on the ``chunks`` table.
+
+Report the state of every index on the ``chunks`` table.
 
 Live Session 08 — used across blocks: after creating the HNSW index (2.2),
 when comparing vector vs halfvec sizes (4.1), and during the monitoring

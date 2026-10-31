@@ -1,6 +1,6 @@
 """Caja común para no repetir código. Los scripts no abren un cliente OpenAI ni un motor SQL por su cuenta: piden el embedder y la sesión que ya usa la app. Las 5 queries salen de `query_examples.py` (una sola lista). Las tablas se pintan en texto plano.
-"""
-"""Shared helpers for the Session 8 live-session benchmark scripts.
+
+Shared helpers for the Session 8 live-session benchmark scripts.
 
 Not a script — imported by ``measure_baseline_s08.py``, ``sweep_ef_search_s08.py``
 and ``compare_indexes_s08.py`` after they bootstrap ``sys.path``. Centralizes:
@@ -88,7 +88,7 @@ def format_table(headers: list[str], rows: list[list[str]]) -> str:
     for row in rows:
         for i, cell in enumerate(row):
             widths[i] = max(widths[i], len(cell))
-    line = "  ".join(h.ljust(widths[i]) for i, cell in enumerate(headers))
+    line = "  ".join(h.ljust(widths[i]) for i, h in enumerate(headers))
     sep = "  ".join("-" * widths[i] for i in range(len(headers)))
     body = "\n".join("  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)) for row in rows)
     return f"{line}\n{sep}\n{body}"

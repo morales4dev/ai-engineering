@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Vector vs halfvec, sin borrar nada. Lanza las mismas 5 queries por las dos expresiones SQL y enseña overlap y tiempos. El lado vector ordena por la columna (`<=>`); el lado halfvec es `/search` (el cast).
-"""
-"""Compare the full-precision HNSW index against the halfvec HNSW index.
+
+Compare the full-precision HNSW index against the halfvec HNSW index.
 
 Live Session 08 — Block 4.2. Runs the five benchmark queries twice — once per
 index — and prints top-5 ids, overlap and latency side by side, to confirm

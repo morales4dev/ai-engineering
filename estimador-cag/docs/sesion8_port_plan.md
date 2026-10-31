@@ -300,7 +300,7 @@ The diary already has `session_07_forense` and `pre_sesion_08`. This step only a
 | 3 | `s08_common` + five `*_s08.py` (trap, rewrite, `require_async_session_factory`) | [x] |
 | 4 | README «Live Session 08» section + pointer from Sesión 8 | [x] |
 | 5 | `211602d` halfvec in `search` + compare_indexes vector-path patch + revert comment | [x] |
-| 6 | Student run → `docs/sesion8_ef_search.md` | [ ] |
+| 6 | Student run → `docs/sesion8_ef_search.md` | [x] |
 | 7 | `evolution.md` event `session_08_forense` only | [ ] |
 
 Next work is **step 1 only**.
@@ -318,3 +318,103 @@ Next work is **step 1 only**.
 - Agent-run `CREATE INDEX`, 30k insert, sweep, or invented distances.
 - `?? src/alembic.ini`.
 - CAG / `/embeddings/compare` / `chunking_comparisons` / S06 ingestion rewrites.
+
+---
+
+## Step 6. Plan — runbook (humano)
+
+Python en el host, desde `estimador-cag/`: `uv run python scripts/s08/<script>.py`.  
+SQL `01`–`05` en pgAdmin (`localhost:5432`, `postgres` / `postgres` / `estimator`).  
+`99` no es pgAdmin (`\if` / `\set`): `psql` local o `docker compose exec postgres psql …`.  
+`05`: sentencias sueltas, sin transacción envolvente (`VACUUM` / `REINDEX CONCURRENTLY`).  
+`s08_common.py` no se ejecuta. Postgres arriba. `OPENAI_API_KEY` en `.env`. No `docker compose down -v`.
+
+Tras el paso 5, `/search` (y por tanto `measure_baseline` y `sweep`) ordenan por el **cast halfvec**. El índice de `01` (columna `embedding`) **no** sirve a esas dos. Si corres el baseline justo después de `01` y no baja el tiempo: no está roto; esa query no usa ese índice. El de `03` sí.
+
+Mínimo para Lia: 0 → 1 → 5 → 8. El resto es el laboratorio (ver el truco, comparar tamaños, mantenimiento).
+
+### 0. Foto inicial
+
+`uv run python scripts/s08/report_index_sizes_s08.py`
+
+- **Por qué:** ver el “antes”: btree/GIN, cero HNSW.
+- **Notarás:** ~60 chunks si aún no has engordado. Ningún `hnsw`.
+- **Check:** `SELECT count(*) FROM chunks;` y la query canónica de `pg_stat_user_indexes` (README).
+
+### 1. Engordar — `insert_synthetic_chunks_s08.py 30000`
+
+- **Por qué primero:** con 60 filas el seq scan es sub-ms. No hay nada que medir. Esto cuesta embeddings (~0,03 $).
+- **Notarás:** progreso `500/30000…`, minutos. Al final, tokens y coste.
+- **Check:** `SELECT count(*) FROM chunks;` ≈ 30060. `chunk_type = 'synthetic'` ≈ 30000.
+
+### 2. Baseline sin índice — `measure_baseline_s08.py`
+
+- **Por qué:** cronómetro del SQL de `/search` *antes* de indexar. Embebe una vez; mide solo el `SELECT`.
+- **Notarás:** `mean_ms` que se puede leer (no sub-ms). Al final, un literal pgvector (por si lo pegas en `02`).
+- **Check:** la tabla que imprime. Guárdala: es el “antes”.
+
+### 3. Índice vector — `01_create_hnsw.sql` (pgAdmin)
+
+- **Por qué:** HNSW sobre la columna `embedding` (`<=>` cosine). Lo usan el antipatrón y el lado vector del compare. **No** lo usa `/search`.
+- **Notarás:** el `CREATE INDEX` tarda (30k). El SELECT del final lista el índice nuevo y su tamaño.
+- **Check:** `report_index_sizes_s08.py` → `chunks_embedding_idx`, tipo `hnsw`.
+
+### 4. Baseline otra vez — `measure_baseline_s08.py`
+
+- **Por qué / qué no notarás:** `/search` sigue en seq scan + cast. Los `mean_ms` **no tienen por qué bajar**. Si no bajan, sigue al 5.
+
+### 5. Índice halfvec — `03_create_halfvec.sql` (pgAdmin)
+
+- **Por qué:** el mismo HNSW sobre `(embedding::halfvec(1536))`. Es el que **sí** puede usar `/search`. ~mitad de tamaño. Obligatorio para Lia.
+- **Notarás:** segundo `CREATE INDEX` (también tarda). El SELECT compara tamaños.
+- **Check:** `report_index_sizes_s08.py` → `chunks_embedding_halfvec_idx`, más pequeño que el de `01`. `EXPLAIN` del propio archivo: `Index Scan using chunks_embedding_halfvec_idx`.
+
+### 6. Baseline con índice que sí pega — `measure_baseline_s08.py`
+
+- **Por qué:** ahora el `SELECT` de `/search` puede hacer Index Scan.
+- **Notarás:** `mean_ms` claramente por debajo del paso 2. Eso es el hueco.
+- **Check:** compara las dos tablas (paso 2 vs este).
+
+### 7. Antipatrón — `02_test_antipatron.sql` (pgAdmin)
+
+- **Por qué:** hace falta `01`. `<=>` usa el índice; `<->` (L2) no. Sin error.
+- **Notarás:** primer `EXPLAIN`: Index Scan. Segundo: Seq Scan + Sort. Tiempos distintos, cero aviso.
+- **Check:** `idx_scan` de `chunks_embedding_idx` sube solo con el caso `<=>`.
+
+### 8. Barrido — `sweep_ef_search_s08.py`  ← entregable Lia
+
+- **Por qué:** necesita el índice de `03`. Barre `ef_search` 10…200 contra un seq scan forzado (verdad exacta). Marca ★.
+- **Notarás:** tabla `ef_search / avg_latency_ms / avg_recall / recommendation`. Recall sube y se aplana; la latencia sigue creciendo.
+- **Check:** hay una fila ★. Esa tabla + “por qué esa y no la de al lado” es `docs/sesion8_ef_search.md`. Números vuestros, no los de Lidr.
+
+### 9. Compare — `compare_indexes_s08.py`
+
+- **Por qué:** hacen falta `01` y `03`. Misma query, dos expresiones. No dropea nada.
+- **Notarás:** overlap 5/5 (o casi). Halfvec no cambia el ranking en este corpus; el índice es más chico.
+- **Check:** las dos líneas `Plan check — … uses: chunks_embedding_*`. Si dice `seq scan`, el índice no está o la expresión no pega.
+
+### 10. Monitor — `04_monitoring_queries.sql` (pgAdmin)
+
+- **Por qué:** hábito. `idx_scan` / tamaño / último uso.
+- **Notarás:** el halfvec tiene scans (pasos 6 y 8). El vector, los del 7 y 9. `idx_scan = 0` tras tráfico semántico ≈ operador/clase cruzados.
+- **Check:** la query canónica del README.
+
+### 11. (Opcional) +100 sintéticos — `insert_synthetic_chunks_s08.py`  (default 100)
+
+- **Por qué:** el `05` simula “ha crecido el corpus”. Encima de 30k, +100 casi no se siente en latencia.
+- **Notarás:** `100/100`. Count += 100.
+- **Check:** `SELECT count(*) FROM chunks WHERE chunk_type = 'synthetic';`
+
+### 12. (Opcional) Mantenimiento — `05_maintenance_cycle.sql` (pgAdmin, sin transacción)
+
+- **Por qué:** ANALYZE / VACUUM / `REINDEX CONCURRENTLY` del halfvec. Hace falta `03`.
+- **Notarás:** `last_analyze` se actualiza. En query times, casi nada.
+- **Check:** el SELECT de `n_live_tup` / `last_analyze` del propio archivo.
+
+### 13. (Opcional) Deshacer lab — `99_revert_live_session.sql` (`psql`, no pgAdmin)
+
+- **Por qué:** quita los dos HNSW, los ~100 extra, resetea `ef_search` y `pg_stat`. Deja los 30k. **No** toca `repository.py`.
+- **Notarás:** los `hnsw` desaparecen. Count sintéticos vuelve a 30000.
+- **Check:** `report_index_sizes_s08.py` otra vez: solo btree/GIN.
+
+Cuando el sweep del **8** esté, pega la tabla aquí. El agente escribe `docs/sesion8_ef_search.md` con esos números. Luego paso 7 (`evolution.md`).

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Cronómetro del SQL de `/search`. No pasa por HTTP. Embebe las queries una vez (eso el índice no lo acelera) y mide solo el `SELECT`. Sirve para ver el antes/después de crear el HNSW.
-"""
-"""Measure SQL-side search latency over the five benchmark queries.
+
+Measure SQL-side search latency over the five benchmark queries.
 
 Live Session 08 — Block 2.1 (baseline before the HNSW index) and Block 2.2
 (re-run right after creating it to expose the before/after gap).

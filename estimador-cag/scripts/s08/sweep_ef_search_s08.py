@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Barrido de `ef_search`. Prueba 10, 20, 40, 80, 120, 200. Contra un seq scan forzado (la verdad exacta) mide latencia y recall, y marca con ★ el valor que merece la pena.
-"""
-"""Sweep ``hnsw.ef_search`` and measure its impact on latency and recall.
+
+Sweep ``hnsw.ef_search`` and measure its impact on latency and recall.
 
 Live Session 08 — Block 3.1. The flagship tuning demo: it draws the two curves
 (recall saturates, latency keeps growing) the group uses to pick a reasoned

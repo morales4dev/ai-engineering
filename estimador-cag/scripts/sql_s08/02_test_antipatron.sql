@@ -23,6 +23,12 @@ FROM chunks
 ORDER BY embedding <=> (SELECT embedding FROM chunks ORDER BY id LIMIT 1)
 LIMIT 5;
 
+EXPLAIN ANALYZE
+SELECT id, chunk_type
+FROM chunks
+ORDER BY (embedding::halfvec(1536)) <=> '[AKI_METE_UN_VECTOR_DE_LOS_TUYOS_COPYPASTEADO]'::halfvec(1536)
+LIMIT 5;
+
 -- Caso 2: operador DESALINEADO (índice de coseno, query con <-> de L2).
 -- Esperado en el plan: "Seq Scan on chunks" + un Sort.
 -- Fijaos en el "Execution Time" de ambos casos: la diferencia es brutal
@@ -32,6 +38,18 @@ SELECT id, chunk_type
 FROM chunks
 ORDER BY embedding <-> (SELECT embedding FROM chunks ORDER BY id LIMIT 1)
 LIMIT 5;
+
+EXPLAIN ANALYZE
+SELECT id, chunk_type
+FROM chunks
+ORDER BY (embedding::halfvec(1536)) <-> '[AKI_METE_UN_VECTOR_DE_LOS_TUYOS_COPYPASTEADO]'::halfvec(1536)
+LIMIT 5;
+
+-- NOTA: para obtener el vector AKI_METE_UN_VECTOR_DE_LOS_TUYOS_COPYPASTEADO :
+SELECT embedding::text
+    FROM chunks
+    ORDER BY id
+    LIMIT 1;
 
 -- La otra forma de cazarlo: las estadísticas de uso. idx_scan se incrementa
 -- con el Caso 1 pero NO con el Caso 2. Un índice vectorial con idx_scan = 0
