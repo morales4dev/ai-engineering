@@ -301,7 +301,7 @@ The diary already has `session_07_forense` and `pre_sesion_08`. This step only a
 | 4 | README «Live Session 08» section + pointer from Sesión 8 | [x] |
 | 5 | `211602d` halfvec in `search` + compare_indexes vector-path patch + revert comment | [x] |
 | 6 | Student run → `docs/sesion8_ef_search.md` | [x] |
-| 7 | `evolution.md` event `session_08_forense` only | [ ] |
+| 7 | `evolution.md` event `session_08_forense` only | [x] |
 
 Next work is **step 1 only**.
 
