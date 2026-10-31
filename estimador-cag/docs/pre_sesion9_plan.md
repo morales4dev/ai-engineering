@@ -8,14 +8,17 @@ This file is the handoff. Closed plans (`pre-sesion8_plan.md`, `sesion8_port_pla
 
 | | Path / value |
 |---|---|
-| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session-09/pre-work` @ `fecc648`, app `estimador-cag/` |
+| Ours | `/home/morales4dev/wsTakeoff/ai-engineering` branch `session-09/pre-work` @ `b0c551b`, app `estimador-cag/` |
 | Reference | `/home/morales4dev/wsTakeoff/ai-engineering-lidr` `origin/session_09` @ `bd231b2`. Quarry is closed. Their solved `arquitectura-actual.md` is **not** a source. |
 | Deliverable | `ai-engineering/arquitectura-actual.md` (git root, same place as Lidr). Filled from `examples/transcripts/S09_TEMPLATE.md`. |
 | Trace script | `estimador-cag/scripts/s09/trace_s09.py` (client only: OpenAI embed + `POST /search`). |
+| Who runs commands | Agent writes the deliverable and pastes what the human returns. Human runs every live command (`trace_s09.py`, curl). Agent does not execute the trace. |
+| Key | `OPENAI_API_KEY` lives in `estimador-cag/.env` (product + RAG). Human sources it when running the script. Agent does not print it. |
 | Transcripts | `ai-engineering/examples/transcripts/{01_clear,02_ambiguous,03_hard}.txt`. Trace uses `02_ambiguous.txt`. |
 | Seed leftovers | `estimador-cag/data/seed/transcripts/` are S06 fixtures. Do not use them. |
 | Stack | Compose already up. `/health` healthy. Corpus after cleanup: **17** `historical_budget`, **60** `budget_component`. No synthetic rows. |
 | Front | Streamlit tabs: New / Conversational / Recent / Chunking Lab / Ajustes. No search tab. Same gap as Lidr Rails. |
+| Step 4 | Joint. Debate then lock the mermaid (same rule as section 1). Agent draws only after the lock. |
 
 ## Already done (do not redo)
 
@@ -53,25 +56,40 @@ Do not use PDF names (`ingest/`, `embedding_pipeline/`, `storage/`). Use our mod
 ```mermaid
 flowchart TB
     subgraph CLIENTS["① Clientes"]
+        ClientsW1["estimación actual · llm_service / sessions"]
+        ClientsW2["SemanticRetriever k-NN cosine"]
         UI["Streamlit<br/>New · Conversational · Recent · Chunking Lab · Ajustes"]
         HTTP["curl / Postman / scripts/s09/trace_s09.py"]
     end
 
     subgraph API["② API — src/routers (transporte)"]
         EpEst["POST /api/v1/estimate<br/>POST /sessions/{id}/estimate"]
-        EpSearch["POST /search"]
         EpIngest["POST /embeddings/ingest"]
         EpOther["compare · config · ingestion"]
+        EpSearch["POST /search"]
     end
 
     subgraph SVC["③ Servicios — un proceso"]
-        Est["estimación actual<br/>llm_service / sessions"]
-        Result["EstimationResult"]
-        Ingest["ingest_service"]
-        Embed["OpenAIEmbedder 1536d"]
-        Store[("pgvector documents + chunks")]
-        Retr["SemanticRetriever k-NN cosine"]
-        Chunks["chunks + distance"]
+        subgraph COL_EST[" "]
+            Est["estimación actual<br/>llm_service / sessions"]
+            Result["EstimationResult"]
+        end
+
+        subgraph COL_RAG[" "]
+            Ingest["ingest_service"]
+            Embed["OpenAIEmbedder 1536d"]
+            Retr["SemanticRetriever k-NN cosine"]
+            Store[("pgvector documents + chunks")]
+        end
+
+        subgraph COL_OUT[" "]
+            Chunks["chunks + distance"]
+        end
+
+        subgraph FLOOR[" "]
+            FloorNote["⛔ sin flecha a la estimación"]
+            FloorR[" "]
+        end
     end
 
     UI --> EpEst --> Est --> Result
@@ -81,9 +99,20 @@ flowchart TB
     Ingest --> Embed --> Store
     Retr -->|"embed_one(query)"| Embed
     Retr -->|"k-NN"| Store
-    Store --> Retr --> Chunks
+    Store --> Retr
+    Retr --> Chunks
 
-    Chunks -. "⛔ sin flecha a la estimación" .-> Result
+    Chunks -.-> FloorR
+    FloorR -.-> FloorNote
+    FloorNote -.-> Result
+
+    style COL_EST fill:none,stroke:none
+    style COL_RAG fill:none,stroke:none
+    style COL_OUT fill:none,stroke:none
+    style FLOOR fill:none,stroke:none
+    style FloorR fill:none,stroke:none,color:transparent
+    style ClientsW1 fill:none,stroke:none,color:transparent
+    style ClientsW2 fill:none,stroke:none,color:transparent
 ```
 
 ---
@@ -104,11 +133,13 @@ Resumen: dibujar el sistema real al cierre de S08, con la forma locked de arriba
 
 Resumen: ejecutar el sistema tal cual contra la transcripción ambigua y pegar la salida real. Sin esto el resto del documento es opinión.
 
-From `ai-engineering/` (stack up, `OPENAI_API_KEY` on the host — step 1 of the script talks to OpenAI directly; `/search` re-embeds inside the API):
+**Operator:** agent prepares the command and, after the human pastes the output, fills section 2. Human runs the script. Agent does not run it.
+
+From `ai-engineering/` (stack up; source `estimador-cag/.env` so `OPENAI_API_KEY` is in the host env — step 1 of the script talks to OpenAI directly; `/search` re-embeds inside the API):
 
 ```bash
-export OPENAI_API_KEY=sk-...
-    uv run estimador-cag/scripts/s09/trace_s09.py examples/transcripts/02_ambiguous.txt
+set -a && source estimador-cag/.env && set +a
+uv run estimador-cag/scripts/s09/trace_s09.py examples/transcripts/02_ambiguous.txt
 ```
 
 Equivalent search-only curl (the script already does this):
@@ -148,6 +179,8 @@ Resumen: mirar los 5 hits con honestidad y escribir solo fallos que se puedan se
 
 Resumen: segundo diagrama, mismas tres filas, cajas nuevas marcadas, salidas de los fallos del paso 3. Un párrafo corto; la pieza crítica es la que atacarías primero.
 
+**Operator:** joint. Do not draw until the mermaid is locked in this plan (same rule as section 1). Debate first; agent pastes only the locked figure + the short paragraph.
+
 - Same client / API / services layout as section 1 (estimate box + unconnected RAG endpoints) so the two figures are comparable.
 - Mark new boxes. Do not redraw a textbook RAG pipeline unless that box is the fix for a named failure.
 - Paragraph ≤ 10 lines: responsibility of each new box, data between them, which one you would build first and why (grounded in the trace, not in the slogan “augmentation”).
@@ -172,7 +205,7 @@ Resumen: dejar el markdown en la raíz del git y una frase en el README para que
 
 | # | Title | OK |
 |---|---|---|
-| 1 | Section 1 diagram (locked shape) into `arquitectura-actual.md` | [ ] |
+| 1 | Section 1 diagram (locked shape) into `arquitectura-actual.md` | [x] |
 | 2 | Live trace of `02_ambiguous.txt` pasted | [ ] |
 | 3 | Chunk reading + five trace-anchored failures | [ ] |
 | 4 | Section 4 evolution from those failures | [ ] |
