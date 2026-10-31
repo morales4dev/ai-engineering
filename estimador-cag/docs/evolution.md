@@ -1,6 +1,6 @@
 # Evolución del estimador-cag
 
-Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas de trabajo (`pre-session-08` incluida).
+Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas de trabajo (`pre-session-08` y `session_08_forense` incluidas).
 
 | Columna | Significado |
 |---|---|
@@ -25,6 +25,7 @@ Nombres de evento (como en las ramas, salvo `v2` y `sesion-02`, que no fueron ra
 - `pre_sesion_07` — pipeline de embeddings in-memory (rama `session-07/pre-exercise`)
 - `session_07_forense` — port live de la sesión 7 (lab de chunking, historial de comparaciones, Ajustes)
 - `pre_sesion_08` — persistencia pgvector + búsqueda semántica (rama `pre-session-08`)
+- `session_08_forense` — port live de la sesión 8 (índices HNSW/halfvec de operador, tuning de compose, SELECT halfvec, scripts de lab)
 
 No entra `session1/` (ejercicios sueltos, no son el estimador).
 
@@ -116,3 +117,7 @@ No entra `session1/` (ejercicios sueltos, no son el estimador).
 | pre_sesion_08              | [x]     | `POST /search`: k-NN por distancia coseno sobre el corpus persistido. Sin índice vectorial |                    |
 | pre_sesion_08              | [x]     | `query_examples.py`: ingesta idempotente del sample + 5 queries (match directo, reformulación, fuera de dominio, ambigua, específica). `compare.py` se queda |                    |
 | pre_sesion_08              | [x]     | Schema: tablas `documents` + `chunks`, metadata JSONB, `embedding` nullable `vector(1536)`, sin índice vectorial |                    |
+| session_08_forense         | [x]     | Compose `postgres`: `shm_size` + flags de maintenance para builds HNSW |                    |
+| session_08_forense         | [x]     | Índices de operador (SQL en caliente, no Alembic): `chunks_embedding_idx` (HNSW vector) + `chunks_embedding_halfvec_idx` (expresión halfvec) |                    |
+| session_08_forense         | [x]     | Lab: scripts `s08/*_s08.py` + `sql_s08/` (baseline, sweep, compare, report, sintéticos, revert) |                    |
+| session_08_forense         | [x]     | `ChunkStore.search` / `POST /search` ordena por el cast halfvec para poder usar `chunks_embedding_halfvec_idx` |                    |
