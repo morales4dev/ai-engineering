@@ -8,67 +8,9 @@
 
 Al cierre de S08 hay **un** proceso FastAPI. Streamlit ya obtiene una estimación por `POST /api/v1/estimate` y `POST /sessions/{id}/estimate` → `llm_service` / sessions → `EstimationResult`. En el mismo proceso existen `POST /embeddings/ingest` (`ingest_service` → `OpenAIEmbedder` → pgvector) y `POST /search` (`SemanticRetriever` + `embed_one` → chunks + `distance`). Nada de Streamlit llama a esos dos endpoints; el camino RAG termina en la lista de chunks. No hay flecha retrieval → estimación. Ahí acaba lo implementado.
 
-```mermaid
-flowchart TB
-    subgraph CLIENTS["① Clientes"]
-        ClientsW1["estimación actual · llm_service / sessions"]
-        ClientsW2["SemanticRetriever k-NN cosine"]
-        UI["Streamlit<br/>New · Conversational · Recent · Chunking Lab · Ajustes"]
-        HTTP["curl / Postman / scripts/s09/trace_s09.py"]
-    end
+Source: `docs/arquitectura-actual.mmd`.
 
-    subgraph API["② API — src/routers (transporte)"]
-        EpEst["POST /api/v1/estimate<br/>POST /sessions/{id}/estimate"]
-        EpIngest["POST /embeddings/ingest"]
-        EpOther["compare · config · ingestion"]
-        EpSearch["POST /search"]
-    end
-
-    subgraph SVC["③ Servicios — un proceso"]
-        subgraph COL_EST[" "]
-            Est["estimación actual<br/>llm_service / sessions"]
-            Result["EstimationResult"]
-        end
-
-        subgraph COL_RAG[" "]
-            Ingest["ingest_service"]
-            Embed["OpenAIEmbedder 1536d"]
-            Retr["SemanticRetriever k-NN cosine"]
-            Store[("pgvector documents + chunks")]
-        end
-
-        subgraph COL_OUT[" "]
-            Chunks["chunks + distance"]
-        end
-
-        subgraph FLOOR[" "]
-            FloorNote["⛔ sin flecha a la estimación"]
-            FloorR[" "]
-        end
-    end
-
-    UI --> EpEst --> Est --> Result
-    UI --> EpOther
-    HTTP --> EpSearch --> Retr
-    HTTP --> EpIngest --> Ingest
-    Ingest --> Embed --> Store
-    Retr -->|"embed_one(query)"| Embed
-    Retr -->|"k-NN"| Store
-    Store --> Retr
-    Retr --> Chunks
-
-    Chunks -.-> FloorR
-    FloorR -.-> FloorNote
-    FloorNote -.-> Result
-
-    style COL_EST fill:none,stroke:none
-    style COL_RAG fill:none,stroke:none
-    style COL_OUT fill:none,stroke:none
-    style FLOOR fill:none,stroke:none
-    style FloorR fill:none,stroke:none,color:transparent
-    style ClientsW1 fill:none,stroke:none,color:transparent
-    style ClientsW2 fill:none,stroke:none,color:transparent
-```
+![Arquitectura actual (cierre S08)](docs/arquitectura-actual.svg)
 
 ---
 
@@ -262,74 +204,9 @@ Nada del top-5 habla del panel de control, club de fidelización ni e-mail con e
 > cerrar el flujo transcripción → estimación generada. Marca claramente lo NUEVO respecto a la
 > sección 1.
 
-```mermaid
-flowchart TB
-    subgraph CLIENTS["① Clientes"]
-        ClientsW1["estimación actual · llm_service / sessions"]
-        ClientsW2["SemanticRetriever k-NN cosine"]
-        UI["Streamlit<br/>New · Conversational · Recent · Chunking Lab · Ajustes"]
-        HTTP["curl / Postman / scripts/s09/trace_s09.py"]
-    end
+Source: `docs/arquitectura-propuesta.mmd`.
 
-    subgraph API["② API — src/routers (transporte)"]
-        EpEst["POST /api/v1/estimate<br/>POST /sessions/{id}/estimate"]
-        EpIngest["POST /embeddings/ingest"]
-        EpOther["compare · config · ingestion"]
-        EpSearch["POST /search"]
-    end
-
-    subgraph SVC["③ Servicios — un proceso"]
-        subgraph COL_EST[" "]
-            Reform["query_reformulator"]
-            Query["EstimationQuery"]
-            Est["estimación actual<br/>llm_service / sessions"]
-            Result["EstimationResult"]
-        end
-
-        subgraph COL_RAG[" "]
-            Ingest["ingest_service"]
-            Embed["OpenAIEmbedder 1536d"]
-            Retr["SemanticRetriever<br/>k-NN + threshold + WHERE"]
-            Store[("pgvector documents + chunks")]
-        end
-
-        subgraph COL_OUT[" "]
-            Chunks["chunks + distance<br/>o [] low_confidence"]
-            Budg["budget_assembler"]
-            Asm["context_assembler"]
-            Sources["source XML"]
-        end
-    end
-
-    UI --> EpEst --> Reform --> Query
-    Query -->|"texto + filtros"| Retr
-    Query --> Est
-    UI --> EpOther
-    HTTP --> EpSearch --> Retr
-    HTTP --> EpIngest --> Ingest
-    Ingest --> Embed --> Store
-    Retr -->|"embed_one(query)"| Embed
-    Retr -->|"k-NN"| Store
-    Store --> Retr
-    Retr --> Chunks
-    Chunks --> Budg
-    Store --> Budg
-    Budg --> Asm --> Sources --> Est --> Result
-    Chunks -.->|"[] low_confidence"| Result
-
-    style COL_EST fill:none,stroke:none
-    style COL_RAG fill:none,stroke:none
-    style COL_OUT fill:none,stroke:none
-    style ClientsW1 fill:none,stroke:none,color:transparent
-    style ClientsW2 fill:none,stroke:none,color:transparent
-    style Reform fill:#fde8e8,stroke:#c0392b
-    style Query fill:#fde8e8,stroke:#c0392b
-    style Budg fill:#fde8e8,stroke:#c0392b
-    style Asm fill:#fde8e8,stroke:#c0392b
-    style Sources fill:#fde8e8,stroke:#c0392b
-    style Retr fill:#fff3cd,stroke:#b7950b
-    style Chunks fill:#fff3cd,stroke:#b7950b
-```
+![Propuesta de evolución](docs/arquitectura-propuesta.svg)
 
 Hay tres módulos nuevos (en rojo). El retriever no es uno de ellos: ya estaba. Lo que cambia es que ahora puede volver con las manos vacías, y entonces no se llama a nadie más.
 

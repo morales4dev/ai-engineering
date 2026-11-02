@@ -1,0 +1,59 @@
+flowchart TB
+    subgraph CLIENTS["① Clientes"]
+        ClientsW1["estimación actual · llm_service / sessions"]
+        ClientsW2["SemanticRetriever k-NN cosine"]
+        UI["Streamlit<br/>New · Conversational · Recent · Chunking Lab · Ajustes"]
+        HTTP["curl / Postman / scripts/s09/trace_s09.py"]
+    end
+
+    subgraph API["② API — src/routers (transporte)"]
+        EpEst["POST /api/v1/estimate<br/>POST /sessions/{id}/estimate"]
+        EpIngest["POST /embeddings/ingest"]
+        EpOther["compare · config · ingestion"]
+        EpSearch["POST /search"]
+    end
+
+    subgraph SVC["③ Servicios — un proceso"]
+        subgraph COL_EST[" "]
+            Est["estimación actual<br/>llm_service / sessions"]
+            Result["EstimationResult"]
+        end
+
+        subgraph COL_RAG[" "]
+            Ingest["ingest_service"]
+            Embed["OpenAIEmbedder 1536d"]
+            Retr["SemanticRetriever k-NN cosine"]
+            Store[("pgvector documents + chunks")]
+        end
+
+        subgraph COL_OUT[" "]
+            Chunks["chunks + distance"]
+        end
+
+        subgraph FLOOR[" "]
+            FloorNote["⛔ sin flecha a la estimación"]
+            FloorR[" "]
+        end
+    end
+
+    UI --> EpEst --> Est --> Result
+    UI --> EpOther
+    HTTP --> EpSearch --> Retr
+    HTTP --> EpIngest --> Ingest
+    Ingest --> Embed --> Store
+    Retr -->|"embed_one(query)"| Embed
+    Retr -->|"k-NN"| Store
+    Store --> Retr
+    Retr --> Chunks
+
+    Chunks -.-> FloorR
+    FloorR -.-> FloorNote
+    FloorNote -.-> Result
+
+    style COL_EST fill:none,stroke:none
+    style COL_RAG fill:none,stroke:none
+    style COL_OUT fill:none,stroke:none
+    style FLOOR fill:none,stroke:none
+    style FloorR fill:none,stroke:none,color:transparent
+    style ClientsW1 fill:none,stroke:none,color:transparent
+    style ClientsW2 fill:none,stroke:none,color:transparent

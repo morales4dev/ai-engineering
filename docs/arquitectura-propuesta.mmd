@@ -1,0 +1,69 @@
+flowchart TB
+    subgraph CLIENTS["① Clientes"]
+        ClientsW1["estimación actual · llm_service / sessions"]
+        ClientsW2["SemanticRetriever k-NN cosine"]
+        UI["Streamlit<br/>New · Conversational · Recent · Chunking Lab · Ajustes"]
+        HTTP["curl / Postman / scripts/s09/trace_s09.py"]
+    end
+
+    subgraph API["② API — src/routers (transporte)"]
+        EpEst["POST /api/v1/estimate<br/>POST /sessions/{id}/estimate"]
+        EpIngest["POST /embeddings/ingest"]
+        EpOther["compare · config · ingestion"]
+        EpSearch["POST /search"]
+    end
+
+    subgraph SVC["③ Servicios — un proceso"]
+        subgraph COL_RAG[" "]
+            Ingest["ingest_service"]
+            Embed["OpenAIEmbedder 1536d"]
+            Store[("pgvector documents + chunks")]
+            Retr["SemanticRetriever<br/>k-NN + threshold + WHERE"]
+        end
+
+        subgraph COL_OUT[" "]
+            Chunks["chunks + distance<br/>o [] low_confidence"]
+            Budg["budget_assembler"]
+            Asm["context_assembler"]
+            Sources["source XML"]
+        end
+
+        subgraph COL_EST[" "]
+            direction TB
+            Reform["query_reformulator"]
+            Query["EstimationQuery"]
+            Est["estimación actual<br/>llm_service / sessions"]
+            Result["EstimationResult"]
+        end
+    end
+
+    UI --> EpEst
+    UI --> EpOther
+    HTTP --> EpSearch --> Retr
+    HTTP --> EpIngest --> Ingest
+    Ingest --> Embed --> Store --> Retr
+    Retr -->|"embed_one(query)"| Embed
+    Retr -->|"k-NN"| Store
+    Retr --> Chunks
+    Chunks --> Budg
+    Store --> Budg
+    Budg --> Asm --> Sources
+    Sources ~~~ Reform
+    EpEst --> Reform --> Query
+    Query -->|"texto + filtros"| Retr
+    Query --> Est
+    Sources --> Est --> Result
+    Chunks -.->|"[] low_confidence"| Result
+
+    style COL_EST fill:none,stroke:none
+    style COL_RAG fill:none,stroke:none
+    style COL_OUT fill:none,stroke:none
+    style ClientsW1 fill:none,stroke:none,color:transparent
+    style ClientsW2 fill:none,stroke:none,color:transparent
+    style Reform fill:#fde8e8,stroke:#c0392b
+    style Query fill:#fde8e8,stroke:#c0392b
+    style Budg fill:#fde8e8,stroke:#c0392b
+    style Asm fill:#fde8e8,stroke:#c0392b
+    style Sources fill:#fde8e8,stroke:#c0392b
+    style Retr fill:#fff3cd,stroke:#b7950b
+    style Chunks fill:#fff3cd,stroke:#b7950b
