@@ -33,6 +33,7 @@ This file is the handoff. Closed plans (`pre-sesion8_plan.md`, `sesion8_port_pla
 - Do not invent distances, norms, or chunk ids. Paste the live output.
 - Observations in Spanish. Commands, payloads, field names in English.
 - Do not re-open the section 1 shape. It is below.
+- Do not re-open the section 4 shape. It is under Step 4 (locked).
 - README pointer at git root so the deliverable is findable. `evolution.md` gets one `pre_sesion_09` event (doc only, no product change).
 
 ## Locked — sección 1 diagram (do not re-debate)
@@ -187,6 +188,81 @@ Resumen: segundo diagrama, mismas tres filas, cajas nuevas marcadas, salidas de 
 
 **Acceptance:** section 1 and section 4 are visually distinct; a reader can see what was added; no greenfield rewrite of Streamlit or of the existing RAG modules.
 
+### Locked — sección 4 diagram (do not re-debate)
+
+Same skeleton as section 1. Red = new. Amber = same box, new contract. Lab path `HTTP → /search` does not go through the reformulator. `⛔ sin flecha` is gone.
+
+Reading: the transcript enters via `/estimate` → `EstimationQuery` → retriever searches with short text + filters → either neighbors exist and the full budget is reassembled, tagged as XML, and `llm_service` estimates, or the list is empty and the answer is “not enough evidence” without calling the model.
+
+```mermaid
+flowchart TB
+    subgraph CLIENTS["① Clientes"]
+        ClientsW1["estimación actual · llm_service / sessions"]
+        ClientsW2["SemanticRetriever k-NN cosine"]
+        UI["Streamlit<br/>New · Conversational · Recent · Chunking Lab · Ajustes"]
+        HTTP["curl / Postman / scripts/s09/trace_s09.py"]
+    end
+
+    subgraph API["② API — src/routers (transporte)"]
+        EpEst["POST /api/v1/estimate<br/>POST /sessions/{id}/estimate"]
+        EpIngest["POST /embeddings/ingest"]
+        EpOther["compare · config · ingestion"]
+        EpSearch["POST /search"]
+    end
+
+    subgraph SVC["③ Servicios — un proceso"]
+        subgraph COL_EST[" "]
+            Reform["query_reformulator"]
+            Query["EstimationQuery"]
+            Est["estimación actual<br/>llm_service / sessions"]
+            Result["EstimationResult"]
+        end
+
+        subgraph COL_RAG[" "]
+            Ingest["ingest_service"]
+            Embed["OpenAIEmbedder 1536d"]
+            Retr["SemanticRetriever<br/>k-NN + threshold + WHERE"]
+            Store[("pgvector documents + chunks")]
+        end
+
+        subgraph COL_OUT[" "]
+            Chunks["chunks + distance<br/>o [] low_confidence"]
+            Budg["budget_assembler"]
+            Asm["context_assembler"]
+            Sources["source XML"]
+        end
+    end
+
+    UI --> EpEst --> Reform --> Query
+    Query -->|"texto + filtros"| Retr
+    Query --> Est
+    UI --> EpOther
+    HTTP --> EpSearch --> Retr
+    HTTP --> EpIngest --> Ingest
+    Ingest --> Embed --> Store
+    Retr -->|"embed_one(query)"| Embed
+    Retr -->|"k-NN"| Store
+    Store --> Retr
+    Retr --> Chunks
+    Chunks --> Budg
+    Store --> Budg
+    Budg --> Asm --> Sources --> Est --> Result
+    Chunks -.->|"[] low_confidence"| Result
+
+    style COL_EST fill:none,stroke:none
+    style COL_RAG fill:none,stroke:none
+    style COL_OUT fill:none,stroke:none
+    style ClientsW1 fill:none,stroke:none,color:transparent
+    style ClientsW2 fill:none,stroke:none,color:transparent
+    style Reform fill:#fde8e8,stroke:#c0392b
+    style Query fill:#fde8e8,stroke:#c0392b
+    style Budg fill:#fde8e8,stroke:#c0392b
+    style Asm fill:#fde8e8,stroke:#c0392b
+    style Sources fill:#fde8e8,stroke:#c0392b
+    style Retr fill:#fff3cd,stroke:#b7950b
+    style Chunks fill:#fff3cd,stroke:#b7950b
+```
+
 **Stop.** Tick. Wait.
 
 ## Step 5 — Cerrar entregable + dónde está
@@ -206,10 +282,10 @@ Resumen: dejar el markdown en la raíz del git y una frase en el README para que
 | # | Title | OK |
 |---|---|---|
 | 1 | Section 1 diagram (locked shape) into `arquitectura-actual.md` | [x] |
-| 2 | Live trace of `02_ambiguous.txt` pasted | [ ] |
-| 3 | Chunk reading + five trace-anchored failures | [ ] |
-| 4 | Section 4 evolution from those failures | [ ] |
-| 5 | Root README pointer + `evolution.md` event | [ ] |
+| 2 | Live trace of `02_ambiguous.txt` pasted | [x] |
+| 3 | Chunk reading + five trace-anchored failures | [x] |
+| 4 | Section 4 evolution from those failures | [x] |
+| 5 | Root README pointer + `evolution.md` event | [x] |
 
 Done. Deliverable is `arquitectura-actual.md` at the git root.
 

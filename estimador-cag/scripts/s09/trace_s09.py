@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["httpx>=0.27", "openai>=1.40"]
+# dependencies = ["httpx>=0.27", "openai>=1.40", "python-dotenv>=1.0"]
 # ///
 """Session 09 pre-work — manual RAG trace over a raw meeting transcript.
 
@@ -39,10 +39,13 @@ import sys
 from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
 from openai import OpenAI
 
 # scripts/s09/ → estimador-cag/ → git root (ai-engineering/)
 REPO_ROOT = Path(__file__).resolve().parents[3]
+APP_DIR = Path(__file__).resolve().parents[2]  # estimador-cag/
+load_dotenv(APP_DIR / ".env")
 
 EMBEDDING_MODEL = "text-embedding-3-small"  # must match the service's EMBEDDING_MODEL
 DEFAULT_TRANSCRIPT = REPO_ROOT / "examples/transcripts/02_ambiguous.txt"
