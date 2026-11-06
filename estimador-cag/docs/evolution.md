@@ -26,6 +26,7 @@ Nombres de evento (como en las ramas, salvo `v2` y `sesion-02`, que no fueron ra
 - `session_07_forense` — port live de la sesión 7 (lab de chunking, historial de comparaciones, Ajustes)
 - `pre_sesion_08` — persistencia pgvector + búsqueda semántica (rama `pre-session-08`)
 - `session_08_forense` — port live de la sesión 8 (índices HNSW/halfvec de operador, tuning de compose, SELECT halfvec, scripts de lab)
+- `pre_sesion_09` — diagnóstico arquitectónico RAG (doc; sin cambio de producto)
 
 No entra `session1/` (ejercicios sueltos, no son el estimador).
 
@@ -121,3 +122,4 @@ No entra `session1/` (ejercicios sueltos, no son el estimador).
 | session_08_forense         | [x]     | Índices de operador (SQL en caliente, no Alembic): `chunks_embedding_idx` (HNSW vector) + `chunks_embedding_halfvec_idx` (expresión halfvec) |                    |
 | session_08_forense         | [x]     | Lab: scripts `s08/*_s08.py` + `sql_s08/` (baseline, sweep, compare, report, sintéticos, revert) |                    |
 | session_08_forense         | [x]     | `ChunkStore.search` / `POST /search` ordena por el cast halfvec para poder usar `chunks_embedding_halfvec_idx` |                    |
+| pre_sesion_09              | [x]     | Diagnóstico RAG en `arquitectura-actual.md` (raíz del repo): trace, cinco fallos, propuesta. Sin cambio de producto |                    |
