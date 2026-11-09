@@ -51,6 +51,32 @@ class Settings(BaseSettings):
     # parent budget. Prompt caching makes the (large) parent document cheap to
     # reuse across the chunks of the same budget.
     CONTEXTUAL_CHUNKER_MODEL: str = "claude-sonnet-4-5"
+    # --- Session 9 fields (RAG estimation: transcript → grounded estimate) ---
+    # Query understanding distills a transcript into an EstimationQuery; a small
+    # model is enough. Generation reasons over retrieved budgets, so it uses the
+    # strongest model with high reasoning effort. Both go through LLMWrapper.
+    # Not in MODEL_KEYS: Ajustes cannot switch these until session_10.
+    REFORMULATION_MODEL: str = "gpt-5-mini"
+    GENERATION_MODEL: str = "gpt-5"
+    # "high" drives a deeper, more consistent module→task decomposition (the S09
+    # article used "medium"; we raise it for the granular modular breakdown).
+    GENERATION_REASONING_EFFORT: Literal["minimal", "low", "medium", "high"] = "high"
+    # Token ceiling (reasoning + output) for the RAG structured calls. gpt-5 is a
+    # reasoning model: its reasoning tokens count against this budget, so the
+    # 4000 wrapper default leaves nothing for the JSON and the call truncates
+    # (finish_reason='length'). A CAP, not a target.
+    GENERATION_MAX_TOKENS: int = 64000
+    # Retrieval knobs (locked defaults from the Session 9 articles).
+    RETRIEVAL_TOP_K: int = 10
+    RETRIEVAL_DISTANCE_THRESHOLD: float = 0.6
+    # Token budget for the assembled <source> context block (tiktoken cl100k_base).
+    MAX_CONTEXT_TOKENS: int = 16384
+    # Idempotency cache for POST /v1/estimate/from-transcript (seconds; 24h).
+    IDEMPOTENCY_TTL: int = 86400
+    # API keys for the two Session 9 routers. None disables the router (401 on
+    # every request) — set them in .env to enable the endpoints.
+    RETRIEVAL_API_KEY: str | None = None
+    ESTIMATE_API_KEY: str | None = None
     APP_ENV: Literal["development", "staging", "production"] = "development"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"
 

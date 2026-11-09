@@ -52,6 +52,9 @@ def _provider_from_model(model: str) -> str:
 MODEL_COSTS: dict[str, dict[str, float]] = {
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4o": {"input": 2.50, "output": 10.00},
+    # Session 9 — reasoning models used by the RAG estimation pipeline.
+    "gpt-5": {"input": 1.25, "output": 10.00},
+    "gpt-5-mini": {"input": 0.25, "output": 2.00},
     "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
     "claude-sonnet-4-5": {"input": 3.00, "output": 15.00},
 }
@@ -125,6 +128,7 @@ class LLMWrapper:
         model_override: str | None = None,
         max_tokens: int = 4000,
         max_retries: int = 6,
+        reasoning_effort: str | None = None,
     ) -> tuple[T, dict[str, Any]]:
         """Call the LLM via Instructor and return ``(model_instance, meta)``.
 
@@ -143,6 +147,12 @@ class LLMWrapper:
             model=target_model,
             response_model=response_model.__name__,
         )
+        # Reasoning models (gpt-5 family) accept ``reasoning_effort``; LiteLLM
+        # forwards it and translates ``max_tokens`` to ``max_completion_tokens``.
+        extra: dict[str, Any] = {}
+        if reasoning_effort is not None:
+            extra["reasoning_effort"] = reasoning_effort
+
         t0 = time.perf_counter()
         try:
             result, raw = self._instructor.chat.completions.create_with_completion(
@@ -153,6 +163,7 @@ class LLMWrapper:
                 response_model=response_model,
                 max_tokens=max_tokens,
                 max_retries=max_retries,
+                **extra,
             )
         except Exception as exc:
             latency_ms = int((time.perf_counter() - t0) * 1000)
@@ -185,6 +196,7 @@ class LLMWrapper:
         model_override: str | None = None,
         max_tokens: int = 4000,
         max_retries: int = 6,
+        reasoning_effort: str | None = None,
     ) -> tuple[T, dict[str, Any]]:
         """Instructor call over a pre-built ``messages`` list.
 
@@ -200,6 +212,10 @@ class LLMWrapper:
             response_model=response_model.__name__,
             messages=len(bounded),
         )
+        extra: dict[str, Any] = {}
+        if reasoning_effort is not None:
+            extra["reasoning_effort"] = reasoning_effort
+
         t0 = time.perf_counter()
         try:
             result, raw = self._instructor.chat.completions.create_with_completion(
@@ -210,6 +226,7 @@ class LLMWrapper:
                 response_model=response_model,
                 max_tokens=max_tokens,
                 max_retries=max_retries,
+                **extra,
             )
         except Exception as exc:
             latency_ms = int((time.perf_counter() - t0) * 1000)
