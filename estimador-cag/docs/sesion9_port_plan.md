@@ -371,9 +371,9 @@ Diary already has `pre_sesion_09`. This step only adds the live we just adopted.
 | 4 | HTTP: RAG API keys, limiter, retrieval, one-shot, thin ejecución router | [x] |
 | 5 | Streamlit RAG Wizard tab | [x] |
 | 6 | Task corpus files + README section (human ingest) | [x] |
-| 7 | `evolution.md` event `session_09_forense` only | [ ] |
+| 7 | `evolution.md` event `session_09_forense` only | [x] |
 
-Next work is **step 7 only**.
+Port complete.
 
 ## Out of this port
 
