@@ -27,6 +27,7 @@ from persistence.models import (  # noqa: E402, F401
     Base,
     ChunkingComparisonRow,
     EstimationRow,
+    EstimationRunRow,
 )
 import generation.rag.store.models  # noqa: E402, F401 — register store tables on Base.metadata
 

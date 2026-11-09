@@ -7,6 +7,7 @@ the vectors. HTTP ingest persists those vectors; it no longer returns them.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -367,3 +368,38 @@ class GenerateResult(BaseModel):
     coherent: bool = Field(
         description="False when an insufficient estimate still carries numbers."
     )
+
+
+# ---- Wizard ejecución (persisted row; HTTP in step 4) ---------------------
+
+
+class RunRetrieveFilters(BaseModel):
+    """Optional filters for ``POST /v1/estimate/runs/{id}/retrieve``.
+
+    Omitted fields fall back to Settings / the reformulated brief.
+    """
+
+    top_k: int | None = Field(default=None, ge=1, le=30)
+    distance_threshold: float | None = Field(default=None, ge=0.0, le=2.0)
+    sectors: list[str] | None = None
+    project_year_min: int | None = Field(default=None, ge=2010, le=2100)
+    project_year_max: int | None = Field(default=None, ge=2010, le=2100)
+    chunk_types: list[str] | None = None
+
+
+class EstimationRun(BaseModel):
+    """One wizard ejecución: transcript + per-stage JSONB + human verify."""
+
+    id: int
+    transcript: str
+    status: str
+    current_step: str
+    reformulation: dict = Field(default_factory=dict)
+    retrieval: dict = Field(default_factory=dict)
+    augmentation: dict = Field(default_factory=dict)
+    generation: dict = Field(default_factory=dict)
+    adjusted_breakdown: dict = Field(default_factory=dict)
+    idempotency_key: str | None = None
+    duration_ms: int | None = None
+    created_at: datetime
+    updated_at: datetime

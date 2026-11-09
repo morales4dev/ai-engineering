@@ -367,7 +367,7 @@ Diary already has `pre_sesion_09`. This step only adds the live we just adopted.
 |---|---|---|
 | 1 | Config, wrapper (`reasoning_effort` + gpt-5 prices), slowapi, `.env.example` | [x] |
 | 2 | Pipeline modules + unit tests (no HTTP) | [x] |
-| 3 | Alembic `0004` + store + facade `services/rag_runs.py` | [ ] |
+| 3 | Alembic `0004` + store + facade `services/rag_runs.py` | [x] |
 | 4 | HTTP: RAG API keys, limiter, retrieval, one-shot, thin ejecución router | [ ] |
 | 5 | Streamlit RAG Wizard tab | [ ] |
 | 6 | Task corpus files + README section (human ingest) | [ ] |
