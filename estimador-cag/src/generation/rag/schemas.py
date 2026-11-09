@@ -403,3 +403,26 @@ class EstimationRun(BaseModel):
     duration_ms: int | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class CreateRunRequest(BaseModel):
+    """Payload for ``POST /v1/estimate/runs``."""
+
+    transcript: str = Field(min_length=100, max_length=50_000)
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+
+class RunAssembleRequest(BaseModel):
+    """Optional token budget for ``POST /v1/estimate/runs/{id}/assemble``.
+
+    Omitted ``max_context_tokens`` falls back to ``MAX_CONTEXT_TOKENS``.
+    """
+
+    max_context_tokens: int | None = Field(default=None, ge=256, le=64_000)
+
+
+class RunVerifyRequest(BaseModel):
+    """Human-edited modules/tasks for ``PATCH /v1/estimate/runs/{id}/verify``."""
+
+    modules: list[WorkModule]
+
