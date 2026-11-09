@@ -369,11 +369,11 @@ Diary already has `pre_sesion_09`. This step only adds the live we just adopted.
 | 2 | Pipeline modules + unit tests (no HTTP) | [x] |
 | 3 | Alembic `0004` + store + facade `services/rag_runs.py` | [x] |
 | 4 | HTTP: RAG API keys, limiter, retrieval, one-shot, thin ejecución router | [x] |
-| 5 | Streamlit RAG Wizard tab | [ ] |
+| 5 | Streamlit RAG Wizard tab | [x] |
 | 6 | Task corpus files + README section (human ingest) | [ ] |
 | 7 | `evolution.md` event `session_09_forense` only | [ ] |
 
-Next work is **step 1 only**.
+Next work is **step 6 only**.
 
 ## Out of this port
 
