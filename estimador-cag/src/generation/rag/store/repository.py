@@ -12,12 +12,9 @@ from pgvector.sqlalchemy import HALFVEC
 from sqlalchemy import Integer, Row, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from generation.rag.chunk_types import BUDGET_COMPONENT
 from generation.rag.schemas import EmbeddedChunk
 from generation.rag.store.models import ChunkRow, DocumentRow, EMBEDDING_DIMENSIONS
-
-# The structural chunker emits one chunk per budget component; the vocabulary
-# is queryable thanks to the index on ``chunk_type`` (live-session filters).
-BUDGET_COMPONENT = "budget_component"
 
 
 class ChunkStore:

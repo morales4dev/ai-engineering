@@ -18,6 +18,7 @@ import time
 import structlog
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from generation.rag.chunk_types import BUDGET_COMPONENT
 from generation.rag.chunking.structural import JSONStructuralChunker
 from generation.rag.embedding.embedder import OpenAIEmbedder, estimated_cost_usd
 from generation.rag.schemas import Budget, IngestResponse, IngestStats
@@ -55,7 +56,7 @@ class RagIngestService:
         source_path: str,
         document_type: str,
         budget: Budget,
-        chunk_type: str = "budget_component",
+        chunk_type: str = BUDGET_COMPONENT,
     ) -> IngestResponse:
         started = time.perf_counter()
 

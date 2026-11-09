@@ -12,6 +12,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from generation.rag.chunk_types import BUDGET_COMPONENT
+
 # Closed universe of client sectors present in the sample dataset. Kept as a
 # Literal so a typo or an unexpected sector fails validation loudly instead of
 # silently leaking into the metadata.
@@ -96,7 +98,7 @@ class IngestRequest(BaseModel):
     )
     content: Budget = Field(description="Full budget JSON, as produced upstream.")
     chunk_type: str = Field(
-        default="budget_component",
+        default=BUDGET_COMPONENT,
         max_length=50,
         description="chunk_type stamped on every chunk (filterable). Defaults keep S08 behaviour; "
         "the task corpus uses 'historical_task'.",
@@ -425,4 +427,3 @@ class RunVerifyRequest(BaseModel):
     """Human-edited modules/tasks for ``PATCH /v1/estimate/runs/{id}/verify``."""
 
     modules: list[WorkModule]
-
