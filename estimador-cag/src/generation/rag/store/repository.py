@@ -9,7 +9,7 @@ everything back and leaves no orphan ``documents`` row.
 from __future__ import annotations
 
 from pgvector.sqlalchemy import HALFVEC
-from sqlalchemy import Row, cast, select
+from sqlalchemy import Integer, Row, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from generation.rag.schemas import EmbeddedChunk
@@ -37,9 +37,13 @@ class ChunkStore:
         document_type: str,
         doc_metadata: dict,
         embedded_chunks: list[EmbeddedChunk],
+        chunk_type: str = BUDGET_COMPONENT,
     ) -> int:
         """Insert the document row plus all its chunk rows. No commit here —
-        the caller's transaction decides when (and whether) anything lands."""
+        the caller's transaction decides when (and whether) anything lands.
+
+        ``chunk_type`` is stamped on every chunk (filterable column); it
+        defaults to ``budget_component`` so existing callers are unaffected."""
         document = DocumentRow(
             source_path=source_path,
             document_type=document_type,
@@ -51,7 +55,7 @@ class ChunkStore:
         session.add_all(
             ChunkRow(
                 document_id=document.id,
-                chunk_type=BUDGET_COMPONENT,
+                chunk_type=chunk_type,
                 content=chunk.text,
                 embedding=chunk.embedding,
                 metadata_=chunk.metadata,
@@ -90,3 +94,69 @@ class ChunkStore:
             .limit(k)
         )
         return list((await session.execute(stmt)).all())
+
+    async def search_filtered(
+        self,
+        session: AsyncSession,
+        *,
+        query_vector: list[float],
+        top_k: int = 10,
+        distance_threshold: float = 0.6,
+        sectors: list[str] | None = None,
+        project_year_min: int | None = None,
+        project_year_max: int | None = None,
+        chunk_types: list[str] | None = None,
+    ) -> tuple[list[Row], int]:
+        """k-NN search with structural pre-filtering and a relevance threshold.
+
+        Session 9 retrieval. Structural filters (sector / project year / chunk
+        type) narrow the candidate space BEFORE the vector ranking — the metadata
+        is persisted in JSONB (``client_sector``, ``year``) and the ``chunk_type``
+        column. Each filter follows the ``(:filter IS NULL OR …)`` pattern: a
+        ``None`` filter simply does not apply. The distance threshold then drops
+        chunks that are not actually close (no "confidently retrieving garbage").
+
+        Returns
+        -------
+        tuple[list[Row], int]
+            ``(rows, candidates_evaluated)`` where ``rows`` are the top-k chunks
+            under the threshold (ascending distance) and ``candidates_evaluated``
+            is how many chunks matched the structural filters before the
+            threshold/limit were applied.
+        """
+        sector_col = ChunkRow.metadata_["client_sector"].astext
+        year_col = cast(ChunkRow.metadata_["year"].astext, Integer)
+
+        structural_filters = []
+        if sectors:
+            structural_filters.append(sector_col.in_(sectors))
+        if project_year_min is not None:
+            structural_filters.append(year_col >= project_year_min)
+        if project_year_max is not None:
+            structural_filters.append(year_col <= project_year_max)
+        if chunk_types:
+            structural_filters.append(ChunkRow.chunk_type.in_(chunk_types))
+
+        distance = cast(ChunkRow.embedding, HALFVEC(EMBEDDING_DIMENSIONS)).cosine_distance(
+            query_vector
+        )
+
+        count_stmt = select(func.count()).select_from(ChunkRow).where(*structural_filters)
+        candidates_evaluated = int((await session.execute(count_stmt)).scalar_one())
+
+        stmt = (
+            select(
+                ChunkRow.id,
+                ChunkRow.document_id,
+                ChunkRow.chunk_type,
+                ChunkRow.content,
+                ChunkRow.metadata_,
+                distance.label("distance"),
+            )
+            .where(*structural_filters)
+            .where(distance <= distance_threshold)
+            .order_by(distance)
+            .limit(top_k)
+        )
+        rows = list((await session.execute(stmt)).all())
+        return rows, candidates_evaluated

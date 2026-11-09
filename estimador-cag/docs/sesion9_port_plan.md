@@ -314,6 +314,7 @@ Copy-from: Lidr `data/task_corpus.json`, `scripts/build_task_corpus.py`.
 
 - Copy json to `estimador-cag/data/task_corpus.json`.
 - Copy script to `scripts/s09/build_task_corpus.py`. Trap + import rewrite. Compose/host URLs like other scripts. Do not run `--ingest`.
+- Known `chunk_type` strings live together as constants (not an enum; the column stays open): `BUDGET_COMPONENT`, `HISTORICAL_TASK`, `SYNTHETIC`. Reuse them from store / ingest / the s09 script / s08 synthetic insert. Values stay snake_case (`"budget_component"`, …).
 - README: new section after «Live Session 08», title «Live Session 09 — RAG estimation». What each new URL is for, wizard tab, `ESTIMATE_API_KEY` / `RETRIEVAL_API_KEY`, timeout 600, task-corpus how-to, wipe SQL. Standalone. Do not rewrite the diagnóstico or Live Session 08. (`evolution.md` is step 7, not here.)
 
 **Guide (human, paid embeddings).** Agent does not run `--ingest`. In this step the agent walks the human through the commands, checks the counts after, and stops if anything looks wrong.
@@ -365,7 +366,7 @@ Diary already has `pre_sesion_09`. This step only adds the live we just adopted.
 | # | Title | OK |
 |---|---|---|
 | 1 | Config, wrapper (`reasoning_effort` + gpt-5 prices), slowapi, `.env.example` | [x] |
-| 2 | Pipeline modules + unit tests (no HTTP) | [ ] |
+| 2 | Pipeline modules + unit tests (no HTTP) | [x] |
 | 3 | Alembic `0004` + store + facade `services/rag_runs.py` | [ ] |
 | 4 | HTTP: RAG API keys, limiter, retrieval, one-shot, thin ejecución router | [ ] |
 | 5 | Streamlit RAG Wizard tab | [ ] |
