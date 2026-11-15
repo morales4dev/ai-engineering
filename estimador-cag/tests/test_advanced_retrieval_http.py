@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import routers.retrieval_advanced as advanced_router
-from generation.rag.retrieval.advanced_pipeline import AdvancedRetrievalOutcome
+from generation.rag.retrieval.advanced_search_pipeline import AdvancedRetrievalOutcome
 from generation.rag.retrieval.collections import Collection
 from generation.rag.retrieval.query_transform import SubQuery
 from generation.rag.retrieval.router import RoutingDecision

@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from dependencies import get_embedder, get_reranker
-from generation.rag.retrieval.advanced_pipeline import StageConfig, advanced_retrieve
+from generation.rag.retrieval.advanced_search_pipeline import StageConfig, advanced_retrieve
 from generation.rag.retrieval.collections import Collection
 
 GOLDEN_PATH = ROOT / "evals" / "golden_retrieval.json"

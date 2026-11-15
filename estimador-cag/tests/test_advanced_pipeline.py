@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from types import SimpleNamespace
 
-from generation.rag.retrieval.advanced_pipeline import (
+from generation.rag.retrieval.advanced_search_pipeline import (
     StageConfig,
     _chunk_key,
     _fuse_collection,
@@ -11,9 +11,9 @@ from generation.rag.retrieval.advanced_pipeline import (
 )
 from generation.rag.retrieval.collections import Collection
 from generation.rag.retrieval.fusion import round_robin_merge
-from generation.rag.retrieval.pipeline import CollectionHits
 from generation.rag.retrieval.query_transform import DECOMPOSE, EXPAND, choose_technique
 from generation.rag.retrieval.router import match_rules, route
+from generation.rag.retrieval.search_pipeline import CollectionHits
 from generation.rag.schemas import RetrievedChunk
 
 

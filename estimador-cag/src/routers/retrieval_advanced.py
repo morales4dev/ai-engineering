@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from config import get_settings
 from dependencies import get_embedder, get_runtime_retrieval_config
 from generation.rag.errors import RetrievalError
-from generation.rag.retrieval.advanced_pipeline import StageConfig, advanced_retrieve
+from generation.rag.retrieval.advanced_search_pipeline import StageConfig, advanced_retrieve
 from generation.rag.retrieval.collections import Collection, HardFilters
 from generation.rag.schemas import RetrievedChunk
 from routers.rate_limiting import limiter

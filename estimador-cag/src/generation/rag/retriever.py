@@ -131,7 +131,7 @@ async def search_chunks(
     if search_mode == "hybrid" or rerank:
         if not query_text:
             raise RetrievalError("query_text is required for hybrid search or reranking.")
-        from generation.rag.retrieval.pipeline import retrieve
+        from generation.rag.retrieval.search_pipeline import retrieve
 
         return await retrieve(
             query_embedding=query_embedding,

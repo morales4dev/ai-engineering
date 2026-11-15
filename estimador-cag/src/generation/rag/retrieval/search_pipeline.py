@@ -1,4 +1,4 @@
-"""Hybrid retrieval with optional recall-then-cross-encoder reranking."""
+"""Search pipeline with optional hybrid retrieval and cross-encoder reranking."""
 
 from __future__ import annotations
 

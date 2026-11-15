@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from generation.rag.retrieval import pipeline
+from generation.rag.retrieval import search_pipeline
 
 
 class FakeStore:
@@ -52,13 +52,13 @@ class FakeReranker:
 @pytest.fixture
 def store(monkeypatch):
     instance = FakeStore()
-    monkeypatch.setattr(pipeline, "get_chunk_store", lambda: instance)
-    monkeypatch.setattr(pipeline, "get_async_session_factory", lambda: lambda: FakeSession())
+    monkeypatch.setattr(search_pipeline, "get_chunk_store", lambda: instance)
+    monkeypatch.setattr(search_pipeline, "get_async_session_factory", lambda: lambda: FakeSession())
     return instance
 
 
 async def test_hybrid_reranking_recalls_both_branches_and_returns_top_n(store):
-    result = await pipeline.retrieve(
+    result = await search_pipeline.retrieve(
         query_embedding=[0.0] * 1536,
         query_text="ecommerce checkout",
         search_mode="hybrid",
@@ -83,7 +83,7 @@ async def test_hybrid_reranking_recalls_both_branches_and_returns_top_n(store):
 
 
 async def test_vector_mode_does_not_run_lexical_branch(store):
-    result = await pipeline.retrieve(
+    result = await search_pipeline.retrieve(
         query_embedding=[0.0] * 1536,
         query_text="ecommerce checkout",
         search_mode="vector",

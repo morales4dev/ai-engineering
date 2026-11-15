@@ -336,7 +336,7 @@ indicando el `X-API-Key` correspondiente.
 
     Debe mostrar `Reranker loaded:`. La primera carga puede descargar pesos
     desde Hugging Face y tardar; mantén activada la verificación TLS.
-  - **Código:** [pipeline.py](../src/generation/rag/retrieval/pipeline.py)
+  - **Código:** [search_pipeline.py](../src/generation/rag/retrieval/search_pipeline.py)
     recupera candidatos; [fusion.py](../src/generation/rag/retrieval/fusion.py)
     combina rankings y [reranker.py](../src/generation/rag/retrieval/reranker.py)
     carga y aplica el modelo.
@@ -352,7 +352,7 @@ indicando el `X-API-Key` correspondiente.
     los documentos con fecha desconocida conservan su peso. Compara `document_date`,
     `relevance_score` y orden; el resultado dependerá de los documentos.
   - **Código:** [query_transform.py](../src/generation/rag/retrieval/query_transform.py)
-    elige y genera las consultas; [advanced_pipeline.py](../src/generation/rag/retrieval/advanced_pipeline.py)
+    elige y genera las consultas; [advanced_search_pipeline.py](../src/generation/rag/retrieval/advanced_search_pipeline.py)
     coordina las etapas y [temporal.py](../src/generation/rag/retrieval/temporal.py)
     aplica el peso temporal.
 

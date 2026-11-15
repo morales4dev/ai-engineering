@@ -1,4 +1,4 @@
-"""Query transformation, collection routing, hybrid fusion, and temporal ranking."""
+"""Advanced search: query transformation, routing, fusion, and temporal ranking."""
 
 from __future__ import annotations
 
@@ -16,9 +16,9 @@ from generation.rag.retrieval.collections import (
     HardFilters,
 )
 from generation.rag.retrieval.fusion import reciprocal_rank_fusion, round_robin_merge
-from generation.rag.retrieval.pipeline import CollectionHits, hybrid_search_one
 from generation.rag.retrieval.query_transform import DECOMPOSE, SubQuery, transform_query
 from generation.rag.retrieval.router import RoutingDecision, route
+from generation.rag.retrieval.search_pipeline import CollectionHits, hybrid_search_one
 from generation.rag.retrieval.temporal import apply_temporal_decay
 from generation.rag.schemas import RetrievedChunk
 
