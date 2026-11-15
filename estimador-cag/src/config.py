@@ -76,6 +76,16 @@ class Settings(BaseSettings):
     RETRIEVAL_RECALL_TOP_K: int = 50
     RERANK_TOP_N: int = 5
     RRF_K: int = 60
+    RETRIEVAL_ROUTING_ENABLED: bool = True
+    QUERY_TRANSFORM_ENABLED: bool = True
+    TEMPORAL_DECAY_ENABLED: bool = False
+    ROUTER_MODEL: str = "gpt-4o-mini"
+    QUERY_TRANSFORM_MODEL: str = "gpt-4o-mini"
+    TEMPORAL_DECAY_HALF_LIFE_DAYS: int = 900
+    QUERY_MAX_SUBQUERIES: int = 4
+    ROUTER_MAX_TARGETS: int = 3
+    TASK_HOURS_TOP_K: int = 5
+    TASK_HOURS_DISTANCE_THRESHOLD: float = 0.45
     # Token budget for the assembled <source> context block (tiktoken cl100k_base).
     MAX_CONTEXT_TOKENS: int = 16384
     # Idempotency cache for POST /v1/estimate/from-transcript (seconds; 24h).

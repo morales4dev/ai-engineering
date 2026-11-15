@@ -126,10 +126,15 @@ class EstimationRunRow(Base):
     current_step: Mapped[str] = mapped_column(
         String(50), nullable=False, default="transcript"
     )
+    workflow_version: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="legacy", server_default="legacy"
+    )
     reformulation: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     retrieval: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     augmentation: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     generation: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    structure: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    task_hours: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     adjusted_breakdown: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)

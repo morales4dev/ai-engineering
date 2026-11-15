@@ -226,7 +226,7 @@ para comparar la recuperación.
   `results` y `search_time_ms`. Para demostrar que participó FTS, comprueba
   `lexical_hits` mayor que cero, no solo que la petición diga `hybrid`.
 
-  **Código:** [pipeline.py](../src/generation/rag/retrieval/pipeline.py) recupera
+  **Código:** [search_pipeline.py](../src/generation/rag/retrieval/search_pipeline.py) recupera
   hasta 50 candidatos por rama y [fusion.py](../src/generation/rag/retrieval/fusion.py)
   los combina con RRF. Cada posición aporta apoyo; aparecer bien colocado en ambas
   listas suma más. `RRF_K=60` suaviza la diferencia entre posiciones.
@@ -281,7 +281,7 @@ para comparar la recuperación.
   modo y `reranker_loaded` permite identificar la carga inicial. El orden puede
   coincidir con el anterior; eso por sí solo no demuestra un fallo.
 
-  **Código:** [pipeline.py](../src/generation/rag/retrieval/pipeline.py) entrega
+  **Código:** [search_pipeline.py](../src/generation/rag/retrieval/search_pipeline.py) entrega
   hasta `RETRIEVAL_RECALL_TOP_K=50` candidatos a
   [reranker.py](../src/generation/rag/retrieval/reranker.py). El cross-encoder
   evalúa cada pareja consulta-fragmento y conserva `RERANK_TOP_N=5`. Si falla,

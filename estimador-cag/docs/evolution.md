@@ -1,11 +1,11 @@
 # Evolución del estimador-cag
 
-Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas de trabajo (`pre-session-08`, `session_08_forense`, `session_09_forense` y `session-10/pre-work` incluidas).
+Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas de trabajo (`pre-session-08`, `session_08_forense`, `session_09_forense`, `session-10/pre-work` y `session_10_forense` incluidas).
 
 | Columna | Significado |
 |---|---|
 | Entró en | Rama o evento en el que aterrizó el cambio |
-| Vigente | `[x]` si el cambio (o su sucesor directo e inequívoco) sigue en el HEAD de `main` hoy. `[]` si se retiró o se sustituyó por otro contrato |
+| Vigente | `[x]` si el cambio (o su sucesor directo e inequívoco) sigue en el estado actual. `[]` si se retiró o se sustituyó por otro contrato |
 | Cambio | Qué se añadió o cambió |
 | Retirado en | Solo si `Vigente` es `[]`: rama o evento que lo quitó |
 
@@ -29,6 +29,7 @@ Nombres de evento (como en las ramas, salvo `v2` y `sesion-02`, que no fueron ra
 - `pre_sesion_09` — diagnóstico arquitectónico RAG (doc; sin cambio de producto)
 - `session_09_forense` — port live de la sesión 9 (RAG estimation, API protegida, wizard Streamlit e historial)
 - `pre_sesion_10` — mejora del retrieval RAG: búsqueda híbrida, reranking y evaluación (rama `session-10/pre-work`)
+- `session_10_forense` — integración live de la sesión 10 (wizard de horas, recuperación avanzada y ajustes)
 
 No entra `session1/` (ejercicios sueltos, no son el estimador).
 
@@ -126,10 +127,19 @@ No entra `session1/` (ejercicios sueltos, no son el estimador).
 | session_08_forense         | [x]     | `ChunkStore.search` / `POST /search` ordena por el cast halfvec para poder usar `chunks_embedding_halfvec_idx` |                    |
 | pre_sesion_09              | [x]     | Diagnóstico RAG en `arquitectura-actual.md` (raíz del repo): trace, cinco fallos, propuesta. Sin cambio de producto |                    |
 | session_09_forense         | [x]     | Pipeline RAG: reformulación a brief estructurado con fallback → retrieval filtrado (threshold, sector, año y tipo) → assembler `<source>` → `Estimate` fundamentado (módulos → tareas, engineer-days) |                    |
-| session_09_forense         | [x]     | HTTP: `POST /v1/retrieval/search`, `POST /v1/estimate/from-transcript` idempotente y ejecuciones persistidas en `POST /v1/estimate/runs` |                    |
+| session_09_forense         | [x]     | HTTP: `POST /v1/retrieval/search` y `POST /v1/estimate/from-transcript` idempotente |                    |
+| session_09_forense         | []      | HTTP: contrato de ejecuciones persistidas en `POST /v1/estimate/runs` para el wizard en días, con etapas de recuperación y ensamblado | session_10_forense |
 | session_09_forense         | [x]     | Seguridad RAG: `ESTIMATE_API_KEY` / `RETRIEVAL_API_KEY`, rate limit por API key y `X-Request-ID` |                    |
-| session_09_forense         | [x]     | Streamlit RAG Wizard: pasos de estimación guiada, verificación humana e historial de ejecuciones |                    |
+| session_09_forense         | []      | Streamlit RAG Wizard en días: recuperación y ensamblado guiados, verificación humana e historial de esas ejecuciones | session_10_forense |
 | session_09_forense         | [x]     | Corpus opcional de tareas históricas (`historical_task_breakdown`) para retrieval a granularidad módulo → tarea |                    |
 | pre_sesion_10              | [x]     | Retrieval RAG híbrido: combina búsqueda semántica y léxica, manteniendo los filtros estructurales existentes |                    |
 | pre_sesion_10              | [x]     | Reranking opcional de candidatos, seleccionable por ejecución desde la API y el wizard de Streamlit |                    |
 | pre_sesion_10              | [x]     | Evaluación con consultas etiquetadas para comparar búsqueda vectorial/híbrida, con y sin reranking, por precisión@5 y latencia |                    |
+| session_10_forense         | [x]     | Wizard Streamlit y API de ejecuciones: generación de estructura de módulos y tareas, revisión humana y estimación posterior en horas |                    |
+| session_10_forense         | [x]     | Estimación de horas por tarea a partir de tareas históricas similares, con vecinos, distancia e indicador de similitud y acuerdo; también disponible mediante API independiente |                    |
+| session_10_forense         | [x]     | Confirmación y corrección de horas y tarifas por tarea, con cálculo de totales e historial de ejecuciones del nuevo wizard |                    |
+| session_10_forense         | [x]     | Corpus sintético ampliado de tareas históricas para la estimación de horas y ejemplos de transcripciones y documentación técnica para recuperación |                    |
+| session_10_forense         | [x]     | API de búsqueda avanzada en presupuestos, transcripciones y documentación técnica: selección de colecciones, filtros y combinación de resultados |                    |
+| session_10_forense         | [x]     | Recuperación avanzada con transformación de consultas y ponderación opcional por antigüedad, además de búsqueda híbrida y reranking |                    |
+| session_10_forense         | [x]     | Ajustes de recuperación en caliente desde Streamlit y API, con valores globales y opciones por estimación o consulta |                    |
+| session_10_forense         | [x]     | Evaluación ampliada de recuperación: comparación de configuraciones A–H por precisión y latencia sobre las distintas colecciones |                    |

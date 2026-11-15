@@ -33,7 +33,12 @@ def _row(chunk_id: int, distance: float) -> SimpleNamespace:
         document_id=chunk_id * 10,
         chunk_type="budget_component",
         content="Cart and checkout service",
-        metadata_={"client_sector": "ecommerce", "year": 2024, "budget_id": "BUD-2024-005"},
+        metadata_={
+            "client_sector": "ecommerce",
+            "year": 2024,
+            "budget_id": "BUD-2024-005",
+            "estimated_hours": 16,
+        },
         distance=distance,
     )
 
@@ -73,6 +78,8 @@ async def test_search_chunks_returns_hits_above_threshold(wire):
     assert first.sector == "ecommerce"  # flattened from client_sector
     assert first.project_year == 2024  # flattened from year
     assert first.chunk_type == "budget_component"
+    assert first.estimated_hours == 16
+    assert first.has_vector_distance is True
     # The structural filter was forwarded to the store.
     assert store.calls[0]["sectors"] == ["ecommerce"]
     assert store.calls[0]["distance_threshold"] == 0.6

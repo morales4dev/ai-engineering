@@ -31,6 +31,7 @@ def test_module_appears_in_text_and_metadata():
     text = render_component_text(_budget(component), component)
     assert "Module: Payments & Billing" in text
     assert component_metadata(_budget(component), component)["module"] == "Payments & Billing"
+    assert component_metadata(_budget(component), component)["tech_stack"] == ["stripe"]
 
 
 def test_no_module_keeps_text_clean_and_metadata_none():

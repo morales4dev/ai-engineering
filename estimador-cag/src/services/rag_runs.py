@@ -1,300 +1,142 @@
-"""Coordinate and persist the steps of the Streamlit RAG wizard.
-
-Each step calls the pipeline and saves its result through
-``services.estimation_runs``. Re-running an earlier step clears downstream
-results so they cannot use stale inputs. Persistence errors propagate.
-
-Generation saves citation and coherence checks without automatically
-regenerating the estimate. The one-shot estimation flow is separate.
-"""
+"""Persist the guided structure, task-hours and human verification stages."""
 
 from __future__ import annotations
 
-import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-import structlog
-
-from config import get_settings
-from dependencies import get_embedder, get_token_encoder
-from generation.rag.context_assembler import build_context_block, truncate_to_token_budget
-from generation.rag.errors import RetrievalError
-from generation.rag.estimator import generate_estimate
 from generation.rag.observability import log_stage
 from generation.rag.query_reformulator import compose_search_text, reformulate_query
-from generation.rag.retriever import search_chunks
-from generation.rag.schemas import (
-    AssembleResult,
-    Estimate,
-    EstimationRun,
-    GenerateResult,
-    ReformulationResult,
-    RetrievedChunk,
-    RunRetrieveFilters,
-    WorkModule,
-)
-from generation.rag.validation import check_coherence, validate_citations
+from generation.rag.schemas import ReformulationResult
+from generation.rag.structure import generate_structure
+from generation.rag.task_hours import estimate_tasks
+from generation.rag.wizard import CostModule, StructureRequest, WizardRun
 from services import estimation_runs as runs_store
 from services.estimation_runs import RunNotFound
 
-log = structlog.get_logger()
-
-_KNOWN_SECTORS = {"finance", "ecommerce", "healthcare", "industrial"}
-
 
 class RunStepConflict(Exception):
-    """An earlier wizard step has not been persisted yet."""
-
     def __init__(self, run_id: int, need: str) -> None:
         super().__init__(f"estimation run {run_id} is missing {need}")
         self.run_id = run_id
         self.need = need
 
 
-def _load(run_id: int) -> EstimationRun:
+def _load(run_id: int) -> WizardRun:
     run = runs_store.get(run_id)
     if run is None:
         raise RunNotFound(run_id)
+    if run.workflow_version != "s10":
+        raise RunStepConflict(run_id, "a session 10 workflow (legacy run is read-only)")
     return run
 
 
-def _reformulation_of(run: EstimationRun) -> ReformulationResult:
-    if not run.reformulation:
-        raise RunStepConflict(run.id, "reformulation")
-    return ReformulationResult.model_validate(run.reformulation)
+def _elapsed_ms(start: float) -> int:
+    return int((time.perf_counter() - start) * 1000)
 
 
-def _chunks_of(run: EstimationRun) -> list[RetrievedChunk]:
-    raw = run.retrieval.get("chunks")
-    if not run.retrieval or raw is None:
-        raise RunStepConflict(run.id, "retrieval")
-    return [RetrievedChunk.model_validate(chunk) for chunk in raw]
-
-
-def _augmentation_of(run: EstimationRun) -> AssembleResult:
-    if not run.augmentation:
-        raise RunStepConflict(run.id, "augmentation")
-    return AssembleResult.model_validate(run.augmentation)
-
-
-def _seed_adjusted_breakdown(estimate: Estimate) -> dict:
-    modules = [
-        {
-            "name": module.name,
-            "description": module.description or "",
-            "tasks": [
-                {
-                    "name": task.name,
-                    "description": task.description or "",
-                    "engineer_days": task.engineer_days,
-                    "sources": list(task.sources),
-                }
-                for task in module.tasks
-            ],
-        }
-        for module in estimate.modules
-    ]
-    total = sum(task["engineer_days"] for module in modules for task in module["tasks"])
-    return {
-        "modules": modules,
-        "total_engineer_days": total,
-        "adjusted_at": None,
-    }
-
-
-def _resolved_filters(
-    run: EstimationRun,
-    filters: RunRetrieveFilters | None,
-) -> dict:
-    settings = get_settings()
-    incoming = filters or RunRetrieveFilters()
-    brief = _reformulation_of(run).query
-    sector = brief.sector.lower().strip() if brief.sector else None
-    default_sectors = [sector] if sector in _KNOWN_SECTORS else None
-    sectors = incoming.sectors if incoming.sectors else default_sectors
-    return {
-        "top_k": incoming.top_k if incoming.top_k is not None else settings.RETRIEVAL_TOP_K,
-        "distance_threshold": (
-            incoming.distance_threshold
-            if incoming.distance_threshold is not None
-            else settings.RETRIEVAL_DISTANCE_THRESHOLD
-        ),
-        "search_mode": (
-            incoming.search_mode
-            if incoming.search_mode is not None
-            else getattr(settings, "RETRIEVAL_SEARCH_MODE", "vector")
-        ),
-        "rerank": (
-            incoming.rerank
-            if incoming.rerank is not None
-            else getattr(settings, "RERANKER_ENABLED", False)
-        ),
-        "sectors": sectors,
-        "project_year_min": incoming.project_year_min,
-        "project_year_max": incoming.project_year_max,
-        "chunk_types": incoming.chunk_types if incoming.chunk_types else None,
-    }
-
-
-def _elapsed_ms(t0: float) -> int:
-    return int((time.perf_counter() - t0) * 1000)
-
-
-async def create_run(
-    transcript: str, *, idempotency_key: str | None = None
-) -> EstimationRun:
-    """Create a run and immediately reformulate its transcript."""
+async def create_run(transcript: str, *, idempotency_key: str | None = None) -> WizardRun:
     inserted = runs_store.insert(transcript=transcript, idempotency_key=idempotency_key)
     return await reformulate(inserted.id)
 
 
-async def reformulate(run_id: int) -> EstimationRun:
+async def reformulate(run_id: int) -> WizardRun:
     run = _load(run_id)
-    t0 = time.perf_counter()
+    started = time.perf_counter()
     with log_stage("reformulation", str(run_id)):
         query = await reformulate_query(run.transcript)
         search_text = compose_search_text(query)
     payload = ReformulationResult(query=query, search_text=search_text).model_dump(mode="json")
-    runs_store.update(
-        run_id,
-        reformulation=payload,
-        status="reformulated",
-        current_step="reformulation",
-        duration_ms=_elapsed_ms(t0),
+    return runs_store.update(
+        run_id, reformulation=payload, status="reformulated",
+        current_step="reformulation", duration_ms=_elapsed_ms(started),
+        generation={}, structure={}, task_hours={}, adjusted_breakdown={},
     )
-    return runs_store.clear_downstream(run_id, "reformulation")
 
 
-async def retrieve(run_id: int, filters: RunRetrieveFilters | None = None) -> EstimationRun:
+async def generate(run_id: int) -> WizardRun:
     run = _load(run_id)
-    brief = _reformulation_of(run)
-    applied = _resolved_filters(run, filters)
-    embedder = get_embedder()
-    if embedder is None:
-        raise RetrievalError("Embedding service is not available.")
-
-    t0 = time.perf_counter()
-    with log_stage("retrieval", str(run_id), sectors=applied["sectors"]):
-        query_embedding = await asyncio.to_thread(embedder.embed_one, brief.search_text)
-        result = await search_chunks(
-            query_embedding,
-            top_k=applied["top_k"],
-            distance_threshold=applied["distance_threshold"],
-            query_text=brief.search_text,
-            search_mode=applied["search_mode"],
-            rerank=applied["rerank"],
-            sectors=applied["sectors"],
-            project_year_min=applied["project_year_min"],
-            project_year_max=applied["project_year_max"],
-            chunk_types=applied["chunk_types"],
-        )
-    payload = result.model_dump(mode="json")
-    payload["filters"] = applied
-    runs_store.update(
-        run_id,
-        retrieval=payload,
-        status="retrieved",
-        current_step="retrieval",
-        duration_ms=_elapsed_ms(t0),
-    )
-    return runs_store.clear_downstream(run_id, "retrieval")
-
-
-async def assemble(run_id: int, max_context_tokens: int | None = None) -> EstimationRun:
-    run = _load(run_id)
-    chunks = _chunks_of(run)
-    settings = get_settings()
-    budget = max_context_tokens or settings.MAX_CONTEXT_TOKENS
-    encoder = get_token_encoder()
-
-    t0 = time.perf_counter()
-    with log_stage("augmentation", str(run_id), budget=budget):
-        kept = truncate_to_token_budget(chunks, budget, encoder)
-        context_block = build_context_block(kept)
-        token_count = len(encoder.encode(context_block)) if context_block else 0
-    payload = AssembleResult(
-        context_block=context_block,
-        kept_chunks=kept,
-        dropped_count=len(chunks) - len(kept),
-        token_count=token_count,
-    ).model_dump(mode="json")
-    runs_store.update(
-        run_id,
-        augmentation=payload,
-        status="assembled",
-        current_step="augmentation",
-        duration_ms=_elapsed_ms(t0),
-    )
-    return runs_store.clear_downstream(run_id, "augmentation")
-
-
-async def generate(run_id: int) -> EstimationRun:
-    run = _load(run_id)
-    query = _reformulation_of(run).query
-    augmentation = _augmentation_of(run)
-
-    t0 = time.perf_counter()
-    with log_stage("generation", str(run_id), sources=len(augmentation.kept_chunks)):
-        estimate = await generate_estimate(
-            augmentation.context_block, structured_query=query
-        )
-    fabricated = validate_citations(estimate, augmentation.kept_chunks)
-    coherent = check_coherence(estimate)
-    payload = GenerateResult(
-        estimate=estimate,
-        fabricated_source_ids=fabricated,
-        coherent=coherent,
-    ).model_dump(mode="json")
+    if not run.reformulation:
+        raise RunStepConflict(run_id, "reformulation")
+    query = ReformulationResult.model_validate(run.reformulation).query
+    started = time.perf_counter()
+    with log_stage("structure", str(run_id)):
+        estimate = await generate_structure(query)
+    payload = estimate.model_dump(mode="json")
     return runs_store.update(
         run_id,
-        generation=payload,
-        adjusted_breakdown=_seed_adjusted_breakdown(estimate),
+        generation={"estimate": payload},
+        structure={"modules": payload["modules"]},
+        task_hours={},
+        adjusted_breakdown={},
         status="generated",
-        current_step="generation",
-        duration_ms=_elapsed_ms(t0),
+        current_step="review",
+        duration_ms=_elapsed_ms(started),
     )
 
 
-async def verify(run_id: int, modules: list[WorkModule]) -> EstimationRun:
-    """Persist the human-edited table. Recompute total. Leave model output untouched."""
-    _load(run_id)
-    cleaned: list[dict] = []
+async def estimate_hours(run_id: int, request: StructureRequest) -> WizardRun:
+    run = _load(run_id)
+    if not run.generation:
+        raise RunStepConflict(run_id, "generation")
+    started = time.perf_counter()
+    with log_stage("task_hours", str(run_id)):
+        estimates = await estimate_tasks(request)
+    modules = [module.model_dump(mode="json") for module in request.modules]
+    matches = iter(estimates)
     for module in modules:
-        name = module.name.strip()
-        if not name:
-            continue
-        tasks = []
-        for task in module.tasks:
-            task_name = task.name.strip()
-            if not task_name:
-                continue
-            tasks.append(
-                {
-                    "name": task_name,
-                    "description": (task.description or "").strip(),
-                    "engineer_days": task.engineer_days,
-                    "sources": list(task.sources),
-                }
+        for task in module["tasks"]:
+            match = next(matches)
+            task.update(
+                estimated_hours=match.estimated_hours,
+                rate_eur_per_hour=75,
+                hours_reliability=match.reliability,
+                has_match=match.has_match,
             )
-        cleaned.append({"name": name, "description": (module.description or "").strip(), "tasks": tasks})
-    total = sum(task["engineer_days"] for module in cleaned for task in module["tasks"])
-    payload = {
-        "modules": cleaned,
-        "total_engineer_days": total,
-        "adjusted_at": datetime.now(timezone.utc).isoformat(),
-    }
+    total_hours = sum(
+        task["estimated_hours"] or 0 for module in modules for task in module["tasks"]
+    )
     return runs_store.update(
         run_id,
-        adjusted_breakdown=payload,
-        status="verified",
+        structure={"modules": [m.model_dump(mode="json") for m in request.modules]},
+        task_hours={"tasks": [estimate.model_dump(mode="json") for estimate in estimates]},
+        adjusted_breakdown={
+            "modules": modules,
+            "total_hours": total_hours,
+            "total_cost_eur": total_hours * 75,
+            "confirmed_at": None,
+        },
+        status="hours_estimated",
+        current_step="hours",
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+async def verify(run_id: int, modules: list[CostModule]) -> WizardRun:
+    run = _load(run_id)
+    if not run.task_hours:
+        raise RunStepConflict(run_id, "task hours")
+    cleaned = [module.model_dump(mode="json") for module in modules]
+    total_hours = sum(t["estimated_hours"] for m in cleaned for t in m["tasks"])
+    total_cost = sum(
+        t["estimated_hours"] * t["rate_eur_per_hour"] for m in cleaned for t in m["tasks"]
+    )
+    return runs_store.update(
+        run_id,
+        adjusted_breakdown={
+            "modules": cleaned,
+            "total_hours": total_hours,
+            "total_cost_eur": total_cost,
+            "confirmed_at": datetime.now(UTC).isoformat(),
+        },
+        status="confirmed",
         current_step="verification",
     )
 
 
-def get(run_id: int) -> EstimationRun | None:
-    return runs_store.get(run_id)
+def get(run_id: int) -> WizardRun:
+    return _load(run_id)
 
 
-def list_runs(limit: int = 20) -> list[EstimationRun]:
+def list_runs(limit: int = 20) -> list[WizardRun]:
     return runs_store.list_runs(limit=limit)

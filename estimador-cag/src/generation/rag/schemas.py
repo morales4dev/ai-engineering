@@ -7,7 +7,7 @@ the vectors. HTTP ingest persists those vectors; it no longer returns them.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -17,7 +17,16 @@ from generation.rag.chunk_types import BUDGET_COMPONENT
 # Closed universe of client sectors present in the sample dataset. Kept as a
 # Literal so a typo or an unexpected sector fails validation loudly instead of
 # silently leaking into the metadata.
-Sector = Literal["finance", "ecommerce", "healthcare", "industrial"]
+Sector = Literal[
+    "finance",
+    "ecommerce",
+    "healthcare",
+    "industrial",
+    "logistics",
+    "education",
+    "media",
+    "government",
+]
 Complexity = Literal["low", "medium", "high"]
 
 
@@ -200,8 +209,20 @@ class RetrievedChunk(BaseModel):
     sector: str
     project_year: int
     chunk_type: str
-    distance: float = Field(description="Cosine distance (lower = more similar).")
+    distance: float | None = Field(
+        default=None,
+        description=(
+            "Cosine distance (lower = more similar). Check has_vector_distance: "
+            "lexical-only results may use null or a legacy placeholder."
+        ),
+    )
+    has_vector_distance: bool = True
     budget_id: str | None = None
+    estimated_hours: int | None = None
+    collection: str | None = None
+    source_id: str | None = None
+    relevance_score: float | None = None
+    document_date: date | None = None
 
 
 class RetrievalResult(BaseModel):

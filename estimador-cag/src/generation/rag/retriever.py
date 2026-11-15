@@ -131,7 +131,7 @@ async def search_chunks(
     if search_mode == "hybrid" or rerank:
         if not query_text:
             raise RetrievalError("query_text is required for hybrid search or reranking.")
-        from generation.rag.retrieval.pipeline import retrieve
+        from generation.rag.retrieval.search_pipeline import retrieve
 
         return await retrieve(
             query_embedding=query_embedding,
@@ -177,7 +177,9 @@ async def search_chunks(
             project_year=int(row.metadata_.get("year", 0)),
             chunk_type=row.chunk_type,
             distance=float(row.distance),
+            has_vector_distance=True,
             budget_id=row.metadata_.get("budget_id"),
+            estimated_hours=row.metadata_.get("estimated_hours"),
         )
         for row in rows
     ]

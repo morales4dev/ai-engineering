@@ -733,7 +733,7 @@ El tuning de Postgres para builds de índices vive en `docker-compose.yml` (serv
 1. Repositorio actualizado: índice halfvec activo, flags de tuning en compose, queries de monitorización en el README.
 2. Documento corto con los números observados en **vuestro** barrido de `ef_search` (tabla del script) y la decisión razonada del valor adoptado: qué recall ganáis y qué latencia pagáis frente a las alternativas. Archivo: [`docs/sesion8_ef_search.md`](docs/sesion8_ef_search.md) (se rellena en el paso 6; no copiar los números de Lidr).
 
-## Live Session 09 — RAG estimation
+## RAG estimation — Sessions 09–10
 
 Session 09 adds a separate transcript-to-estimate RAG flow. It does not replace
 the CAG endpoints or the Session 8 `POST /search` contract. FastAPI owns the
@@ -742,10 +742,17 @@ pipeline and PostgreSQL persistence; Streamlit is an HTTP-only client.
 ### Streamlit RAG Wizard
 
 Start the API and Streamlit as described above, then open the **RAG Wizard**
-tab. Paste or upload a UTF-8 `.txt` transcript, then follow reformulation,
-retrieval, context assembly, grounded generation and human verification. Each
-execution is persisted by FastAPI and can be reopened from its history. Editing
-an earlier stage clears later results, so stale estimates are not reused.
+tab. Paste or upload a UTF-8 `.txt` transcript, generate a structure, review
+its modules and tasks, estimate hours from similar historical tasks, then edit
+hours and hourly rates and confirm. FastAPI persists the steps, and the server
+recalculates the final total. Re-running an earlier stage clears later results.
+Tasks without a sufficiently close vector match need manual hours. The
+similarity/agreement score is not a calibrated probability.
+
+The migration marks existing Session 9 wizard records `legacy` without deleting
+or converting them. The new wizard lists and edits only Session 10 records.
+The independent one-shot endpoint below still produces engineer-days and does
+not add records to the wizard history.
 
 Set both independent RAG API keys in `estimador-cag/.env` and recreate the API
 container:
@@ -761,31 +768,34 @@ Configure `ESTIMATOR_API_BASE_URL` for the Streamlit client when the API is not
 at `http://localhost:8000`. Grounded generation may take several minutes; the
 wizard allows 600 seconds for that request.
 
-### Session 09 API
+### RAG API
 
 All protected routes require `X-API-Key`.
 
 | Method and path | Key | Purpose |
 |---|---|---|
 | `POST /v1/retrieval/search` | `RETRIEVAL_API_KEY` | Standalone semantic retrieval with threshold and metadata filters; does not create an execution. |
+| `POST /v1/retrieval/advanced-search` | `RETRIEVAL_API_KEY` | Multi-collection retrieval with routing, query transformation and optional reranking and temporal decay. |
 | `POST /v1/estimate/from-transcript` | `ESTIMATE_API_KEY` | One-shot reformulate → retrieve → generate. Uses Redis idempotency and does not save to `estimation_runs`. |
+| `POST /v1/estimate/tasks/hours` | `ESTIMATE_API_KEY` | Estimate hours for a supplied module/task structure without saving a run. |
 | `POST /v1/estimate/runs` | `ESTIMATE_API_KEY` | Create a saved wizard execution from `{ "transcript": "…" }` and reformulate it. |
 | `POST /v1/estimate/runs/{id}/reformulate` | `ESTIMATE_API_KEY` | Re-run reformulation and clear downstream stages. |
-| `POST /v1/estimate/runs/{id}/retrieve` | `ESTIMATE_API_KEY` | Retrieve evidence with optional `top_k`, `distance_threshold`, sectors and year filters. |
-| `POST /v1/estimate/runs/{id}/assemble` | `ESTIMATE_API_KEY` | Build the token-budgeted `<source>` context block. |
-| `POST /v1/estimate/runs/{id}/generate` | `ESTIMATE_API_KEY` | Generate a grounded estimate and report citation/coherence checks. |
-| `PATCH /v1/estimate/runs/{id}/verify` | `ESTIMATE_API_KEY` | Save human-edited modules/tasks; the server recomputes the total. |
-| `GET /v1/estimate/runs` | `ESTIMATE_API_KEY` | List the last 20 saved executions. |
-| `GET /v1/estimate/runs/{id}` | `ESTIMATE_API_KEY` | Reopen one saved execution. |
+| `POST /v1/estimate/runs/{id}/generate` | `ESTIMATE_API_KEY` | Generate a module/task structure without hours or sources. |
+| `POST /v1/estimate/runs/{id}/hours` | `ESTIMATE_API_KEY` | Save the reviewed structure and estimate each task's hours. |
+| `PATCH /v1/estimate/runs/{id}/verify` | `ESTIMATE_API_KEY` | Confirm hours and rates; the server recomputes hours and cost. |
+| `GET /v1/estimate/runs` | `ESTIMATE_API_KEY` | List the last 20 Session 10 executions. |
+| `GET /v1/estimate/runs/{id}` | `ESTIMATE_API_KEY` | Reopen a Session 10 execution. |
 
 ### Optional task-granular corpus
 
-The historical Session 8 budgets have one chunk per component. The optional
-Session 9 corpus contains 12 deterministic synthetic projects broken down into
-module-tagged tasks. It is tagged as `document_type =
+The historical Session 8 budgets have one chunk per component. The Session 10
+generator produces 60 deterministic **synthetic**, not observed, projects
+across eight sectors in `data/task_corpus_s10.json`. Its tasks are tagged as `document_type =
 historical_task_breakdown` and `chunk_type = historical_task`; it can coexist
-with the historical budgets. Generation does not call an embedding service.
+with the historical budgets and the previous 12-project sample. Generation does not call an embedding service.
 Ingest does call the configured OpenAI embeddings API and can incur cost.
+The two synthetic corpora may contain overlapping examples; use care when
+interpreting hours and the similarity/agreement score.
 
 Review or regenerate the JSON without ingesting:
 
@@ -816,12 +826,8 @@ docker compose exec -T postgres psql -U postgres -d estimator -c \
   "SELECT document_type, count(*) FROM documents GROUP BY 1 ORDER BY 1;"
 ```
 
-Expect 12 `historical_task_breakdown` documents, each with multiple
-`historical_task` chunks. To remove only this optional corpus:
-
-```sql
-DELETE FROM documents WHERE document_type = 'historical_task_breakdown';
-```
+The new sample contributes up to 60 `historical_task_breakdown` documents,
+each with multiple `historical_task` chunks. Existing data is not deleted.
 
 ## Pre Session 10 — Hybrid search and reranking
 
@@ -838,11 +844,12 @@ the CAG flows or the Session 8 `POST /search` contract:
   the best 5 from up to 50 candidates. The model loads lazily and is reused within
   the process; load/scoring failures are reported, not silently bypassed.
 
-In **RAG Wizard**, use **Search mode** and **Rerank top candidates** before
-submitting retrieval. Both `POST /v1/retrieval/search` and
-`POST /v1/estimate/runs/{id}/retrieve` accept `search_mode` (`vector` / `hybrid`)
-and `rerank` (boolean). Environment settings provide defaults, including for
-the one-shot RAG estimator; request/wizard choices override them.
+In **RAG Wizard**, use the task search settings before estimating hours.
+`POST /v1/retrieval/search` and `POST /v1/estimate/runs/{id}/hours` accept
+`search_mode` (`vector` / `hybrid`) and `rerank` (boolean). Environment settings
+provide defaults for standalone retrieval and the one-shot estimator.
+Task-hour searches use the current runtime retrieval settings unless explicitly
+overridden for that estimation in the wizard or API request.
 
 ```dotenv
 RETRIEVAL_SEARCH_MODE=vector
@@ -854,7 +861,8 @@ RRF_K=60
 
 Vector-only retrieval remains the default. In hybrid/reranked results,
 `distance` is not the final ranking score: keyword-only hits carry a placeholder
-distance, and reranker scores are not exposed in the response.
+distance, and reranker scores are not exposed in the response. A keyword-only
+hit cannot be used as a distance-weighted task-hours neighbor.
 
 ### Verify and compare
 
@@ -868,8 +876,9 @@ Expect `Reranker loaded:` followed by the configured model name. The first run
 downloads weights from Hugging Face; stop and resolve download/TLS errors if
 verification fails.
 
-The [retrieval golden set](evals/golden_retrieval.json) contains five project
-briefs with manually assigned relevant budget IDs. With the historical budgets
+The [retrieval golden set](evals/golden_retrieval.json) contains project briefs
+and cross-collection queries with manually assigned relevant source IDs. With
+the historical budgets and the sample transcripts and technical documents
 ingested, `OPENAI_API_KEY` set and host `DATABASE_URL` pointing to PostgreSQL,
 run from `estimador-cag` on the host:
 
@@ -877,12 +886,221 @@ run from `estimador-cag` on the host:
 uv run --locked python scripts/eval_retrieval_s10.py
 ```
 
-It prints precision@5 and mean warm retrieval latency for A (vector),
-B (hybrid), C (vector + reranker) and D (hybrid + reranker). Relevance is counted
-per chunk using its parent budget ID. Timing excludes reformulation, embeddings,
-initial model loading and generation. Live measurements are still pending;
-no relevance or latency gains are claimed yet.
+It prints precision@5 and mean warm end-to-end retrieval latency for A–H:
+vector and hybrid baselines, reranking, temporal decay, routing, query
+transformation and the full pipeline. Relevance is counted per chunk using its
+source ID. Timing includes query embeddings and any routing/transformation LLM
+calls, but excludes initial reranker loading. Live measurements are still
+pending; no relevance or latency gains are claimed yet.
 
 For copy-paste requests, SQL checks and the code behind each manual test, see
 the [Session 10 manual guide](docs/pre_sesion_10_guia.md).
+
+## Session 10 live — Advanced retrieval
+
+`POST /v1/retrieval/advanced-search` is independent of
+`POST /v1/retrieval/search`. It uses the existing `documents`/`chunks` store
+and vector and lexical search paths, without migrations or table renames.
+The `document_type` and `chunk_type` identify budgets, transcripts and
+technical documents.
+
+The endpoint can expand a query or split it into topics. It selects collections
+using rules, falling back to a structured classifier and then all collections
+when there is no signal. It combines rankings with RRF (consensus) or round
+robin (coverage), applies metadata filters before searching, and supports
+reranking and temporal decay. Advanced defaults are in `config.py`; temporal
+decay is disabled initially.
+
+To optionally ingest the demonstration corpus:
+
+```bash
+cd estimador-cag
+uv run python scripts/build_advanced_corpus.py
+```
+
+This requires PostgreSQL, `OPENAI_API_KEY` and the existing schema. The script
+checks each `source_path` before ingestion and again after obtaining embeddings.
+Sequential re-runs skip documents already present. The sample data must be
+ingested before it can be searched.
+
+### Activation
+
+Requests require `X-API-Key: $RETRIEVAL_API_KEY`. By default, routing and query
+transformation are enabled, temporal decay is disabled, search mode follows
+`RETRIEVAL_SEARCH_MODE` and reranking follows `RERANKER_ENABLED`. Each request
+can override these controls:
+
+```json
+{
+  "query_text": "How many hours did the payment integration take, and how are its webhooks implemented?",
+  "search_mode": "hybrid",
+  "rerank": true,
+  "routing_enabled": true,
+  "query_transform_enabled": true,
+  "temporal_decay_enabled": true
+}
+```
+
+### Runtime controls
+
+The **Ajustes → Recuperación** tab exposes the same controls as
+`GET/PUT /api/v1/config/retrieval`, protected by `X-API-Key: $ESTIMATE_API_KEY`.
+Overrides are stored in the Redis hash `estimator:runtime_retrieval`, shared
+across workers and read on each execution. `PUT` is partial: omitted keys stay
+unchanged and `null` removes an override, restoring the `.env` default. If Redis
+is unavailable, reads use defaults and writes return 503.
+
+The advanced endpoint uses each runtime override when the request omits
+`search_mode`, `rerank`, `routing_enabled`, `query_transform_enabled` or
+`temporal_decay_enabled`. The engineer-days endpoint
+`POST /v1/estimate/from-transcript` also uses runtime `search_mode` and
+`rerank` without changing its request or response. These controls do not alter
+the earlier `/v1/retrieval/search` endpoint.
+
+The `retrieval` snapshot returns `effective`, `default` and `overridden` for
+each control. It also exposes `TASK_HOURS_TOP_K` and
+`TASK_HOURS_DISTANCE_THRESHOLD`, configurable at runtime with `.env` defaults
+of `5` and `0.45`. The task-hours endpoints use these values together with
+`search_mode` and `rerank` when the request omits the corresponding options.
+The wizard uses them by default and allows per-estimation overrides.
+
+## RAG flows at a glance
+
+Each labelled group below is a separate entry point. Follow its numbered steps from top to
+bottom; there are no arrows between the three flows. They reuse parts of the
+retrieval code, but the wizard does not call the advanced-search endpoint.
+
+```mermaid
+flowchart TB
+    subgraph wizard["Hours wizard · Streamlit"]
+        direction TB
+        W1["1. Submit transcript"] --> W2["2. Generate and review tasks"]
+        W2 --> W3["3. Find similar tasks and estimate hours"]
+        W3 --> W4["4. Confirm hours and rates"]
+    end
+
+    subgraph days["Engineer-days · API"]
+        direction TB
+        D1["1. Submit transcript"] --> D2["2. Retrieve sources and assemble context"]
+        D2 --> D3["3. Generate an estimate in days"]
+    end
+
+    subgraph advanced["Advanced search · API"]
+        direction TB
+        A1["1. Submit search query"] --> A2["2. Search selected collections"]
+        A2 --> A3["3. Return ranked fragments"]
+    end
+```
+
+The independent engineer-days flow is implemented in
+[`estimator.py`](src/generation/rag/estimator.py). The Session 8
+[`/search` sequence](docs/search-sequence.mmd) remains a separate, simpler
+semantic-search endpoint.
+
+### Hours wizard
+
+1. **Start:** Streamlit sends the transcript; the API creates an execution and
+   reformulates the conversation into a structured brief.
+2. **Generate and review:** the model proposes modules and tasks. The user can
+   edit them before requesting hours.
+3. **Estimate hours:** for each reviewed task, the API searches historical
+   tasks and calculates a distance-weighted estimate from suitable neighbors.
+   The search can use hybrid retrieval and reranking. Tasks without a suitable
+   vector match need manual hours.
+4. **Confirm:** the user reviews hours and hourly rates; the API recalculates
+   the totals and saves the confirmation. Each completed stage is persisted.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Streamlit wizard
+    participant API as FastAPI
+    participant LLM as Language model
+    participant Embed as Embeddings
+    participant DB as PostgreSQL
+
+    User->>UI: Submit transcript
+    UI->>API: Create execution
+    API->>DB: Save execution
+    API->>LLM: Reformulate transcript
+    API->>DB: Save reformulation
+    API-->>UI: Reformulated brief
+
+    User->>UI: Generate structure
+    UI->>API: Generate modules and tasks
+    API->>LLM: Generate structure
+    API->>DB: Save structure
+    API-->>UI: Structure for review
+
+    User->>UI: Review tasks and request hours
+    UI->>API: Send reviewed structure
+    API->>Embed: Embed each task
+    API->>DB: Search similar historical tasks
+    API->>API: Calculate hours from suitable neighbors
+    API->>DB: Save structure and estimates
+    API-->>UI: Hours and neighbors
+
+    User->>UI: Review and confirm hours and rates
+    UI->>API: Confirm
+    API->>API: Recalculate totals
+    API->>DB: Save confirmation
+    API-->>UI: Confirmed estimate
+```
+
+The UI is in [`wizard_ui.py`](src/wizard_ui.py), orchestration in
+[`rag_runs.py`](src/services/rag_runs.py), structure generation in
+[`structure.py`](src/generation/rag/structure.py), and task matching in
+[`task_hours.py`](src/generation/rag/task_hours.py).
+
+### Advanced search
+
+1. **Prepare:** query transformation and collection routing run in parallel.
+   Transformation can expand or split the query; collections can be supplied
+   explicitly or selected by the router.
+2. **Search:** embed each resulting query and search the selected collections
+   with their applicable metadata filters. Search can be vector-only or hybrid.
+3. **Combine and rank:** merge the candidate lists; optionally rerank them and
+   apply temporal decay.
+4. **Return:** send the ranked fragments and information about routing,
+   subqueries and candidate counts to the caller.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant API as Advanced-search API
+    participant Search as Advanced search pipeline
+    participant Plan as Query transform
+    participant Router as Collection router
+    participant Embed as Embeddings
+    participant DB as PostgreSQL
+    participant Rank as Reranker
+
+    Client->>API: Query, options and filters
+    API->>Search: Run search
+    par Query transformation
+        Search->>Plan: Prepare query, optionally expand or split
+        Plan-->>Search: Subqueries
+    and Collection routing
+        Search->>Router: Select collections
+        Router-->>Search: Targets and reason
+    end
+    Search->>Embed: Embed subqueries
+    Search->>DB: Search collections with filters
+    DB-->>Search: Vector and optional lexical candidates
+    Search->>Search: Combine candidate lists
+    opt Reranking enabled and candidates found
+        Search->>Rank: Score candidates
+        Rank-->>Search: Scores
+    end
+    opt Temporal decay enabled
+        Search->>Search: Adjust scores by document age
+    end
+    Search-->>API: Ranked fragments and search details
+    API-->>Client: Results
+```
+
+The endpoint is in [`retrieval_advanced.py`](src/routers/retrieval_advanced.py);
+[`advanced_search_pipeline.py`](src/generation/rag/retrieval/advanced_search_pipeline.py)
+coordinates its stages, and [`search_pipeline.py`](src/generation/rag/retrieval/search_pipeline.py)
+performs the collection searches.
 

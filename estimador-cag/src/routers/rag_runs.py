@@ -9,16 +9,13 @@ functions, the call belongs in the facade.
 from __future__ import annotations
 
 import structlog
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from generation.rag.errors import RagError
 from generation.rag.schemas import (
     CreateRunRequest,
-    EstimationRun,
-    RunAssembleRequest,
-    RunRetrieveFilters,
-    RunVerifyRequest,
 )
+from generation.rag.wizard import StructureRequest, TaskHoursResponse, VerifyRequest, WizardRun
 from routers.rate_limiting import limiter
 from routers.security import require_estimate_key
 from services import rag_runs as facade
@@ -61,69 +58,60 @@ def _sync(fn):
         raise _map(exc) from exc
 
 
-@router.post("/runs", response_model=EstimationRun, dependencies=_AUTH)
+@router.post("/tasks/hours", response_model=TaskHoursResponse, dependencies=_AUTH)
 @limiter.limit("30/minute")
-async def create_run(request: Request, payload: CreateRunRequest) -> EstimationRun:
+async def estimate_task_hours(request: Request, payload: StructureRequest) -> TaskHoursResponse:
+    return TaskHoursResponse(tasks=await _await(facade.estimate_tasks(payload)))
+
+
+@router.post("/runs", response_model=WizardRun, dependencies=_AUTH)
+@limiter.limit("30/minute")
+async def create_run(request: Request, payload: CreateRunRequest) -> WizardRun:
     return await _await(
         facade.create_run(payload.transcript, idempotency_key=payload.idempotency_key)
     )
 
 
-@router.get("/runs", response_model=list[EstimationRun], dependencies=_AUTH)
+@router.get("/runs", response_model=list[WizardRun], dependencies=_AUTH)
 @limiter.limit("60/minute")
 def list_runs(
     request: Request,
     limit: int = Query(default=20, ge=1, le=20),
-) -> list[EstimationRun]:
+) -> list[WizardRun]:
     return _sync(lambda: facade.list_runs(limit=limit))
 
 
-@router.get("/runs/{run_id}", response_model=EstimationRun, dependencies=_AUTH)
+@router.get("/runs/{run_id}", response_model=WizardRun, dependencies=_AUTH)
 @limiter.limit("60/minute")
-def get_run(request: Request, run_id: int) -> EstimationRun:
-    run = _sync(lambda: facade.get(run_id))
-    if run is None:
-        raise HTTPException(status_code=404, detail="Estimation run not found")
-    return run
+def get_run(request: Request, run_id: int) -> WizardRun:
+    return _sync(lambda: facade.get(run_id))
 
 
-@router.post("/runs/{run_id}/reformulate", response_model=EstimationRun, dependencies=_AUTH)
+@router.post("/runs/{run_id}/reformulate", response_model=WizardRun, dependencies=_AUTH)
 @limiter.limit("30/minute")
-async def reformulate_run(request: Request, run_id: int) -> EstimationRun:
+async def reformulate_run(request: Request, run_id: int) -> WizardRun:
     return await _await(facade.reformulate(run_id))
 
 
-@router.post("/runs/{run_id}/retrieve", response_model=EstimationRun, dependencies=_AUTH)
-@limiter.limit("60/minute")
-async def retrieve_run(
-    request: Request,
-    run_id: int,
-    payload: RunRetrieveFilters = Body(default_factory=RunRetrieveFilters),
-) -> EstimationRun:
-    return await _await(facade.retrieve(run_id, payload))
-
-
-@router.post("/runs/{run_id}/assemble", response_model=EstimationRun, dependencies=_AUTH)
-@limiter.limit("60/minute")
-async def assemble_run(
-    request: Request,
-    run_id: int,
-    payload: RunAssembleRequest = Body(default_factory=RunAssembleRequest),
-) -> EstimationRun:
-    return await _await(facade.assemble(run_id, payload.max_context_tokens))
-
-
-@router.post("/runs/{run_id}/generate", response_model=EstimationRun, dependencies=_AUTH)
+@router.post("/runs/{run_id}/generate", response_model=WizardRun, dependencies=_AUTH)
 @limiter.limit("15/minute")
-async def generate_run(request: Request, run_id: int) -> EstimationRun:
+async def generate_run(request: Request, run_id: int) -> WizardRun:
     return await _await(facade.generate(run_id))
 
 
-@router.patch("/runs/{run_id}/verify", response_model=EstimationRun, dependencies=_AUTH)
+@router.post("/runs/{run_id}/hours", response_model=WizardRun, dependencies=_AUTH)
+@limiter.limit("30/minute")
+async def estimate_run_hours(
+    request: Request, run_id: int, payload: StructureRequest
+) -> WizardRun:
+    return await _await(facade.estimate_hours(run_id, payload))
+
+
+@router.patch("/runs/{run_id}/verify", response_model=WizardRun, dependencies=_AUTH)
 @limiter.limit("60/minute")
 async def verify_run(
     request: Request,
     run_id: int,
-    payload: RunVerifyRequest,
-) -> EstimationRun:
+    payload: VerifyRequest,
+) -> WizardRun:
     return await _await(facade.verify(run_id, payload.modules))

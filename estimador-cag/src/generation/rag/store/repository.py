@@ -103,6 +103,8 @@ class ChunkStore:
         project_year_min: int | None = None,
         project_year_max: int | None = None,
         chunk_types: list[str] | None = None,
+        document_types: list[str] | None = None,
+        extra_filters: list | None = None,
     ) -> tuple[list[Row], int]:
         """k-NN search with structural pre-filtering and a relevance threshold.
 
@@ -127,24 +129,34 @@ class ChunkStore:
             project_year_max=project_year_max,
             chunk_types=chunk_types,
         )
+        if document_types:
+            structural_filters.append(DocumentRow.document_type.in_(document_types))
+        structural_filters.extend(extra_filters or [])
 
         distance = cast(ChunkRow.embedding, HALFVEC(EMBEDDING_DIMENSIONS)).cosine_distance(
             query_vector
         )
 
-        count_stmt = select(func.count()).select_from(ChunkRow).where(*structural_filters)
+        count_stmt = select(func.count()).select_from(ChunkRow)
+        if document_types:
+            count_stmt = count_stmt.join(
+                DocumentRow, ChunkRow.document_id == DocumentRow.id
+            )
+        count_stmt = count_stmt.where(*structural_filters)
         candidates_evaluated = int((await session.execute(count_stmt)).scalar_one())
 
+        stmt = select(
+            ChunkRow.id,
+            ChunkRow.document_id,
+            ChunkRow.chunk_type,
+            ChunkRow.content,
+            ChunkRow.metadata_,
+            distance.label("distance"),
+        )
+        if document_types:
+            stmt = stmt.join(DocumentRow, ChunkRow.document_id == DocumentRow.id)
         stmt = (
-            select(
-                ChunkRow.id,
-                ChunkRow.document_id,
-                ChunkRow.chunk_type,
-                ChunkRow.content,
-                ChunkRow.metadata_,
-                distance.label("distance"),
-            )
-            .where(*structural_filters)
+            stmt.where(*structural_filters)
             .where(distance <= distance_threshold)
             .order_by(distance)
             .limit(top_k)
@@ -162,6 +174,8 @@ class ChunkStore:
         project_year_min: int | None = None,
         project_year_max: int | None = None,
         chunk_types: list[str] | None = None,
+        document_types: list[str] | None = None,
+        extra_filters: list | None = None,
     ) -> list[Row]:
         """Return full-text matches, ranked by PostgreSQL cover density."""
         tsquery = func.plainto_tsquery("english", query_text)
@@ -172,16 +186,21 @@ class ChunkStore:
             project_year_max=project_year_max,
             chunk_types=chunk_types,
         )
+        if document_types:
+            structural_filters.append(DocumentRow.document_type.in_(document_types))
+        structural_filters.extend(extra_filters or [])
+        stmt = select(
+            ChunkRow.id,
+            ChunkRow.document_id,
+            ChunkRow.chunk_type,
+            ChunkRow.content,
+            ChunkRow.metadata_,
+            rank.label("rank"),
+        )
+        if document_types:
+            stmt = stmt.join(DocumentRow, ChunkRow.document_id == DocumentRow.id)
         stmt = (
-            select(
-                ChunkRow.id,
-                ChunkRow.document_id,
-                ChunkRow.chunk_type,
-                ChunkRow.content,
-                ChunkRow.metadata_,
-                rank.label("rank"),
-            )
-            .where(ChunkRow.content_tsv.op("@@")(tsquery))
+            stmt.where(ChunkRow.content_tsv.op("@@")(tsquery))
             .where(*structural_filters)
             .order_by(rank.desc())
             .limit(top_k)

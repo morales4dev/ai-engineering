@@ -14,7 +14,7 @@ idempotent ingest never duplicates.
 
 Usage::
 
-    # generate data/task_corpus.json only (review before ingesting)
+    # generate data/task_corpus_s10.json only (review before ingesting)
     docker compose run --rm estimator python scripts/s09/build_task_corpus.py --generate-only
 
     # generate + ingest into pgvector (needs OPENAI_API_KEY for embeddings)
@@ -40,7 +40,7 @@ from pathlib import Path
 import httpx
 
 ROOT = Path(__file__).resolve().parent.parent.parent  # estimador-cag/ on host, /app in container
-OUT_PATH = ROOT / "data" / "task_corpus.json"
+OUT_PATH = ROOT / "data" / "task_corpus_s10.json"
 DOCUMENT_TYPE = "historical_task_breakdown"
 for candidate in (ROOT / "src", ROOT):
     if (candidate / "config.py").exists():
@@ -52,7 +52,7 @@ from generation.rag.chunk_types import HISTORICAL_TASK  # noqa: E402
 CHUNK_TYPE = HISTORICAL_TASK
 CANDIDATE_BASE_URLS = ("http://localhost:8000", "http://estimator:8000")
 DEFAULT_SEED = 90
-DEFAULT_COUNT = 12
+DEFAULT_COUNT = 60
 
 # --- task templates -------------------------------------------------------
 # Each template: (task name, description, tech pool, (min_hours, max_hours),
@@ -243,6 +243,128 @@ COMMON_MODULES: dict[str, list[Template]] = {
             (24, 60),
             "low",
         ),
+        (
+            "UAT & handover",
+            "User-acceptance test rounds, training and documentation handover.",
+            ["confluence"],
+            (16, 36),
+            "low",
+        ),
+    ],
+    "Analytics & Reporting": [
+        (
+            "Event tracking & instrumentation",
+            "Product analytics events with a tracking plan.",
+            ["segment", "typescript"],
+            (16, 36),
+            "medium",
+        ),
+        (
+            "BI dashboards",
+            "Self-service dashboards and scheduled report delivery.",
+            ["metabase", "postgresql"],
+            (24, 48),
+            "medium",
+        ),
+        (
+            "Data warehouse modelling",
+            "Modelled marts and transformations for analytics.",
+            ["dbt", "bigquery"],
+            (24, 56),
+            "high",
+        ),
+    ],
+    "Notifications & Messaging": [
+        (
+            "Transactional email & SMS",
+            "Templated multi-channel notifications with delivery tracking.",
+            ["python", "sendgrid", "twilio"],
+            (12, 28),
+            "low",
+        ),
+        (
+            "Push notifications",
+            "Mobile/web push with topic subscriptions and opt-out.",
+            ["python", "firebase"],
+            (12, 28),
+            "medium",
+        ),
+        (
+            "In-app notification centre",
+            "Real-time in-app inbox with read/unread state.",
+            ["typescript", "websocket", "redis"],
+            (16, 36),
+            "medium",
+        ),
+    ],
+    "Search & Discovery": [
+        (
+            "Full-text search service",
+            "Indexing pipeline and query API with ranking.",
+            ["elasticsearch", "python"],
+            (24, 56),
+            "high",
+        ),
+        (
+            "Recommendations engine",
+            "Collaborative/content-based recommendations.",
+            ["python", "scikit_learn"],
+            (24, 56),
+            "high",
+        ),
+        (
+            "Autocomplete & typeahead",
+            "Low-latency suggestions with synonyms.",
+            ["elasticsearch", "redis"],
+            (12, 28),
+            "medium",
+        ),
+    ],
+    "Admin & Back-office": [
+        (
+            "Admin console",
+            "CRUD back-office with auditing and bulk actions.",
+            ["typescript", "react", "python"],
+            (24, 48),
+            "medium",
+        ),
+        (
+            "Feature flags & config",
+            "Runtime feature flags and remote configuration.",
+            ["python", "redis"],
+            (12, 28),
+            "medium",
+        ),
+        (
+            "Bulk import/export",
+            "CSV/Excel import-export with validation and previews.",
+            ["python", "pandas"],
+            (12, 32),
+            "medium",
+        ),
+    ],
+    "Integrations Platform": [
+        (
+            "Public REST/GraphQL API",
+            "Versioned public API with rate limiting and docs.",
+            ["python", "fastapi"],
+            (24, 56),
+            "high",
+        ),
+        (
+            "OAuth provider / API keys",
+            "Issue and manage third-party API credentials.",
+            ["python", "postgresql"],
+            (16, 40),
+            "high",
+        ),
+        (
+            "Event streaming bus",
+            "Internal event bus with schemas and dead-letter handling.",
+            ["python", "kafka"],
+            (24, 56),
+            "high",
+        ),
     ],
 }
 
@@ -397,6 +519,198 @@ SECTOR_MODULES: dict[str, dict[str, list[Template]]] = {
             ),
         ],
     },
+    "logistics": {
+        "Fleet & Routing": [
+            (
+                "Route optimization engine",
+                "Vehicle routing with time windows and constraints.",
+                ["python", "or_tools"],
+                (32, 72),
+                "high",
+            ),
+            (
+                "Live fleet tracking",
+                "Real-time GPS tracking and ETA computation.",
+                ["python", "kafka", "postgresql"],
+                (24, 56),
+                "high",
+            ),
+            (
+                "Driver mobile app integration",
+                "Job dispatch and proof-of-delivery capture.",
+                ["typescript", "react_native"],
+                (24, 48),
+                "medium",
+            ),
+        ],
+        "Warehouse & Inventory": [
+            (
+                "Inventory & stock control",
+                "Multi-warehouse stock levels and reservations.",
+                ["python", "postgresql"],
+                (24, 56),
+                "high",
+            ),
+            (
+                "Barcode / scanning workflow",
+                "Pick-pack-ship flows with handheld scanners.",
+                ["python", "redis"],
+                (16, 40),
+                "medium",
+            ),
+            (
+                "Carrier & label integration",
+                "Multi-carrier rates, labels and tracking sync.",
+                ["python", "httpx"],
+                (16, 40),
+                "medium",
+            ),
+        ],
+    },
+    "education": {
+        "Courses & LMS": [
+            (
+                "Course authoring & catalog",
+                "Course builder, modules, lessons and catalog.",
+                ["typescript", "react", "postgresql"],
+                (24, 56),
+                "high",
+            ),
+            (
+                "Video lessons & progress",
+                "Lesson player with resume and progress tracking.",
+                ["typescript", "webrtc"],
+                (24, 48),
+                "medium",
+            ),
+            (
+                "Certificates & badges",
+                "Completion certificates and shareable badges.",
+                ["python", "postgresql"],
+                (12, 28),
+                "low",
+            ),
+        ],
+        "Assessments": [
+            (
+                "Quiz & exam engine",
+                "Question banks, timed exams and auto-grading.",
+                ["python", "postgresql"],
+                (24, 56),
+                "high",
+            ),
+            (
+                "Plagiarism & proctoring",
+                "Similarity checks and remote proctoring hooks.",
+                ["python", "scikit_learn"],
+                (24, 48),
+                "high",
+            ),
+            (
+                "Grades & feedback",
+                "Gradebook with rubric-based feedback.",
+                ["python", "postgresql"],
+                (16, 36),
+                "medium",
+            ),
+        ],
+    },
+    "media": {
+        "Content & Publishing": [
+            (
+                "Headless CMS",
+                "Structured content modelling with a publishing workflow.",
+                ["typescript", "graphql", "postgresql"],
+                (24, 56),
+                "high",
+            ),
+            (
+                "Digital asset management",
+                "Media library with transcoding and metadata.",
+                ["python", "ffmpeg", "s3"],
+                (24, 56),
+                "high",
+            ),
+            (
+                "Editorial workflow",
+                "Draft-review-publish with roles and scheduling.",
+                ["typescript", "react"],
+                (16, 40),
+                "medium",
+            ),
+        ],
+        "Streaming & Playback": [
+            (
+                "Adaptive video streaming",
+                "HLS/DASH packaging and adaptive bitrate playback.",
+                ["python", "ffmpeg"],
+                (32, 72),
+                "high",
+            ),
+            (
+                "Live streaming pipeline",
+                "Low-latency live ingest and distribution.",
+                ["python", "webrtc"],
+                (32, 64),
+                "high",
+            ),
+            (
+                "DRM & entitlements",
+                "Content protection and subscription entitlements.",
+                ["python"],
+                (16, 40),
+                "high",
+            ),
+        ],
+    },
+    "government": {
+        "Citizen Services": [
+            (
+                "Online application portal",
+                "Multi-step citizen forms with eligibility checks.",
+                ["typescript", "react", "python"],
+                (24, 56),
+                "high",
+            ),
+            (
+                "Identity & eID integration",
+                "National eID / verified identity onboarding.",
+                ["python", "oauth"],
+                (24, 56),
+                "high",
+            ),
+            (
+                "Appointment & case tracking",
+                "Public-service appointments and case status.",
+                ["python", "postgresql"],
+                (16, 40),
+                "medium",
+            ),
+        ],
+        "Records & Compliance": [
+            (
+                "Public records registry",
+                "Authoritative registry with versioning and search.",
+                ["python", "postgresql", "elasticsearch"],
+                (24, 64),
+                "high",
+            ),
+            (
+                "Accessibility & compliance",
+                "WCAG 2.1 AA conformance and accessibility audit.",
+                ["typescript"],
+                (16, 36),
+                "medium",
+            ),
+            (
+                "Open-data publishing",
+                "Datasets, APIs and transparency portals.",
+                ["python", "fastapi"],
+                (16, 40),
+                "medium",
+            ),
+        ],
+    },
 }
 
 SECTOR_TECH = {
@@ -404,13 +718,30 @@ SECTOR_TECH = {
     "ecommerce": "django",
     "healthcare": "python_fastapi",
     "industrial": "java_spring",
+    "logistics": "go_gin",
+    "education": "django",
+    "media": "node_nestjs",
+    "government": "java_spring",
 }
-SECTOR_COUNTRY = {"finance": "DE", "ecommerce": "ES", "healthcare": "FR", "industrial": "US"}
+SECTOR_COUNTRY = {
+    "finance": "DE",
+    "ecommerce": "ES",
+    "healthcare": "FR",
+    "industrial": "US",
+    "logistics": "NL",
+    "education": "GB",
+    "media": "US",
+    "government": "ES",
+}
 CLIENT_PREFIX = {
     "finance": ["NordBank", "PagoSeguro", "FinNova", "CapitalFlow"],
     "ecommerce": ["ShopHub", "MercadoVivo", "CartLabs", "TiendaUno"],
     "healthcare": ["SaludRed", "MediCore", "ClinicaPlus", "VitalCare"],
     "industrial": ["IndusTech", "FabricaSmart", "MaqExpert", "PlantaCore"],
+    "logistics": ["CargoLink", "RutaViva", "FleetCore", "TransSmart"],
+    "education": ["EduNova", "AulaViva", "LearnHub", "CampusOne"],
+    "media": ["StreamLabs", "MediaForge", "PressVivo", "PlayCore"],
+    "government": ["CivicaRed", "GobDigital", "PublicaOne", "EstadoSmart"],
 }
 ABBREV = {
     "Authentication & Access": "AUTH",
@@ -420,6 +751,11 @@ ABBREV = {
     "Security & Compliance": "SEC",
     "QA & Testing": "QA",
     "Project Management": "PM",
+    "Analytics & Reporting": "ANL",
+    "Notifications & Messaging": "NOTIF",
+    "Search & Discovery": "SRCH",
+    "Admin & Back-office": "ADMIN",
+    "Integrations Platform": "INTG",
     "Payments & Billing": "PAY",
     "Regulatory Reporting": "REG",
     "Catalog & Search": "CAT",
@@ -428,6 +764,14 @@ ABBREV = {
     "Scheduling": "SCH",
     "Telemetry & IoT": "IOT",
     "Operations": "OPS",
+    "Fleet & Routing": "FLEET",
+    "Warehouse & Inventory": "WMS",
+    "Courses & LMS": "LMS",
+    "Assessments": "ASMT",
+    "Content & Publishing": "CMS",
+    "Streaming & Playback": "STRM",
+    "Citizen Services": "CIT",
+    "Records & Compliance": "REC",
 }
 
 
@@ -525,7 +869,7 @@ def ingest_corpus(corpus: list[dict], base_url: str | None = None) -> None:
             response = client.post(
                 f"{base_url}/embeddings/ingest",
                 json={
-                    "source_path": f"data/task_corpus.json::{project['budget_id']}",
+                    "source_path": f"data/task_corpus_s10.json::{project['budget_id']}",
                     "document_type": DOCUMENT_TYPE,
                     "chunk_type": CHUNK_TYPE,
                     "content": project,

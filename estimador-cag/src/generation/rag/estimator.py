@@ -142,7 +142,12 @@ async def estimate_from_transcript(
     ------
     ReformulationError, RetrievalError, GenerationError, MalformedEstimateError
     """
-    from dependencies import get_embedder, get_idempotency_store, get_token_encoder
+    from dependencies import (
+        get_embedder,
+        get_idempotency_store,
+        get_runtime_retrieval_config,
+        get_token_encoder,
+    )
 
     settings = get_settings()
     request_id = _current_request_id()
@@ -169,14 +174,15 @@ async def estimate_from_transcript(
     # 3. Metadata-filtered retrieval with soft-fail.
     sector = query.sector.lower().strip() if query.sector else None
     sectors = [sector] if sector in _KNOWN_SECTORS else None
+    runtime_retrieval = get_runtime_retrieval_config()
     with log_stage("retrieval", request_id, sectors=sectors):
         retrieval = await search_chunks(
             query_embedding,
             top_k=settings.RETRIEVAL_TOP_K,
             distance_threshold=settings.RETRIEVAL_DISTANCE_THRESHOLD,
             query_text=search_text,
-            search_mode=getattr(settings, "RETRIEVAL_SEARCH_MODE", "vector"),
-            rerank=getattr(settings, "RERANKER_ENABLED", False),
+            search_mode=runtime_retrieval.effective_search_mode(),
+            rerank=runtime_retrieval.effective_rerank(),
             sectors=sectors,
         )
 

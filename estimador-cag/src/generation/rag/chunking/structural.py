@@ -71,6 +71,7 @@ def component_metadata(budget: Budget, component: BudgetComponent) -> dict:
         "module": component.module,
         "client_sector": budget.client_metadata.sector,
         "main_technology": budget.main_technology,
+        "tech_stack": component.tech_stack,
         "year": budget.year,
         "complexity": component.complexity,
         "estimated_hours": component.estimated_hours,
