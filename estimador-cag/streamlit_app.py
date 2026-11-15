@@ -1390,7 +1390,7 @@ if rag_tab.open:
                         key=editor_key,
                     )
                     try:
-                        edited_modules = _rag_modules_from_editor(edited.to_dict(orient="records"))
+                        edited_modules = _rag_modules_from_editor(edited)
                     except ValueError as exc:
                         st.error(str(exc))
                         edited_modules = []
