@@ -174,6 +174,9 @@ async def estimate_from_transcript(
             query_embedding,
             top_k=settings.RETRIEVAL_TOP_K,
             distance_threshold=settings.RETRIEVAL_DISTANCE_THRESHOLD,
+            query_text=search_text,
+            search_mode=getattr(settings, "RETRIEVAL_SEARCH_MODE", "vector"),
+            rerank=getattr(settings, "RERANKER_ENABLED", False),
             sectors=sectors,
         )
 

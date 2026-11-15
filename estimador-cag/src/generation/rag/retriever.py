@@ -79,12 +79,18 @@ async def search_chunks(
     query_embedding: list[float],
     top_k: int = 10,
     distance_threshold: float = 0.6,
+    query_text: str | None = None,
+    search_mode: str | None = None,
+    rerank: bool | None = None,
+    recall_k: int | None = None,
+    rerank_top_n: int | None = None,
+    rrf_k: int | None = None,
     sectors: list[str] | None = None,
     project_year_min: int | None = None,
     project_year_max: int | None = None,
     chunk_types: list[str] | None = None,
 ) -> RetrievalResult:
-    """Metadata-filtered k-NN retrieval with a relevance threshold (Session 9).
+    """Metadata-filtered retrieval, optionally hybrid and cross-encoder reranked.
 
     The query is assumed already embedded (the orchestrator embeds the composed
     search text). Structural filters narrow the space before the vector ranking;
@@ -103,7 +109,7 @@ async def search_chunks(
     Returns
     -------
     RetrievalResult
-        ``chunks`` ascending by distance. ``low_confidence`` is True (soft-fail)
+        ``chunks`` best-first. ``low_confidence`` is True (soft-fail)
         when nothing crosses the threshold — the orchestrator then skips
         generation instead of grounding on irrelevant budgets.
 
@@ -112,7 +118,36 @@ async def search_chunks(
     RetrievalError
         If the vector store cannot be queried.
     """
+    from config import get_settings
     from dependencies import get_async_session_factory, get_chunk_store
+
+    settings = get_settings()
+    search_mode = search_mode or getattr(settings, "RETRIEVAL_SEARCH_MODE", "vector")
+    rerank = rerank if rerank is not None else getattr(settings, "RERANKER_ENABLED", False)
+    recall_k = recall_k or getattr(settings, "RETRIEVAL_RECALL_TOP_K", 50)
+    rerank_top_n = rerank_top_n or getattr(settings, "RERANK_TOP_N", 5)
+    rrf_k = rrf_k or getattr(settings, "RRF_K", 60)
+
+    if search_mode == "hybrid" or rerank:
+        if not query_text:
+            raise RetrievalError("query_text is required for hybrid search or reranking.")
+        from generation.rag.retrieval.pipeline import retrieve
+
+        return await retrieve(
+            query_embedding=query_embedding,
+            query_text=query_text,
+            search_mode=search_mode,
+            rerank=rerank,
+            top_k=top_k,
+            recall_k=recall_k,
+            rerank_top_n=rerank_top_n,
+            distance_threshold=distance_threshold,
+            rrf_k=rrf_k,
+            sectors=sectors,
+            project_year_min=project_year_min,
+            project_year_max=project_year_max,
+            chunk_types=chunk_types,
+        )
 
     session_factory = get_async_session_factory()
     store = get_chunk_store()
@@ -142,6 +177,7 @@ async def search_chunks(
             project_year=int(row.metadata_.get("year", 0)),
             chunk_type=row.chunk_type,
             distance=float(row.distance),
+            budget_id=row.metadata_.get("budget_id"),
         )
         for row in rows
     ]
