@@ -121,18 +121,12 @@ class ChunkStore:
             is how many chunks matched the structural filters before the
             threshold/limit were applied.
         """
-        sector_col = ChunkRow.metadata_["client_sector"].astext
-        year_col = cast(ChunkRow.metadata_["year"].astext, Integer)
-
-        structural_filters = []
-        if sectors:
-            structural_filters.append(sector_col.in_(sectors))
-        if project_year_min is not None:
-            structural_filters.append(year_col >= project_year_min)
-        if project_year_max is not None:
-            structural_filters.append(year_col <= project_year_max)
-        if chunk_types:
-            structural_filters.append(ChunkRow.chunk_type.in_(chunk_types))
+        structural_filters = self._structural_filters(
+            sectors=sectors,
+            project_year_min=project_year_min,
+            project_year_max=project_year_max,
+            chunk_types=chunk_types,
+        )
 
         distance = cast(ChunkRow.embedding, HALFVEC(EMBEDDING_DIMENSIONS)).cosine_distance(
             query_vector
@@ -157,3 +151,60 @@ class ChunkStore:
         )
         rows = list((await session.execute(stmt)).all())
         return rows, candidates_evaluated
+
+    async def search_lexical(
+        self,
+        session: AsyncSession,
+        *,
+        query_text: str,
+        top_k: int = 50,
+        sectors: list[str] | None = None,
+        project_year_min: int | None = None,
+        project_year_max: int | None = None,
+        chunk_types: list[str] | None = None,
+    ) -> list[Row]:
+        """Return full-text matches, ranked by PostgreSQL cover density."""
+        tsquery = func.plainto_tsquery("english", query_text)
+        rank = func.ts_rank_cd(ChunkRow.content_tsv, tsquery)
+        structural_filters = self._structural_filters(
+            sectors=sectors,
+            project_year_min=project_year_min,
+            project_year_max=project_year_max,
+            chunk_types=chunk_types,
+        )
+        stmt = (
+            select(
+                ChunkRow.id,
+                ChunkRow.document_id,
+                ChunkRow.chunk_type,
+                ChunkRow.content,
+                ChunkRow.metadata_,
+                rank.label("rank"),
+            )
+            .where(ChunkRow.content_tsv.op("@@")(tsquery))
+            .where(*structural_filters)
+            .order_by(rank.desc())
+            .limit(top_k)
+        )
+        return list((await session.execute(stmt)).all())
+
+    @staticmethod
+    def _structural_filters(
+        *,
+        sectors: list[str] | None,
+        project_year_min: int | None,
+        project_year_max: int | None,
+        chunk_types: list[str] | None,
+    ) -> list:
+        sector_col = ChunkRow.metadata_["client_sector"].astext
+        year_col = cast(ChunkRow.metadata_["year"].astext, Integer)
+        filters = []
+        if sectors:
+            filters.append(sector_col.in_(sectors))
+        if project_year_min is not None:
+            filters.append(year_col >= project_year_min)
+        if project_year_max is not None:
+            filters.append(year_col <= project_year_max)
+        if chunk_types:
+            filters.append(ChunkRow.chunk_type.in_(chunk_types))
+        return filters

@@ -1162,6 +1162,27 @@ if rag_tab.open:
                         step=0.05,
                         key=f"rag_threshold_{run_id}",
                     )
+                    search_mode = st.selectbox(
+                        "Search mode",
+                        options=("vector", "hybrid"),
+                        index=(
+                            1
+                            if saved_filters.get(
+                                "search_mode",
+                                getattr(settings, "RETRIEVAL_SEARCH_MODE", "vector"),
+                            )
+                            == "hybrid"
+                            else 0
+                        ),
+                        key=f"rag_search_mode_{run_id}",
+                    )
+                    rerank_enabled = st.checkbox(
+                        "Rerank top candidates",
+                        value=saved_filters.get(
+                            "rerank", getattr(settings, "RERANKER_ENABLED", False)
+                        ),
+                        key=f"rag_rerank_{run_id}",
+                    )
                     sectors = st.multiselect(
                         "Sectors",
                         options=list(_RAG_SECTORS),
@@ -1199,6 +1220,8 @@ if rag_tab.open:
                         filters = {
                             "top_k": int(top_k),
                             "distance_threshold": float(threshold),
+                            "search_mode": search_mode,
+                            "rerank": rerank_enabled,
                             "sectors": sectors or None,
                             "project_year_min": year_min,
                             "project_year_max": year_max,

@@ -1,6 +1,6 @@
 # Evolución del estimador-cag
 
-Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas de trabajo (`pre-session-08`, `session_08_forense` y `session_09_forense` incluidas).
+Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas de trabajo (`pre-session-08`, `session_08_forense`, `session_09_forense` y `session-10/pre-work` incluidas).
 
 | Columna | Significado |
 |---|---|
@@ -28,6 +28,7 @@ Nombres de evento (como en las ramas, salvo `v2` y `sesion-02`, que no fueron ra
 - `session_08_forense` — port live de la sesión 8 (índices HNSW/halfvec de operador, tuning de compose, SELECT halfvec, scripts de lab)
 - `pre_sesion_09` — diagnóstico arquitectónico RAG (doc; sin cambio de producto)
 - `session_09_forense` — port live de la sesión 9 (RAG estimation, API protegida, wizard Streamlit e historial)
+- `pre_sesion_10` — mejora del retrieval RAG: búsqueda híbrida, reranking y evaluación (rama `session-10/pre-work`)
 
 No entra `session1/` (ejercicios sueltos, no son el estimador).
 
@@ -129,3 +130,6 @@ No entra `session1/` (ejercicios sueltos, no son el estimador).
 | session_09_forense         | [x]     | Seguridad RAG: `ESTIMATE_API_KEY` / `RETRIEVAL_API_KEY`, rate limit por API key y `X-Request-ID` |                    |
 | session_09_forense         | [x]     | Streamlit RAG Wizard: pasos de estimación guiada, verificación humana e historial de ejecuciones |                    |
 | session_09_forense         | [x]     | Corpus opcional de tareas históricas (`historical_task_breakdown`) para retrieval a granularidad módulo → tarea |                    |
+| pre_sesion_10              | [x]     | Retrieval RAG híbrido: combina búsqueda semántica y léxica, manteniendo los filtros estructurales existentes |                    |
+| pre_sesion_10              | [x]     | Reranking opcional de candidatos, seleccionable por ejecución desde la API y el wizard de Streamlit |                    |
+| pre_sesion_10              | [x]     | Evaluación con consultas etiquetadas para comparar búsqueda vectorial/híbrida, con y sin reranking, por precisión@5 y latencia |                    |

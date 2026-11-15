@@ -37,6 +37,14 @@ log = structlog.get_logger()
 
 
 @lru_cache
+def get_reranker():
+    """Cross-encoder singleton; model weights load only when reranking starts."""
+    from generation.rag.retrieval.reranker import CrossEncoderReranker
+
+    return CrossEncoderReranker.from_settings()
+
+
+@lru_cache
 def get_cache() -> EstimationCache:
     settings = get_settings()
     return EstimationCache.from_url(settings.REDIS_URL, ttl=settings.CACHE_TTL)

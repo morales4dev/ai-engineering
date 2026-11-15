@@ -14,7 +14,9 @@ That is a good first stage because:
 - CAG itself needs no extra infrastructure; embeddings live on a separate endpoint (`POST /embeddings/ingest`), not on the CAG path
 - It works well when the context volume is small (a handful of examples)
 
-Later modules of the Master are expected to evolve this kind of service toward **RAG** (Retrieval Augmented Generation) with a vector store when the example set grows.
+The service also provides a separate **RAG** (Retrieval Augmented Generation)
+flow over historical budgets, with optional hybrid search and reranking.
+The original CAG endpoints remain unchanged.
 
 ## Requirements
 
@@ -820,4 +822,67 @@ Expect 12 `historical_task_breakdown` documents, each with multiple
 ```sql
 DELETE FROM documents WHERE document_type = 'historical_task_breakdown';
 ```
+
+## Pre Session 10 — Hybrid search and reranking
+
+Branch `session-10/pre-work` improves the RAG retrieval stage without changing
+the CAG flows or the Session 8 `POST /search` contract:
+
+- **Keyword search:** migration `0005_session10_fts` adds a generated `tsvector`
+  column and GIN index to chunks. It uses English rules because the shipped
+  corpus and reformulated search text are English, despite the exercise's
+  Spanish-corpus description. FTS normalizes words; it does not translate them.
+- **Hybrid search:** combines vector and keyword rankings with Reciprocal Rank
+  Fusion (RRF), returning one list without duplicate chunks.
+- **Optional reranking:** a CPU cross-encoder scores query/chunk pairs, selecting
+  the best 5 from up to 50 candidates. The model loads lazily and is reused within
+  the process; load/scoring failures are reported, not silently bypassed.
+
+In **RAG Wizard**, use **Search mode** and **Rerank top candidates** before
+submitting retrieval. Both `POST /v1/retrieval/search` and
+`POST /v1/estimate/runs/{id}/retrieve` accept `search_mode` (`vector` / `hybrid`)
+and `rerank` (boolean). Environment settings provide defaults, including for
+the one-shot RAG estimator; request/wizard choices override them.
+
+```dotenv
+RETRIEVAL_SEARCH_MODE=vector
+RERANKER_ENABLED=false
+RETRIEVAL_RECALL_TOP_K=50
+RERANK_TOP_N=5
+RRF_K=60
+```
+
+Vector-only retrieval remains the default. In hybrid/reranked results,
+`distance` is not the final ranking score: keyword-only hits carry a placeholder
+distance, and reranker scores are not exposed in the response.
+
+### Verify and compare
+
+With the stack running, verify the model before proceeding:
+
+```bash
+docker compose exec -T estimator python -m generation.rag.retrieval.verify_reranker
+```
+
+Expect `Reranker loaded:` followed by the configured model name. The first run
+downloads weights from Hugging Face; stop and resolve download/TLS errors if
+verification fails.
+
+The [retrieval golden set](evals/golden_retrieval.json) contains five project
+briefs with manually assigned relevant budget IDs. With the historical budgets
+ingested, `OPENAI_API_KEY` set and host `DATABASE_URL` pointing to PostgreSQL,
+run from `estimador-cag` on the host:
+
+```bash
+uv run --locked python scripts/eval_retrieval_s10.py
+```
+
+It prints precision@5 and mean warm retrieval latency for A (vector),
+B (hybrid), C (vector + reranker) and D (hybrid + reranker). Relevance is counted
+per chunk using its parent budget ID. Timing excludes reformulation, embeddings,
+initial model loading and generation. Live measurements are still pending;
+no relevance or latency gains are claimed yet.
+
+For copy-paste requests, SQL checks and the code behind each manual test, see
+the [Session 10 manual guide](docs/pre_sesion_10_guia.md).
 

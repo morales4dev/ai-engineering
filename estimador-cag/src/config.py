@@ -69,6 +69,13 @@ class Settings(BaseSettings):
     # Retrieval knobs (locked defaults from the Session 9 articles).
     RETRIEVAL_TOP_K: int = 10
     RETRIEVAL_DISTANCE_THRESHOLD: float = 0.6
+    # Session 10: vector baseline or RRF hybrid search, with optional cross-encoder reranking.
+    RETRIEVAL_SEARCH_MODE: Literal["vector", "hybrid"] = "vector"
+    RERANKER_ENABLED: bool = False
+    RERANKER_MODEL: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+    RETRIEVAL_RECALL_TOP_K: int = 50
+    RERANK_TOP_N: int = 5
+    RRF_K: int = 60
     # Token budget for the assembled <source> context block (tiktoken cl100k_base).
     MAX_CONTEXT_TOKENS: int = 16384
     # Idempotency cache for POST /v1/estimate/from-transcript (seconds; 24h).

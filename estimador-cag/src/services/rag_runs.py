@@ -1,13 +1,11 @@
-"""Wizard facade for RAG ejecuciones.
+"""Coordinate and persist the steps of the Streamlit RAG wizard.
 
-Stand-in for Lidr's web: each mutating method calls the amnesiac pipeline
-functions, writes ``estimation_runs``, and ``clear_downstream`` when an earlier
-step is re-run. Persistence failure raises (503 at HTTP). Does not talk SQL
-itself — that is ``services.estimation_runs``.
+Each step calls the pipeline and saves its result through
+``services.estimation_runs``. Re-running an earlier step clears downstream
+results so they cannot use stale inputs. Persistence errors propagate.
 
-Generate follows Lidr's **stage** generate (no auto-retry; fabricated ids /
-coherence land on the run payload). ``estimate_from_transcript`` stays on the
-one-shot path only.
+Generation saves citation and coherence checks without automatically
+regenerating the estimate. The one-shot estimation flow is separate.
 """
 
 from __future__ import annotations
@@ -122,6 +120,16 @@ def _resolved_filters(
             if incoming.distance_threshold is not None
             else settings.RETRIEVAL_DISTANCE_THRESHOLD
         ),
+        "search_mode": (
+            incoming.search_mode
+            if incoming.search_mode is not None
+            else getattr(settings, "RETRIEVAL_SEARCH_MODE", "vector")
+        ),
+        "rerank": (
+            incoming.rerank
+            if incoming.rerank is not None
+            else getattr(settings, "RERANKER_ENABLED", False)
+        ),
         "sectors": sectors,
         "project_year_min": incoming.project_year_min,
         "project_year_max": incoming.project_year_max,
@@ -136,7 +144,7 @@ def _elapsed_ms(t0: float) -> int:
 async def create_run(
     transcript: str, *, idempotency_key: str | None = None
 ) -> EstimationRun:
-    """Insert the ejecución and immediately run reformulation."""
+    """Create a run and immediately reformulate its transcript."""
     inserted = runs_store.insert(transcript=transcript, idempotency_key=idempotency_key)
     return await reformulate(inserted.id)
 
@@ -173,6 +181,9 @@ async def retrieve(run_id: int, filters: RunRetrieveFilters | None = None) -> Es
             query_embedding,
             top_k=applied["top_k"],
             distance_threshold=applied["distance_threshold"],
+            query_text=brief.search_text,
+            search_mode=applied["search_mode"],
+            rerank=applied["rerank"],
             sectors=applied["sectors"],
             project_year_min=applied["project_year_min"],
             project_year_max=applied["project_year_max"],

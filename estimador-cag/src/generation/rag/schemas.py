@@ -201,6 +201,7 @@ class RetrievedChunk(BaseModel):
     project_year: int
     chunk_type: str
     distance: float = Field(description="Cosine distance (lower = more similar).")
+    budget_id: str | None = None
 
 
 class RetrievalResult(BaseModel):
@@ -292,6 +293,8 @@ class RetrievalRequest(BaseModel):
     query_text: str = Field(min_length=10, max_length=2000)
     top_k: int = Field(default=10, ge=1, le=30)
     distance_threshold: float = Field(default=0.6, ge=0.0, le=2.0)
+    search_mode: Literal["vector", "hybrid"] | None = None
+    rerank: bool | None = None
     sectors: list[str] | None = None
     project_year_min: int | None = Field(default=None, ge=2010, le=2100)
     project_year_max: int | None = Field(default=None, ge=2010, le=2100)
@@ -383,6 +386,8 @@ class RunRetrieveFilters(BaseModel):
 
     top_k: int | None = Field(default=None, ge=1, le=30)
     distance_threshold: float | None = Field(default=None, ge=0.0, le=2.0)
+    search_mode: Literal["vector", "hybrid"] | None = None
+    rerank: bool | None = None
     sectors: list[str] | None = None
     project_year_min: int | None = Field(default=None, ge=2010, le=2100)
     project_year_max: int | None = Field(default=None, ge=2010, le=2100)

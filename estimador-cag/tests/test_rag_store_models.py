@@ -41,6 +41,7 @@ def test_relational_indexes_present():
     assert index_names == {
         "ix_chunks_document_id",
         "ix_chunks_chunk_type",
+        "ix_chunks_content_tsv",
         "ix_chunks_metadata_gin",
     }
     assert {index.name for index in DocumentRow.__table__.indexes} == {"ix_documents_source_path"}

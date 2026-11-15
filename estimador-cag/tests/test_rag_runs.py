@@ -190,6 +190,19 @@ async def test_retrieve_explicit_filters_win(store, pipeline):
     assert pipeline["search_kwargs"]["distance_threshold"] == 0.4
 
 
+async def test_retrieve_exposes_hybrid_search_and_reranking(store, pipeline):
+    created = await rag_runs.create_run("x" * 200)
+    run = await rag_runs.retrieve(
+        created.id,
+        RunRetrieveFilters(search_mode="hybrid", rerank=True),
+    )
+
+    assert pipeline["search_kwargs"]["search_mode"] == "hybrid"
+    assert pipeline["search_kwargs"]["rerank"] is True
+    assert run.retrieval["filters"]["search_mode"] == "hybrid"
+    assert run.retrieval["filters"]["rerank"] is True
+
+
 async def test_retrieve_without_reformulation_raises(store, pipeline):
     inserted = store.insert(transcript="x" * 200)
     with pytest.raises(rag_runs.RunStepConflict):
