@@ -4,27 +4,102 @@ from __future__ import annotations
 
 import asyncio
 import time
+from dataclasses import dataclass
 
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from dependencies import get_async_session_factory, get_chunk_store
 from generation.rag.errors import RetrievalError
+from generation.rag.retrieval.collections import Collection, HardFilters, spec_for
 from generation.rag.retrieval.fusion import reciprocal_rank_fusion
 from generation.rag.schemas import RetrievalResult, RetrievedChunk
 
 log = structlog.get_logger()
-_NO_VECTOR_DISTANCE = 1.0
 
 
-def _row_to_chunk(row, *, distance: float) -> RetrievedChunk:
+def _row_to_chunk(row, *, distance: float | None) -> RetrievedChunk:
+    metadata = row.metadata_ or {}
     return RetrievedChunk(
         id=row.id,
         content=row.content,
-        sector=str(row.metadata_.get("client_sector", "unknown")),
-        project_year=int(row.metadata_.get("year", 0)),
+        sector=str(metadata.get("client_sector", "unknown")),
+        project_year=int(metadata.get("year", 0)),
         chunk_type=row.chunk_type,
-        distance=distance,
-        budget_id=row.metadata_.get("budget_id"),
+        distance=distance if distance is not None else 1.0,
+        has_vector_distance=distance is not None,
+        budget_id=metadata.get("budget_id"),
+        estimated_hours=metadata.get("estimated_hours"),
+    )
+
+
+@dataclass
+class CollectionHits:
+    """Vector/lexical recall for one collection and one transformed query."""
+
+    collection: Collection
+    candidates: dict[int, RetrievedChunk]
+    vector_ids: list[int]
+    lexical_ids: list[int]
+    candidates_evaluated: int
+
+    def fused_order(self, *, search_mode: str, rrf_k: int) -> list[RetrievedChunk]:
+        if search_mode == "hybrid":
+            fused = reciprocal_rank_fusion([self.vector_ids, self.lexical_ids], k=rrf_k)
+            return [self.candidates[chunk_id] for chunk_id, _score in fused]
+        return [self.candidates[chunk_id] for chunk_id in self.vector_ids]
+
+
+async def hybrid_search_one(
+    session: AsyncSession,
+    store,
+    *,
+    collection: Collection,
+    query_embedding: list[float],
+    query_text: str,
+    search_mode: str,
+    recall_k: int,
+    top_k: int,
+    distance_threshold: float,
+    will_rerank: bool,
+    hard_filters: HardFilters,
+) -> CollectionHits:
+    """Run the existing hybrid recall path restricted to one metadata collection."""
+    spec = spec_for(collection)
+    extra_filters = spec.hard_filter_clauses(hard_filters)
+    wide = will_rerank or search_mode == "hybrid"
+    vector_rows, candidates_evaluated = await store.search_filtered(
+        session,
+        query_vector=query_embedding,
+        top_k=recall_k if wide else top_k,
+        distance_threshold=distance_threshold,
+        chunk_types=list(spec.chunk_types),
+        document_types=list(spec.document_types),
+        extra_filters=extra_filters,
+    )
+    lexical_rows = (
+        await store.search_lexical(
+            session,
+            query_text=query_text,
+            top_k=recall_k,
+            chunk_types=list(spec.chunk_types),
+            document_types=list(spec.document_types),
+            extra_filters=extra_filters,
+        )
+        if search_mode == "hybrid"
+        else []
+    )
+    candidates = {
+        row.id: spec.to_chunk(row, distance=float(row.distance)) for row in vector_rows
+    }
+    for row in lexical_rows:
+        candidates.setdefault(row.id, spec.to_chunk(row, distance=None))
+    return CollectionHits(
+        collection=collection,
+        candidates=candidates,
+        vector_ids=[row.id for row in vector_rows],
+        lexical_ids=[row.id for row in lexical_rows],
+        candidates_evaluated=candidates_evaluated,
     )
 
 
@@ -84,7 +159,7 @@ async def retrieve(
         row.id: _row_to_chunk(row, distance=float(row.distance)) for row in vector_rows
     }
     for row in lexical_rows:
-        candidates.setdefault(row.id, _row_to_chunk(row, distance=_NO_VECTOR_DISTANCE))
+        candidates.setdefault(row.id, _row_to_chunk(row, distance=None))
 
     if search_mode == "hybrid":
         fused = reciprocal_rank_fusion(

@@ -15,6 +15,7 @@ from routers.ingestion import router as ingestion_router
 from routers.sessions import router as sessions_router
 from routers.rate_limiting import limiter, rate_limit_exceeded_handler
 from routers.retrieval import router as retrieval_router
+from routers.retrieval_advanced import router as retrieval_advanced_router
 from routers.rag_estimate import router as rag_estimate_router
 from routers.rag_runs import router as rag_runs_router
 from services.history import init_db
@@ -120,6 +121,7 @@ app.include_router(search_router)
 app.include_router(config_router)
 # Session 9 — RAG retrieval + grounded estimation (each independently secured).
 app.include_router(retrieval_router)
+app.include_router(retrieval_advanced_router)
 app.include_router(rag_estimate_router)
 app.include_router(rag_runs_router)
 

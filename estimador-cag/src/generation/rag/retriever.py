@@ -177,7 +177,9 @@ async def search_chunks(
             project_year=int(row.metadata_.get("year", 0)),
             chunk_type=row.chunk_type,
             distance=float(row.distance),
+            has_vector_distance=True,
             budget_id=row.metadata_.get("budget_id"),
+            estimated_hours=row.metadata_.get("estimated_hours"),
         )
         for row in rows
     ]

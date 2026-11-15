@@ -107,6 +107,12 @@ def wire(monkeypatch):
         monkeypatch.setattr(deps, "get_embedder", lambda: SimpleNamespace(embed_one=fake_embed))
         monkeypatch.setattr(deps, "get_token_encoder", lambda: CharEncoder())
         monkeypatch.setattr(deps, "get_idempotency_store", lambda: store)
+        monkeypatch.setattr(
+            deps, "get_runtime_retrieval_config",
+            lambda: SimpleNamespace(
+                effective_search_mode=lambda: "vector", effective_rerank=lambda: False
+            ),
+        )
         return calls, store
 
     return _wire

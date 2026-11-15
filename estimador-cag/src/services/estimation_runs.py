@@ -11,54 +11,25 @@ Schema is Alembic's job — this module does not create_all.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from generation.rag.schemas import EstimationRun
+from generation.rag.wizard import WizardRun
 from persistence.database import get_engine
 from persistence.models import EstimationRunRow
 
 log = structlog.get_logger()
-
-# Wizard order. ``clear_downstream`` nulls JSON for steps after ``from_step``.
-STEPS = (
-    "transcript",
-    "reformulation",
-    "retrieval",
-    "augmentation",
-    "generation",
-    "verification",
-)
-
-# JSONB columns that a later step would leave stale if an earlier one is re-run.
-_CLEAR_AFTER: dict[str, tuple[str, ...]] = {
-    "transcript": (
-        "reformulation",
-        "retrieval",
-        "augmentation",
-        "generation",
-        "adjusted_breakdown",
-    ),
-    "reformulation": (
-        "retrieval",
-        "augmentation",
-        "generation",
-        "adjusted_breakdown",
-    ),
-    "retrieval": ("augmentation", "generation", "adjusted_breakdown"),
-    "augmentation": ("generation", "adjusted_breakdown"),
-    "generation": ("adjusted_breakdown",),
-    "verification": (),
-}
 
 _JSON_FIELDS = (
     "reformulation",
     "retrieval",
     "augmentation",
     "generation",
+    "structure",
+    "task_hours",
     "adjusted_breakdown",
 )
 _SCALAR_FIELDS = ("status", "current_step", "idempotency_key", "duration_ms", "transcript")
@@ -79,27 +50,30 @@ class RunNotFound(Exception):
 def _created_at(row: EstimationRunRow) -> datetime:
     value = row.created_at
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
     return value
 
 
 def _updated_at(row: EstimationRunRow) -> datetime:
     value = row.updated_at
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
     return value
 
 
-def _to_run(row: EstimationRunRow) -> EstimationRun:
-    return EstimationRun(
+def _to_run(row: EstimationRunRow) -> WizardRun:
+    return WizardRun(
         id=row.id,
         transcript=row.transcript,
         status=row.status,
         current_step=row.current_step,
+        workflow_version=row.workflow_version,
         reformulation=dict(row.reformulation or {}),
         retrieval=dict(row.retrieval or {}),
         augmentation=dict(row.augmentation or {}),
         generation=dict(row.generation or {}),
+        structure=dict(row.structure or {}),
+        task_hours=dict(row.task_hours or {}),
         adjusted_breakdown=dict(row.adjusted_breakdown or {}),
         idempotency_key=row.idempotency_key,
         duration_ms=row.duration_ms,
@@ -115,13 +89,14 @@ def _require_engine():
     return engine
 
 
-def insert(*, transcript: str, idempotency_key: str | None = None) -> EstimationRun:
+def insert(*, transcript: str, idempotency_key: str | None = None) -> WizardRun:
     """INSERT a new ejecución. Raises if Postgres is down."""
     engine = _require_engine()
     try:
         row = EstimationRunRow(
             transcript=transcript,
             idempotency_key=idempotency_key,
+            workflow_version="s10",
         )
         with Session(engine) as session:
             session.add(row)
@@ -136,7 +111,7 @@ def insert(*, transcript: str, idempotency_key: str | None = None) -> Estimation
         raise EstimationRunsUnavailable(str(exc)[:200]) from exc
 
 
-def get(run_id: int) -> EstimationRun | None:
+def get(run_id: int) -> WizardRun | None:
     engine = _require_engine()
     try:
         with Session(engine) as session:
@@ -150,12 +125,13 @@ def get(run_id: int) -> EstimationRun | None:
         raise EstimationRunsUnavailable(str(exc)[:200]) from exc
 
 
-def list_runs(limit: int = 20) -> list[EstimationRun]:
+def list_runs(limit: int = 20) -> list[WizardRun]:
     engine = _require_engine()
     try:
         with Session(engine) as session:
             rows = session.scalars(
                 select(EstimationRunRow)
+                .where(EstimationRunRow.workflow_version == "s10")
                 .order_by(desc(EstimationRunRow.created_at))
                 .limit(limit)
             ).all()
@@ -166,7 +142,7 @@ def list_runs(limit: int = 20) -> list[EstimationRun]:
         raise EstimationRunsUnavailable(str(exc)[:200]) from exc
 
 
-def update(run_id: int, **fields) -> EstimationRun:
+def update(run_id: int, **fields) -> WizardRun:
     """Patch JSON / scalar columns. Raises if missing or Postgres is down."""
     unknown = set(fields) - set(_JSON_FIELDS) - set(_SCALAR_FIELDS)
     if unknown:
@@ -186,14 +162,3 @@ def update(run_id: int, **fields) -> EstimationRun:
         raise
     except Exception as exc:
         raise EstimationRunsUnavailable(str(exc)[:200]) from exc
-
-
-def clear_downstream(run_id: int, from_step: str) -> EstimationRun:
-    """Null later JSON columns so a re-run never leaves a stale estimate."""
-    columns = _CLEAR_AFTER.get(from_step, ())
-    if not columns:
-        got = get(run_id)
-        if got is None:
-            raise RunNotFound(run_id)
-        return got
-    return update(run_id, **{column: {} for column in columns})

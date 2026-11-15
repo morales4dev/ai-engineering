@@ -18,10 +18,11 @@ from generation.rag.schemas import RetrievedChunk
 
 def _wrap_chunk(chunk: RetrievedChunk) -> str:
     """Render a single chunk as a self-describing ``<source>`` XML element."""
+    distance = f"{chunk.distance:.4f}" if chunk.distance is not None else "not-scored"
     return (
         f'<source id="{chunk.id}" sector="{chunk.sector}" '
         f'project_year="{chunk.project_year}" chunk_type="{chunk.chunk_type}" '
-        f'distance="{chunk.distance:.4f}">\n'
+        f'distance="{distance}">\n'
         f"{chunk.content}\n"
         f"</source>"
     )

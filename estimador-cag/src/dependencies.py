@@ -30,7 +30,7 @@ from ingestion.parsers.registry import ParserRegistry, default_registry
 from persistence.database import get_async_session_factory
 from services.cache import EstimationCache
 from services.llm_wrapper import LLMWrapper
-from services.runtime_config import RuntimeModelConfig
+from services.runtime_config import RuntimeModelConfig, RuntimeRetrievalConfig
 from sessions import SessionStore
 
 log = structlog.get_logger()
@@ -59,6 +59,13 @@ def get_runtime_config() -> RuntimeModelConfig:
     """
     settings = get_settings()
     return RuntimeModelConfig.from_url(settings.REDIS_URL, settings)
+
+
+@lru_cache
+def get_runtime_retrieval_config() -> RuntimeRetrievalConfig:
+    """Redis-backed overrides for Session 10 retrieval behavior."""
+    settings = get_settings()
+    return RuntimeRetrievalConfig.from_url(settings.REDIS_URL, settings)
 
 
 @lru_cache
