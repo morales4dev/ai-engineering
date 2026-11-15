@@ -50,13 +50,14 @@ from sqlalchemy import select  # noqa: E402
 
 from s08_common import require_async_session_factory, require_embedder  # noqa: E402
 
+from generation.rag.chunk_types import SYNTHETIC  # noqa: E402
 from generation.rag.embedding.embedder import OpenAIEmbedder, estimated_cost_usd  # noqa: E402
 from generation.rag.schemas import Chunk  # noqa: E402
 from generation.rag.store.models import ChunkRow, DocumentRow  # noqa: E402
 
 SYNTHETIC_SOURCE_PATH = "synthetic::live-session-08"
 SYNTHETIC_DOCUMENT_TYPE = "synthetic_test"
-SYNTHETIC_CHUNK_TYPE = "synthetic"
+SYNTHETIC_CHUNK_TYPE = SYNTHETIC
 BATCH_SIZE = 500  # texts embedded + rows inserted per transaction
 
 TEMPLATES = [

@@ -1,8 +1,10 @@
 import structlog
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 # from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
 
 from config import get_settings
 from routers.embeddings import router as embeddings_router
@@ -11,6 +13,10 @@ from routers.config import router as config_router
 from routers.estimations import router as estimations_router
 from routers.ingestion import router as ingestion_router
 from routers.sessions import router as sessions_router
+from routers.rate_limiting import limiter, rate_limit_exceeded_handler
+from routers.retrieval import router as retrieval_router
+from routers.rag_estimate import router as rag_estimate_router
+from routers.rag_runs import router as rag_runs_router
 from services.history import init_db
 
 
@@ -84,12 +90,38 @@ app = FastAPI(
 #     allow_headers=["*"],
 # )
 
+# Session 9: per-API-key rate limiting (slowapi). The decorators on the routers
+# read ``app.state.limiter``; a custom handler turns the limit breach into a
+# JSON 429 with a ``Retry-After`` header.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """Assign a correlation id per request, bind it for structlog, and echo it
+    back on the ``X-Request-ID`` response header so failures are debuggable."""
+    request_id = request.headers.get("X-Request-ID") or str(uuid4())
+    request.state.request_id = request_id
+    structlog.contextvars.bind_contextvars(request_id=request_id)
+    try:
+        response = await call_next(request)
+    finally:
+        structlog.contextvars.unbind_contextvars("request_id")
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
 app.include_router(estimations_router)
 app.include_router(sessions_router)
 app.include_router(ingestion_router)
 app.include_router(embeddings_router)
 app.include_router(search_router)
 app.include_router(config_router)
+# Session 9 — RAG retrieval + grounded estimation (each independently secured).
+app.include_router(retrieval_router)
+app.include_router(rag_estimate_router)
+app.include_router(rag_runs_router)
 
 
 @app.get("/health")

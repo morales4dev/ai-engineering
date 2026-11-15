@@ -1,12 +1,13 @@
 """SQLAlchemy ORM models.
 
-One ``DeclarativeBase`` for Alembic. Four tables:
+One ``DeclarativeBase`` for Alembic. Five tables:
 
 * ``estimations`` — successful one-shot ``/estimate`` rows (was ``create_all``).
 * ``pseudonym_mappings`` — reversible PII mapping keyed by
   ``(entity_type, original_hash)``.
 * ``ingestion_jobs`` — book-keeping for ``POST /ingestion/runs``.
 * ``chunking_comparisons`` — successful ``POST /embeddings/compare`` rows.
+* ``estimation_runs`` — wizard ejecuciones (Session 9).
 """
 from __future__ import annotations
 
@@ -103,6 +104,34 @@ class ChunkingComparisonRow(Base):
     )
     corpus_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     response_payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class EstimationRunRow(Base):
+    __tablename__ = "estimation_runs"
+    __table_args__ = (Index("idx_estimation_runs_created_at", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    transcript: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="started")
+    current_step: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="transcript"
+    )
+    reformulation: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    retrieval: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    augmentation: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    generation: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    adjusted_breakdown: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

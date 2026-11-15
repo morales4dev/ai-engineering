@@ -731,5 +731,93 @@ El tuning de Postgres para builds de índices vive en `docker-compose.yml` (serv
 1. Repositorio actualizado: índice halfvec activo, flags de tuning en compose, queries de monitorización en el README.
 2. Documento corto con los números observados en **vuestro** barrido de `ef_search` (tabla del script) y la decisión razonada del valor adoptado: qué recall ganáis y qué latencia pagáis frente a las alternativas. Archivo: [`docs/sesion8_ef_search.md`](docs/sesion8_ef_search.md) (se rellena en el paso 6; no copiar los números de Lidr).
 
+## Live Session 09 — RAG estimation
 
+Session 09 adds a separate transcript-to-estimate RAG flow. It does not replace
+the CAG endpoints or the Session 8 `POST /search` contract. FastAPI owns the
+pipeline and PostgreSQL persistence; Streamlit is an HTTP-only client.
+
+### Streamlit RAG Wizard
+
+Start the API and Streamlit as described above, then open the **RAG Wizard**
+tab. Paste or upload a UTF-8 `.txt` transcript, then follow reformulation,
+retrieval, context assembly, grounded generation and human verification. Each
+execution is persisted by FastAPI and can be reopened from its history. Editing
+an earlier stage clears later results, so stale estimates are not reused.
+
+Set both independent RAG API keys in `estimador-cag/.env` and recreate the API
+container:
+
+```dotenv
+ESTIMATE_API_KEY=<a private key for estimate and wizard endpoints>
+RETRIEVAL_API_KEY=<a separate private key for retrieval-only access>
+```
+
+The wizard sends `X-API-Key` using `ESTIMATE_API_KEY`. Direct retrieval clients
+use `RETRIEVAL_API_KEY`; that key cannot call estimate-generation endpoints.
+Configure `ESTIMATOR_API_BASE_URL` for the Streamlit client when the API is not
+at `http://localhost:8000`. Grounded generation may take several minutes; the
+wizard allows 600 seconds for that request.
+
+### Session 09 API
+
+All protected routes require `X-API-Key`.
+
+| Method and path | Key | Purpose |
+|---|---|---|
+| `POST /v1/retrieval/search` | `RETRIEVAL_API_KEY` | Standalone semantic retrieval with threshold and metadata filters; does not create an execution. |
+| `POST /v1/estimate/from-transcript` | `ESTIMATE_API_KEY` | One-shot reformulate → retrieve → generate. Uses Redis idempotency and does not save to `estimation_runs`. |
+| `POST /v1/estimate/runs` | `ESTIMATE_API_KEY` | Create a saved wizard execution from `{ "transcript": "…" }` and reformulate it. |
+| `POST /v1/estimate/runs/{id}/reformulate` | `ESTIMATE_API_KEY` | Re-run reformulation and clear downstream stages. |
+| `POST /v1/estimate/runs/{id}/retrieve` | `ESTIMATE_API_KEY` | Retrieve evidence with optional `top_k`, `distance_threshold`, sectors and year filters. |
+| `POST /v1/estimate/runs/{id}/assemble` | `ESTIMATE_API_KEY` | Build the token-budgeted `<source>` context block. |
+| `POST /v1/estimate/runs/{id}/generate` | `ESTIMATE_API_KEY` | Generate a grounded estimate and report citation/coherence checks. |
+| `PATCH /v1/estimate/runs/{id}/verify` | `ESTIMATE_API_KEY` | Save human-edited modules/tasks; the server recomputes the total. |
+| `GET /v1/estimate/runs` | `ESTIMATE_API_KEY` | List the last 20 saved executions. |
+| `GET /v1/estimate/runs/{id}` | `ESTIMATE_API_KEY` | Reopen one saved execution. |
+
+### Optional task-granular corpus
+
+The historical Session 8 budgets have one chunk per component. The optional
+Session 9 corpus contains 12 deterministic synthetic projects broken down into
+module-tagged tasks. It is tagged as `document_type =
+historical_task_breakdown` and `chunk_type = historical_task`; it can coexist
+with the historical budgets. Generation does not call an embedding service.
+Ingest does call the configured OpenAI embeddings API and can incur cost.
+
+Review or regenerate the JSON without ingesting:
+
+```bash
+cd estimador-cag
+docker compose run --rm estimator python scripts/s09/build_task_corpus.py --generate-only
+```
+
+To opt in to ingest, start the stack, set `OPENAI_API_KEY` in `.env`, then run:
+
+```bash
+cd estimador-cag
+docker compose run --rm estimator python scripts/s09/build_task_corpus.py --ingest
+```
+
+Alternatively, with the API running on the host:
+
+```bash
+cd estimador-cag
+ESTIMATOR_BASE_URL=http://localhost:8000 uv run python scripts/s09/build_task_corpus.py --ingest
+```
+
+Each project is one document; repeated ingestion skips documents already
+present. After an opted-in ingest, verify the document counts:
+
+```bash
+docker compose exec -T postgres psql -U postgres -d estimator -c \
+  "SELECT document_type, count(*) FROM documents GROUP BY 1 ORDER BY 1;"
+```
+
+Expect 12 `historical_task_breakdown` documents, each with multiple
+`historical_task` chunks. To remove only this optional corpus:
+
+```sql
+DELETE FROM documents WHERE document_type = 'historical_task_breakdown';
+```
 

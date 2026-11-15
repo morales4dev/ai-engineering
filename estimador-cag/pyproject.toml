@@ -47,6 +47,7 @@ dependencies = [
     "faker>=24.0",
     "openpyxl>=3.1",
     "unstructured[all-docs]>=0.14",
+    "slowapi>=0.1.9",
 ]
 
 [dependency-groups]

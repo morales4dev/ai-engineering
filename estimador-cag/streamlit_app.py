@@ -12,11 +12,11 @@ SRC_DIR = Path(__file__).resolve().parent / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-import httpx
-import streamlit as st
+import httpx  # noqa: E402
+import streamlit as st  # noqa: E402
 
-from config import get_settings
-from schemas.estimation import (
+from config import get_settings  # noqa: E402
+from schemas.estimation import (  # noqa: E402
     OUT_OF_SCOPE_PREFIX,
     DetailLevel,
     OutputFormat,
@@ -42,7 +42,10 @@ SESSIONS_ENDPOINT = f"{API_BASE_URL}/sessions"
 COMPARE_ENDPOINT = f"{API_BASE_URL}/embeddings/compare"
 COMPARISONS_ENDPOINT = f"{API_BASE_URL}/embeddings/comparisons"
 CONFIG_ENDPOINT = f"{API_BASE_URL}/api/v1/config/models"
+RAG_RUNS_ENDPOINT = f"{API_BASE_URL}/v1/estimate/runs"
 COMPARE_TIMEOUT_SECONDS = 600
+RAG_GENERATION_TIMEOUT_SECONDS = 600
+_RAG_SECTORS = ("finance", "ecommerce", "healthcare", "industrial")
 
 # Same six canned strings as data/test_queries.json. Hardcoded: they are demo
 # questions, not the corpus. Judge by eye — no gold labels.
@@ -337,6 +340,128 @@ def _show_http_error(exc: httpx.HTTPStatusError) -> None:
     st.error(f"Service returned {exc.response.status_code}: {exc.response.text}")
 
 
+def _rag_api_request(
+    method: str,
+    path: str = "",
+    *,
+    payload: dict | None = None,
+    timeout_seconds: int = 15,
+) -> dict | list:
+    response = httpx.request(
+        method,
+        f"{RAG_RUNS_ENDPOINT}{path}",
+        headers={"X-API-Key": settings.ESTIMATE_API_KEY or ""},
+        json=payload,
+        timeout=httpx.Timeout(float(timeout_seconds), connect=10.0),
+    )
+    response.raise_for_status()
+    body = response.json()
+    if not isinstance(body, (dict, list)):
+        raise ValueError("The RAG API returned an unexpected response.")
+    return body
+
+
+def _rag_update_run(run: dict) -> None:
+    st.session_state.rag_run = run
+    st.session_state.rag_run_id = run["id"]
+    st.session_state.rag_run_revision = st.session_state.get("rag_run_revision", 0) + 1
+
+
+def _rag_text(value: object) -> str:
+    return "" if value is None else str(value).strip()
+
+
+def _rag_editor_rows(breakdown: dict) -> list[dict]:
+    rows = []
+    for module in breakdown.get("modules") or []:
+        tasks = module.get("tasks") or []
+        if not tasks:
+            rows.append(
+                {
+                    "Module": module.get("name", ""),
+                    "Module description": module.get("description", ""),
+                    "Task": "",
+                    "Task description": "",
+                    "Engineer days": 0,
+                    "Source IDs": "",
+                }
+            )
+        for task in tasks:
+            rows.append(
+                {
+                    "Module": module.get("name", ""),
+                    "Module description": module.get("description", ""),
+                    "Task": task.get("name", ""),
+                    "Task description": task.get("description", ""),
+                    "Engineer days": task.get("engineer_days", 0),
+                    "Source IDs": ", ".join(str(source) for source in task.get("sources") or []),
+                }
+            )
+    return rows or [
+        {
+            "Module": "",
+            "Module description": "",
+            "Task": "",
+            "Task description": "",
+            "Engineer days": 0,
+            "Source IDs": "",
+        }
+    ]
+
+
+def _rag_modules_from_editor(rows: list[dict]) -> list[dict]:
+    modules: dict[str, dict] = {}
+    for row in rows:
+        name = _rag_text(row.get("Module"))
+        module_description = _rag_text(row.get("Module description"))
+        task_name = _rag_text(row.get("Task"))
+        task_description = _rag_text(row.get("Task description"))
+        sources_text = _rag_text(row.get("Source IDs"))
+        raw_days = row.get("Engineer days", 0)
+        if not any(
+            (name, module_description, task_name, task_description, sources_text)
+        ) and raw_days in (
+            0,
+            None,
+            "",
+        ):
+            continue
+        if not name:
+            raise ValueError("Every non-empty row needs a module name.")
+        if not task_name:
+            if task_description or sources_text or raw_days not in (0, None, ""):
+                raise ValueError("Every task needs a task name.")
+            modules.setdefault(name, {"name": name, "description": module_description, "tasks": []})
+            continue
+        try:
+            days = int(raw_days)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Engineer days must be a whole number for task {task_name}.") from exc
+        if days < 0:
+            raise ValueError("Engineer days cannot be negative.")
+        try:
+            sources = [int(value.strip()) for value in sources_text.split(",") if value.strip()]
+        except ValueError as exc:
+            raise ValueError(
+                f"Source IDs must be comma-separated integers for task {task_name}."
+            ) from exc
+
+        module = modules.setdefault(
+            name, {"name": name, "description": module_description, "tasks": []}
+        )
+        if module_description:
+            module["description"] = module_description
+        module["tasks"].append(
+            {
+                "name": task_name,
+                "description": task_description,
+                "engineer_days": days,
+                "sources": sources,
+            }
+        )
+    return list(modules.values())
+
+
 def _create_session() -> str | None:
     try:
         response = httpx.post(SESSIONS_ENDPOINT, timeout=httpx.Timeout(15.0, connect=5.0))
@@ -539,14 +664,17 @@ def _render_review_trail(acb: dict) -> None:
 
 _init_conversational_state()
 _init_lab_state()
+st.session_state.setdefault("rag_run", None)
+st.session_state.setdefault("rag_run_id", None)
+st.session_state.setdefault("rag_run_revision", 0)
 
 st.title("Software estimation")
 st.caption(
     "One-shot form, a conversational session, a saved estimation, the chunking lab, or Ajustes."
 )
 
-new_tab, conv_tab, history_tab, lab_tab, ajustes_tab = st.tabs(
-    ["New estimation", "Conversational", "Recent", "Chunking Lab", "Ajustes"],
+new_tab, conv_tab, history_tab, lab_tab, rag_tab, ajustes_tab = st.tabs(
+    ["New estimation", "Conversational", "Recent", "Chunking Lab", "RAG Wizard", "Ajustes"],
     on_change="rerun",
 )
 
@@ -912,6 +1040,460 @@ with lab_tab:
             else:
                 st.session_state.lab_result = body.get("response") or {}
                 st.rerun()
+
+if rag_tab.open:
+    with rag_tab:
+        st.subheader("RAG Wizard")
+        st.caption(
+            "Guided transcript-to-estimate flow. The UI uses the FastAPI execution API; "
+            "the server stores each execution and its stage results."
+        )
+        if not settings.ESTIMATE_API_KEY:
+            st.error("Configure ESTIMATE_API_KEY in estimador-cag/.env to use the RAG Wizard.")
+        else:
+            current_run = st.session_state.rag_run
+            if current_run:
+                st.caption(
+                    f"Execution **#{current_run['id']}** · "
+                    f"status `{current_run.get('status', 'started')}` · "
+                    f"current step `{current_run.get('current_step', 'transcript')}`"
+                )
+                if st.button("New execution", key="rag_new_execution"):
+                    st.session_state.rag_run = None
+                    st.session_state.rag_run_id = None
+                    st.rerun()
+            else:
+                with st.form("rag_start_form", clear_on_submit=False):
+                    transcript = st.text_area(
+                        "Transcript",
+                        height=200,
+                        placeholder="Paste the project meeting transcript here…",
+                        help="At least 100 characters. Alternatively upload a .txt file.",
+                        key="rag_transcript",
+                    )
+                    transcript_file = st.file_uploader(
+                        "Or upload a transcript",
+                        type=["txt"],
+                        key="rag_transcript_upload",
+                    )
+                    start_run = st.form_submit_button("Start guided estimation", type="primary")
+                if start_run:
+                    selected_transcript = transcript.strip()
+                    valid_transcript = True
+                    if transcript_file is not None:
+                        try:
+                            selected_transcript = transcript_file.getvalue().decode("utf-8").strip()
+                        except UnicodeDecodeError:
+                            st.error("The transcript file must be UTF-8 encoded.")
+                            valid_transcript = False
+                    if valid_transcript and len(selected_transcript) < 100:
+                        st.error("The transcript must contain at least 100 characters.")
+                    elif valid_transcript and len(selected_transcript) > 50_000:
+                        st.error("The transcript must be at most 50,000 characters.")
+                    elif valid_transcript:
+                        try:
+                            with st.spinner("Starting execution and reformulating the transcript…"):
+                                body = _rag_api_request(
+                                    "POST",
+                                    payload={"transcript": selected_transcript},
+                                )
+                                if not isinstance(body, dict):
+                                    raise ValueError(
+                                        "The RAG API returned an unexpected execution."
+                                    )
+                                _rag_update_run(body)
+                        except httpx.HTTPStatusError as exc:
+                            _show_http_error(exc)
+                        except httpx.HTTPError as exc:
+                            st.error(f"Could not reach the RAG API at `{RAG_RUNS_ENDPOINT}`: {exc}")
+                        except ValueError as exc:
+                            st.error(str(exc))
+                        else:
+                            st.rerun()
+
+            current_run = st.session_state.rag_run
+            if current_run:
+                run_id = current_run["id"]
+                st.markdown("#### 1. Transcript")
+                with st.expander("Original transcript"):
+                    st.write(current_run.get("transcript", ""))
+                st.markdown("#### 2. Reformulation")
+                reformulation = current_run.get("reformulation") or {}
+                if reformulation:
+                    st.markdown("**Brief**")
+                    st.json(reformulation.get("query") or {})
+                    st.markdown("**Search text**")
+                    st.write(reformulation.get("search_text") or "")
+                    if st.button("Re-run reformulation", key=f"rag_reformulate_{run_id}"):
+                        try:
+                            with st.spinner("Reformulating…"):
+                                body = _rag_api_request("POST", f"/{run_id}/reformulate")
+                                if not isinstance(body, dict):
+                                    raise ValueError(
+                                        "The RAG API returned an unexpected execution."
+                                    )
+                                _rag_update_run(body)
+                        except httpx.HTTPStatusError as exc:
+                            _show_http_error(exc)
+                        except httpx.HTTPError as exc:
+                            st.error(f"Could not reach the RAG API: {exc}")
+                        except ValueError as exc:
+                            st.error(str(exc))
+                        else:
+                            st.rerun()
+
+                retrieval = current_run.get("retrieval") or {}
+                saved_filters = retrieval.get("filters") or {}
+                st.markdown("#### 3. Retrieval")
+                with st.form(f"rag_retrieval_form_{run_id}"):
+                    top_k = st.number_input(
+                        "top_k",
+                        min_value=1,
+                        max_value=30,
+                        value=saved_filters.get("top_k", 10),
+                        step=1,
+                        key=f"rag_top_k_{run_id}",
+                    )
+                    threshold = st.number_input(
+                        "Distance threshold",
+                        min_value=0.0,
+                        max_value=2.0,
+                        value=float(saved_filters.get("distance_threshold", 0.6)),
+                        step=0.05,
+                        key=f"rag_threshold_{run_id}",
+                    )
+                    sectors = st.multiselect(
+                        "Sectors",
+                        options=list(_RAG_SECTORS),
+                        default=saved_filters.get("sectors") or [],
+                        key=f"rag_sectors_{run_id}",
+                    )
+                    year_col1, year_col2 = st.columns(2)
+                    with year_col1:
+                        year_min = st.number_input(
+                            "Project year minimum",
+                            min_value=2010,
+                            max_value=2100,
+                            value=saved_filters.get("project_year_min"),
+                            step=1,
+                            key=f"rag_year_min_{run_id}",
+                        )
+                    with year_col2:
+                        year_max = st.number_input(
+                            "Project year maximum",
+                            min_value=2010,
+                            max_value=2100,
+                            value=saved_filters.get("project_year_max"),
+                            step=1,
+                            key=f"rag_year_max_{run_id}",
+                        )
+                    retrieve = st.form_submit_button(
+                        "Run / re-run retrieval",
+                        type="primary",
+                        disabled=not bool(reformulation),
+                    )
+                if retrieve:
+                    if year_min is not None and year_max is not None and year_min > year_max:
+                        st.error("The minimum project year cannot exceed the maximum.")
+                    else:
+                        filters = {
+                            "top_k": int(top_k),
+                            "distance_threshold": float(threshold),
+                            "sectors": sectors or None,
+                            "project_year_min": year_min,
+                            "project_year_max": year_max,
+                        }
+                        try:
+                            with st.spinner("Retrieving historical evidence…"):
+                                body = _rag_api_request(
+                                    "POST", f"/{run_id}/retrieve", payload=filters
+                                )
+                                if not isinstance(body, dict):
+                                    raise ValueError(
+                                        "The RAG API returned an unexpected execution."
+                                    )
+                                _rag_update_run(body)
+                        except httpx.HTTPStatusError as exc:
+                            _show_http_error(exc)
+                        except httpx.HTTPError as exc:
+                            st.error(f"Could not reach the RAG API: {exc}")
+                        except ValueError as exc:
+                            st.error(str(exc))
+                        else:
+                            st.rerun()
+
+                if retrieval:
+                    chunks = retrieval.get("chunks") or []
+                    if retrieval.get("low_confidence"):
+                        st.warning(
+                            "Low confidence: no historical chunk passed the threshold. "
+                            "The retrieved set is empty; it is not evidence for the estimate."
+                        )
+                    st.caption(
+                        f"{len(chunks)} hit(s) · "
+                        f"{retrieval.get('candidates_evaluated', 0)} candidate(s) evaluated"
+                    )
+                    if chunks:
+                        st.dataframe(
+                            [
+                                {
+                                    "ID": item.get("id"),
+                                    "Sector": item.get("sector"),
+                                    "Year": item.get("project_year"),
+                                    "Type": item.get("chunk_type"),
+                                    "Distance": item.get("distance"),
+                                    "Content": item.get("content"),
+                                }
+                                for item in chunks
+                            ],
+                            hide_index=True,
+                            use_container_width=True,
+                        )
+
+                st.markdown("#### 4. Context assembly")
+                augmentation = current_run.get("augmentation") or {}
+                if retrieval and not augmentation:
+                    if st.button("Assemble context", key=f"rag_assemble_{run_id}", type="primary"):
+                        try:
+                            with st.spinner("Assembling the source context…"):
+                                body = _rag_api_request("POST", f"/{run_id}/assemble", payload={})
+                                if not isinstance(body, dict):
+                                    raise ValueError(
+                                        "The RAG API returned an unexpected execution."
+                                    )
+                                _rag_update_run(body)
+                        except httpx.HTTPStatusError as exc:
+                            _show_http_error(exc)
+                        except httpx.HTTPError as exc:
+                            st.error(f"Could not reach the RAG API: {exc}")
+                        except ValueError as exc:
+                            st.error(str(exc))
+                        else:
+                            st.rerun()
+                if augmentation:
+                    kept = augmentation.get("kept_chunks") or []
+                    st.caption(
+                        f"Kept {len(kept)} chunk(s), dropped "
+                        f"{augmentation.get('dropped_count', 0)} · "
+                        f"{augmentation.get('token_count', 0)} token(s)"
+                    )
+                    with st.expander("Assembled <source> block"):
+                        st.code(augmentation.get("context_block") or "", language="xml")
+
+                st.markdown("#### 5. Grounded generation")
+                generation = current_run.get("generation") or {}
+                if augmentation and not generation:
+                    if st.button("Generate estimate", key=f"rag_generate_{run_id}", type="primary"):
+                        try:
+                            with st.spinner(
+                                f"Generating grounded estimate (timeout "
+                                f"{RAG_GENERATION_TIMEOUT_SECONDS}s)…"
+                            ):
+                                body = _rag_api_request(
+                                    "POST",
+                                    f"/{run_id}/generate",
+                                    timeout_seconds=RAG_GENERATION_TIMEOUT_SECONDS,
+                                )
+                                if not isinstance(body, dict):
+                                    raise ValueError(
+                                        "The RAG API returned an unexpected execution."
+                                    )
+                                _rag_update_run(body)
+                        except httpx.HTTPStatusError as exc:
+                            _show_http_error(exc)
+                        except httpx.HTTPError as exc:
+                            st.error(f"Could not reach the RAG API: {exc}")
+                        except ValueError as exc:
+                            st.error(str(exc))
+                        else:
+                            st.rerun()
+                if generation:
+                    if generation.get("fabricated_source_ids"):
+                        st.warning(
+                            "The model cited unknown source IDs: "
+                            + ", ".join(str(item) for item in generation["fabricated_source_ids"])
+                        )
+                    if generation.get("coherent") is False:
+                        st.warning("The generated estimate failed the coherence check.")
+                    estimate = generation.get("estimate") or {}
+                    model_total = estimate.get("total_engineer_days")
+                    model_total_label = (
+                        f"{model_total} engineer-days"
+                        if model_total is not None
+                        else "Insufficient context"
+                    )
+                    st.caption(
+                        f"Confidence: **{estimate.get('confidence', 'unknown')}** · "
+                        f"Model total: **{model_total_label}**"
+                    )
+                    st.write(estimate.get("reasoning") or "")
+                    estimate_rows = [
+                        {
+                            "Module": module.get("name", ""),
+                            "Task": task.get("name", ""),
+                            "Engineer days": task.get("engineer_days", 0),
+                            "Source IDs": ", ".join(
+                                str(source) for source in task.get("sources") or []
+                            ),
+                        }
+                        for module in estimate.get("modules") or []
+                        for task in module.get("tasks") or []
+                    ]
+                    if estimate_rows:
+                        st.dataframe(estimate_rows, hide_index=True, use_container_width=True)
+                    if estimate.get("sources"):
+                        with st.expander("Source citations"):
+                            st.json(estimate["sources"])
+                    if estimate.get("assumptions"):
+                        with st.expander("Assumptions"):
+                            st.json(estimate["assumptions"])
+
+                    st.markdown("#### 6. Human verification")
+                    st.caption(
+                        "The model output remains unchanged. Edit the human version; "
+                        "the API recomputes and stores its total on save."
+                    )
+                    adjusted = current_run.get("adjusted_breakdown") or {}
+                    model_col, human_col = st.columns(2)
+                    with model_col:
+                        st.markdown("**Model version**")
+                        st.metric(
+                            "Model engineer-days",
+                            estimate.get("total_engineer_days")
+                            if estimate.get("total_engineer_days") is not None
+                            else "Insufficient",
+                        )
+                    with human_col:
+                        st.markdown("**Human version**")
+                        st.metric(
+                            "Saved human engineer-days",
+                            adjusted.get("total_engineer_days", 0),
+                        )
+                    editor_key = f"rag_editor_{run_id}_{st.session_state.rag_run_revision}"
+                    edited = st.data_editor(
+                        _rag_editor_rows(adjusted),
+                        num_rows="dynamic",
+                        hide_index=True,
+                        use_container_width=True,
+                        column_config={
+                            "Module": st.column_config.TextColumn(required=True),
+                            "Module description": st.column_config.TextColumn(),
+                            "Task": st.column_config.TextColumn(required=True),
+                            "Task description": st.column_config.TextColumn(),
+                            "Engineer days": st.column_config.NumberColumn(
+                                min_value=0, step=1, format="%d"
+                            ),
+                            "Source IDs": st.column_config.TextColumn(
+                                help="Comma-separated chunk IDs."
+                            ),
+                        },
+                        key=editor_key,
+                    )
+                    try:
+                        edited_modules = _rag_modules_from_editor(edited.to_dict(orient="records"))
+                    except ValueError as exc:
+                        st.error(str(exc))
+                        edited_modules = []
+                        edited_total = 0
+                        valid_edit = False
+                    else:
+                        edited_total = sum(
+                            task["engineer_days"]
+                            for module in edited_modules
+                            for task in module["tasks"]
+                        )
+                        valid_edit = True
+                    st.metric("Current human engineer-days", edited_total)
+                    save_verification = st.button(
+                        "Save human version",
+                        key=f"rag_save_verification_{run_id}",
+                        type="primary",
+                        disabled=not valid_edit,
+                    )
+                    if save_verification:
+                        try:
+                            with st.spinner("Saving verified estimate…"):
+                                body = _rag_api_request(
+                                    "PATCH",
+                                    f"/{run_id}/verify",
+                                    payload={"modules": edited_modules},
+                                )
+                                if not isinstance(body, dict):
+                                    raise ValueError(
+                                        "The RAG API returned an unexpected execution."
+                                    )
+                                _rag_update_run(body)
+                        except httpx.HTTPStatusError as exc:
+                            _show_http_error(exc)
+                        except httpx.HTTPError as exc:
+                            st.error(f"Could not reach the RAG API: {exc}")
+                        except ValueError as exc:
+                            st.error(str(exc))
+                        else:
+                            st.success(
+                                f"Saved human estimate: "
+                                f"{body.get('adjusted_breakdown', {}).get('total_engineer_days', 0)} "
+                                "engineer-days."
+                            )
+                            st.rerun()
+
+            st.markdown("#### 7. Execution history")
+            try:
+                history = _rag_api_request("GET", timeout_seconds=15)
+                if not isinstance(history, list):
+                    raise ValueError("The RAG API returned an unexpected execution history.")
+            except httpx.HTTPStatusError as exc:
+                _show_http_error(exc)
+                history = []
+            except httpx.HTTPError as exc:
+                st.error(f"Could not load RAG execution history: {exc}")
+                history = []
+            except ValueError as exc:
+                st.error(str(exc))
+                history = []
+
+            if history:
+                st.dataframe(
+                    [
+                        {
+                            "ID": item.get("id"),
+                            "Status": item.get("status"),
+                            "Step": item.get("current_step"),
+                            "Created": item.get("created_at"),
+                            "Updated": item.get("updated_at"),
+                        }
+                        for item in history
+                    ],
+                    hide_index=True,
+                    use_container_width=True,
+                )
+                history_labels = {
+                    f"#{item['id']} · {item.get('status', '')} · "
+                    f"{item.get('created_at', '')}": item["id"]
+                    for item in history
+                }
+                selected_history = st.selectbox(
+                    "Reopen execution",
+                    options=list(history_labels),
+                    key="rag_history_selection",
+                )
+                if st.button("Open execution", key="rag_open_execution"):
+                    selected_id = history_labels[selected_history]
+                    try:
+                        body = _rag_api_request("GET", f"/{selected_id}")
+                        if not isinstance(body, dict):
+                            raise ValueError("The RAG API returned an unexpected execution.")
+                        _rag_update_run(body)
+                    except httpx.HTTPStatusError as exc:
+                        _show_http_error(exc)
+                    except httpx.HTTPError as exc:
+                        st.error(f"Could not open execution #{selected_id}: {exc}")
+                    except ValueError as exc:
+                        st.error(str(exc))
+                    else:
+                        st.rerun()
+            else:
+                st.caption("No RAG executions yet.")
 
 with ajustes_tab:
     st.subheader("Ajustes")

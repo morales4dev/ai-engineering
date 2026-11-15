@@ -128,6 +128,24 @@ def get_semantic_retriever() -> SemanticRetriever | None:
 
 
 @lru_cache
+def get_idempotency_store():
+    """Idempotency cache for ``POST /v1/estimate/from-transcript`` (singleton).
+
+    Redis-backed when ``REDIS_URL`` is reachable, in-process dict otherwise."""
+    from generation.rag.idempotency import IdempotencyStore
+
+    return IdempotencyStore.from_settings(get_settings())
+
+
+@lru_cache
+def get_token_encoder():
+    """tiktoken ``cl100k_base`` encoder used for the context token budget."""
+    import tiktoken
+
+    return tiktoken.get_encoding("cl100k_base")
+
+
+@lru_cache
 def get_anthropic_client() -> anthropic.Anthropic | None:
     """Anthropic client for Contextual Retrieval. None without a key."""
     settings = get_settings()
