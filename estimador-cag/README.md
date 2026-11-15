@@ -964,3 +964,143 @@ of `5` and `0.45`. The task-hours endpoints use these values together with
 `search_mode` and `rerank` when the request omits the corresponding options.
 The wizard uses them by default and allows per-estimation overrides.
 
+## RAG flows at a glance
+
+Each labelled group below is a separate entry point. Follow its numbered steps from top to
+bottom; there are no arrows between the three flows. They reuse parts of the
+retrieval code, but the wizard does not call the advanced-search endpoint.
+
+```mermaid
+flowchart TB
+    subgraph wizard["Hours wizard · Streamlit"]
+        direction TB
+        W1["1. Submit transcript"] --> W2["2. Generate and review tasks"]
+        W2 --> W3["3. Find similar tasks and estimate hours"]
+        W3 --> W4["4. Confirm hours and rates"]
+    end
+
+    subgraph days["Engineer-days · API"]
+        direction TB
+        D1["1. Submit transcript"] --> D2["2. Retrieve sources and assemble context"]
+        D2 --> D3["3. Generate an estimate in days"]
+    end
+
+    subgraph advanced["Advanced search · API"]
+        direction TB
+        A1["1. Submit search query"] --> A2["2. Search selected collections"]
+        A2 --> A3["3. Return ranked fragments"]
+    end
+```
+
+The independent engineer-days flow is implemented in
+[`estimator.py`](src/generation/rag/estimator.py). The Session 8
+[`/search` sequence](docs/search-sequence.mmd) remains a separate, simpler
+semantic-search endpoint.
+
+### Hours wizard
+
+1. **Start:** Streamlit sends the transcript; the API creates an execution and
+   reformulates the conversation into a structured brief.
+2. **Generate and review:** the model proposes modules and tasks. The user can
+   edit them before requesting hours.
+3. **Estimate hours:** for each reviewed task, the API searches historical
+   tasks and calculates a distance-weighted estimate from suitable neighbors.
+   The search can use hybrid retrieval and reranking. Tasks without a suitable
+   vector match need manual hours.
+4. **Confirm:** the user reviews hours and hourly rates; the API recalculates
+   the totals and saves the confirmation. Each completed stage is persisted.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Streamlit wizard
+    participant API as FastAPI
+    participant LLM as Language model
+    participant Embed as Embeddings
+    participant DB as PostgreSQL
+
+    User->>UI: Submit transcript
+    UI->>API: Create execution
+    API->>DB: Save execution
+    API->>LLM: Reformulate transcript
+    API->>DB: Save reformulation
+    API-->>UI: Reformulated brief
+
+    User->>UI: Generate structure
+    UI->>API: Generate modules and tasks
+    API->>LLM: Generate structure
+    API->>DB: Save structure
+    API-->>UI: Structure for review
+
+    User->>UI: Review tasks and request hours
+    UI->>API: Send reviewed structure
+    API->>Embed: Embed each task
+    API->>DB: Search similar historical tasks
+    API->>API: Calculate hours from suitable neighbors
+    API->>DB: Save structure and estimates
+    API-->>UI: Hours and neighbors
+
+    User->>UI: Review and confirm hours and rates
+    UI->>API: Confirm
+    API->>API: Recalculate totals
+    API->>DB: Save confirmation
+    API-->>UI: Confirmed estimate
+```
+
+The UI is in [`wizard_ui.py`](src/wizard_ui.py), orchestration in
+[`rag_runs.py`](src/services/rag_runs.py), structure generation in
+[`structure.py`](src/generation/rag/structure.py), and task matching in
+[`task_hours.py`](src/generation/rag/task_hours.py).
+
+### Advanced search
+
+1. **Prepare:** query transformation and collection routing run in parallel.
+   Transformation can expand or split the query; collections can be supplied
+   explicitly or selected by the router.
+2. **Search:** embed each resulting query and search the selected collections
+   with their applicable metadata filters. Search can be vector-only or hybrid.
+3. **Combine and rank:** merge the candidate lists; optionally rerank them and
+   apply temporal decay.
+4. **Return:** send the ranked fragments and information about routing,
+   subqueries and candidate counts to the caller.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant API as Advanced-search API
+    participant Search as Advanced search pipeline
+    participant Plan as Query transform
+    participant Router as Collection router
+    participant Embed as Embeddings
+    participant DB as PostgreSQL
+    participant Rank as Reranker
+
+    Client->>API: Query, options and filters
+    API->>Search: Run search
+    par Query transformation
+        Search->>Plan: Prepare query, optionally expand or split
+        Plan-->>Search: Subqueries
+    and Collection routing
+        Search->>Router: Select collections
+        Router-->>Search: Targets and reason
+    end
+    Search->>Embed: Embed subqueries
+    Search->>DB: Search collections with filters
+    DB-->>Search: Vector and optional lexical candidates
+    Search->>Search: Combine candidate lists
+    opt Reranking enabled and candidates found
+        Search->>Rank: Score candidates
+        Rank-->>Search: Scores
+    end
+    opt Temporal decay enabled
+        Search->>Search: Adjust scores by document age
+    end
+    Search-->>API: Ranked fragments and search details
+    API-->>Client: Results
+```
+
+The endpoint is in [`retrieval_advanced.py`](src/routers/retrieval_advanced.py);
+[`advanced_search_pipeline.py`](src/generation/rag/retrieval/advanced_search_pipeline.py)
+coordinates its stages, and [`search_pipeline.py`](src/generation/rag/retrieval/search_pipeline.py)
+performs the collection searches.
+
