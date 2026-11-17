@@ -98,3 +98,16 @@ async def test_vector_mode_does_not_run_lexical_branch(store):
     assert [chunk.id for chunk in result.chunks] == [1]
     assert store.vector_calls[0]["top_k"] == 1
     assert store.lexical_calls == []
+
+
+@pytest.mark.parametrize(("key", "document_id"), [
+    ("source_id", "SOURCE-1"), ("transcript_id", "TR-1"), ("doc_id", "DOC-1"),
+])
+def test_non_budget_provenance_survives_context_assembly(key, document_id):
+    from generation.rag.context_assembler import build_context_block
+
+    row = _row(1)
+    row.metadata_ = {key: document_id}
+    row.chunk_type = "meeting_segment" if key == "transcript_id" else "doc_section"
+    chunk = search_pipeline._row_to_chunk(row, distance=None)
+    assert f'document_id="{document_id}"' in build_context_block([chunk])

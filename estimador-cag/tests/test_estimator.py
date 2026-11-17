@@ -18,6 +18,7 @@ from generation.rag.schemas import (
     RetrievalResult,
     RetrievedChunk,
     SourceCitation,
+    SourceReference,
     TaskItem,
     WorkModule,
 )
@@ -57,6 +58,7 @@ def _chunk(chunk_id: int) -> RetrievedChunk:
         project_year=2024,
         chunk_type="budget_component",
         distance=0.42,
+        budget_id="BUD-2024-005",
     )
 
 
@@ -67,7 +69,12 @@ def _good_estimate() -> Estimate:
         modules=[
             WorkModule(
                 name="Checkout",
-                tasks=[TaskItem(name="Cart & payment flow", engineer_days=18, sources=[1])],
+                tasks=[TaskItem(
+                    name="Cart & payment flow", engineer_days=18, grounded=True,
+                    sources=[SourceReference(
+                        chunk_id="1", document_id="BUD-2024-005", evidence="Estimated hours: 140",
+                    )],
+                )],
             )
         ],
         sources=[SourceCitation(source_id=1, relevance="primary", used_for="checkout")],
@@ -177,3 +184,82 @@ async def test_idempotency_hit_short_circuits_pipeline(wire):
     assert second == first
     # No stage re-ran on the cached call.
     assert calls == {"reformulate": 1, "search": 1, "generate": 1, "embed": 1}
+
+
+@pytest.mark.parametrize("repair_succeeds", [True, False])
+async def test_citation_retry_is_bounded_and_logs_final_report(
+    wire, monkeypatch, repair_succeeds,
+):
+    from structlog.testing import capture_logs
+
+    bad = _good_estimate()
+    bad.modules[0].tasks[0].sources[0].chunk_id = "invented"
+    wire(
+        retrieval=RetrievalResult(chunks=[_chunk(1)], low_confidence=False, candidates_evaluated=1),
+        estimate=bad,
+    )
+    retries = []
+
+    async def repair(context, query, *, feedback):
+        retries.append(feedback)
+        return _good_estimate() if repair_succeeds else bad
+
+    monkeypatch.setattr(orch, "_generate", repair)
+    monkeypatch.setattr(orch, "_current_request_id", lambda: "test-request")
+    with capture_logs() as logs:
+        result = await orch.estimate_from_transcript("x" * 200)
+
+    assert len(retries) == 1
+    assert "invented" in retries[0]
+    assert result.confidence == ("high" if repair_succeeds else "low")
+    reports = [entry for entry in logs if entry["event"] == "citation_report"]
+    assert [entry["phase"] for entry in reports] == ["initial", "final"]
+    assert all(entry["request_id"] == "test-request" for entry in reports)
+    assert reports[-1]["dangling_lines"] == (0 if repair_succeeds else 1)
+    assert any(e["event"] == "citations_unrepaired" for e in logs) is not repair_succeeds
+
+
+async def test_coherence_repair_cannot_bypass_final_citation_check(wire, monkeypatch):
+    incoherent = _good_estimate().model_copy(update={"confidence": "insufficient"})
+    wire(
+        retrieval=RetrievalResult(chunks=[_chunk(1)], low_confidence=False, candidates_evaluated=1),
+        estimate=incoherent,
+    )
+    bad = _good_estimate()
+    bad.modules[0].tasks[0].sources[0].chunk_id = "invented"
+
+    async def repair(*args, **kwargs):
+        return bad
+
+    monkeypatch.setattr(orch, "_generate", repair)
+    result = await orch.estimate_from_transcript("x" * 200)
+    assert result.confidence == "low"
+
+
+async def test_dropped_chunk_is_not_a_valid_citation(wire, monkeypatch):
+    from generation.rag.context_assembler import build_context_block
+
+    estimate = _good_estimate()
+    estimate.modules[0].tasks[0].sources[0].chunk_id = "2"
+    wire(
+        retrieval=RetrievalResult(
+            chunks=[_chunk(1), _chunk(2)], low_confidence=False, candidates_evaluated=2,
+        ),
+        estimate=estimate,
+    )
+    monkeypatch.setattr(
+        orch, "get_settings",
+        lambda: SimpleNamespace(
+            **{**vars(_SETTINGS), "MAX_CONTEXT_TOKENS": len(build_context_block([_chunk(1)]))}
+        ),
+    )
+    retries = []
+
+    async def repair(context, query, *, feedback):
+        retries.append(feedback)
+        assert 'id="2"' not in context
+        return _good_estimate()
+
+    monkeypatch.setattr(orch, "_generate", repair)
+    await orch.estimate_from_transcript("x" * 200)
+    assert len(retries) == 1

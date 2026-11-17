@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from generation.rag.chunk_types import BUDGET_COMPONENT
 
@@ -253,22 +253,40 @@ class Assumption(BaseModel):
     rationale: str
 
 
-class TaskItem(BaseModel):
-    """One concrete engineering task inside a functional module, in engineer-days.
+class SourceReference(BaseModel):
+    """A line-level reference to a chunk actually supplied to the generator."""
 
-    ``sources`` cite the historical chunk(s) the task was derived from; a task
-    with no historical analog is left uncited and should surface as an
-    :class:`Assumption` instead.
-    """
+    chunk_id: str = Field(min_length=1, description="Exact id attribute of the source.")
+    document_id: str = Field(
+        min_length=1, description="Exact document_id attribute of the same source."
+    )
+    evidence: str = Field(
+        min_length=1, description="Verbatim span or figure copied from the source, not a paraphrase."
+    )
+
+
+class TaskItem(BaseModel):
+    """One estimate line; unsupported scope carries neither effort nor sources."""
 
     name: str
     description: str | None = Field(
         default=None, description="One-line scope of the task."
     )
-    engineer_days: int = Field(ge=0)
-    sources: list[int] = Field(
-        default_factory=list, description="Chunk ids that back this task."
+    engineer_days: int | None = Field(default=None, ge=0)
+    grounded: bool = Field(
+        description="True iff supported by retrieved source data; False means insufficient data."
     )
+    sources: list[SourceReference] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _grounding_integrity(self) -> TaskItem:
+        if self.grounded and not self.sources:
+            raise ValueError("A grounded line must cite at least one source.")
+        if not self.grounded and self.sources:
+            raise ValueError("An ungrounded line must not carry sources.")
+        if not self.grounded and self.engineer_days is not None:
+            raise ValueError("An ungrounded line must leave engineer_days null.")
+        return self
 
 
 class WorkModule(BaseModel):
@@ -301,6 +319,32 @@ class Estimate(BaseModel):
     confidence: Confidence
     reasoning: str = Field(description="How the estimate was derived from the sources.")
     insufficient_context_explanation: str | None = None
+
+
+class LineCitation(BaseModel):
+    """Referential citation status, not a semantic evidence assessment."""
+
+    module: str
+    component: str
+    status: Literal["grounded", "dangling", "insufficient"]
+    cited_chunk_ids: list[str] = Field(default_factory=list)
+    dangling_chunk_ids: list[str] = Field(default_factory=list)
+
+
+class CitationReport(BaseModel):
+    """Audit against the chunks retained in the generator's context."""
+
+    total_lines: int = Field(ge=0)
+    grounded_lines: int = Field(ge=0)
+    dangling_lines: int = Field(ge=0)
+    insufficient_lines: int = Field(ge=0)
+    verified_citations: int = Field(ge=0)
+    dangling_citations: list[str] = Field(default_factory=list)
+    lines: list[LineCitation] = Field(default_factory=list)
+
+    @property
+    def has_dangling(self) -> bool:
+        return bool(self.dangling_citations)
 
 
 # ---- HTTP request models for the Session 9 routers ------------------------

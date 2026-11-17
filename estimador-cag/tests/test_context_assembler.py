@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
 from generation.rag.context_assembler import build_context_block, truncate_to_token_budget
+from generation.rag.errors import RetrievalError
 from generation.rag.schemas import RetrievedChunk
 
 
@@ -21,6 +24,7 @@ def _chunk(chunk_id: int, content: str) -> RetrievedChunk:
         project_year=2024,
         chunk_type="budget_component",
         distance=0.123,
+        budget_id="BUD-001",
     )
 
 
@@ -33,6 +37,7 @@ def test_build_context_block_wraps_each_chunk_in_source_xml():
     assert 'project_year="2024"' in block
     assert 'chunk_type="budget_component"' in block
     assert 'distance="0.1230"' in block
+    assert 'document_id="BUD-001"' in block
     assert "Cart and checkout service" in block
     assert block.strip().endswith("</source>")
 
@@ -51,15 +56,14 @@ def test_truncate_keeps_whole_chunks_within_budget():
     encoder = CharEncoder()
 
     # Budget large enough for exactly the first two wrapped chunks.
-    first_two_cost = sum(
-        len(encoder.encode(part))
-        for part in (build_context_block([chunks[0]]), build_context_block([chunks[1]]))
-    )
+    first_two_cost = len(encoder.encode(build_context_block(chunks[:2])))
     kept = truncate_to_token_budget(chunks, first_two_cost, encoder)
 
     assert [c.id for c in kept] == [1, 2]
     # Every kept chunk is whole — content is never sliced.
     assert all(set(c.content) == {chr(ord("a") + c.id - 1)} for c in kept)
+    assert len(encoder.encode(build_context_block(kept))) <= first_two_cost
+    assert len(truncate_to_token_budget(chunks, first_two_cost - 1, encoder)) == 1
 
 
 def test_truncate_zero_budget_keeps_nothing():
@@ -76,3 +80,19 @@ def test_truncate_counts_xml_wrapper_not_just_content():
     # A budget that fits the raw content but NOT the wrapped element keeps nothing.
     assert content_only < wrapped
     assert truncate_to_token_budget([chunk], content_only, encoder) == []
+
+
+def test_document_provenance_and_unscored_distance():
+    chunk = _chunk(1, "source")
+    chunk.distance = None
+    chunk.source_id = 'DOC-"quoted"'
+    block = build_context_block([chunk])
+    assert """document_id='DOC-"quoted"'""" in block
+    assert 'distance="not-scored"' in block
+
+
+def test_missing_document_provenance_fails_explicitly():
+    chunk = _chunk(1, "source")
+    chunk.budget_id = None
+    with pytest.raises(RetrievalError, match="no document provenance"):
+        build_context_block([chunk])

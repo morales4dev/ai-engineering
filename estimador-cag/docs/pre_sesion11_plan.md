@@ -5,9 +5,12 @@
 Este documento es el entregable de planificación solicitado por el usuario. Debe
 permitir continuar en otra sesión sin disponer del historial del chat.
 
-**Estado: pendiente de revisión del usuario. No comenzar la implementación hasta
-que lo apruebe o indique sus correcciones.** Las propuestas de diseño de este
-documento no deben confundirse con decisiones ya aprobadas.
+**Estado: aprobado por el usuario el 17 de noviembre de 2026 con «ok, impementa
+ya!». Código implementado y pruebas offline ejecutadas.** La preparación de
+dependencias del scorer queda bloqueada por falta de paquetes en caché; no se
+ha usado red para resolverla. La fase 2 no se ha ejecutado y no existe todavía
+una tabla propia de métricas. Para continuar manualmente, ir al
+[paso 10, guía de ejecución](#101-guía-manual-empezar-aquí).
 
 Antes de aprobar la implementación hay que cerrar todas las decisiones de
 diseño y preparación con el usuario. Preguntar de una en una, explicar en
@@ -16,7 +19,7 @@ esperar su respuesta y registrarla aquí antes de continuar. No aplazar esas
 decisiones a la sesión de implementación ni interpretar una aprobación parcial
 como aprobación del plan completo.
 
-Al redactarlo, el 17 de noviembre de 2026:
+Estado histórico al redactar el plan, antes de aprobar la implementación:
 
 - Solo se han inspeccionado archivos y el historial de Git. No se han ejecutado
   tests, llamadas a modelos, ingestas, migraciones, instalaciones ni servicios.
@@ -28,13 +31,17 @@ Al redactarlo, el 17 de noviembre de 2026:
 
 Orden para retomar:
 
-1. [ ] Leer este documento completo.
-2. [ ] Leer la respuesta del usuario a su revisión. Si no está disponible, pedirla.
-3. [ ] Comprobar ramas, commits y estado de ambos repositorios, sin cambiar nada.
-4. [ ] Implementar únicamente el alcance aprobado.
-5. [ ] Completar la fase 1 offline, incluidas todas las validaciones que no
-   requieran servicios, y entregar la guía autónoma de la fase 2.
-6. [ ] Confirmar al cerrar que no se han hecho commits sin autorización explícita.
+1. [x] Leer este documento completo. Evidencia: revisión de las secciones 0-10.
+2. [x] Leer la respuesta del usuario. Evidencia: aprobación citada arriba.
+3. [x] Comprobar ramas y estado. Evidencia: alumno `session-11/pre-work`,
+   instructor `session_11` / `3292744`; no se cambió de rama.
+4. [x] Implementar únicamente el alcance aprobado. Evidencia: pasos 1-9.
+5. [ ] Completar todas las validaciones offline y entregar la guía autónoma.
+   Bloqueado únicamente el lock/import real del scorer: ver pasos 8 y 10.
+   La guía y las pruebas que usan el entorno ya disponible están entregadas.
+6. [x] No se han creado commits ni añadido archivos al índice por parte del
+   asistente. En la revisión final ya había tests en el índice; se han
+   respetado, sin deshacer ni modificar el staging ajeno.
 
 ### 0.1 Seguimiento persistente y verificable por una persona
 
@@ -267,8 +274,8 @@ literalmente a Streamlit.
     concretar las rutas/conexiones de ese montaje, no pedir elegir entorno
     durante la implementación.
 
-El usuario pidió este archivo porque va a cerrar la sesión. No necesita ahora
-una implementación parcial ni que se arranquen pruebas reales automáticamente.
+El usuario aprobó después la implementación de la fase 1. Se mantiene la
+prohibición de arrancar servicios, hacer llamadas de pago o ejecutar la fase 2.
 
 ### 2.2 Restricciones prácticas
 
@@ -300,15 +307,18 @@ class SourceReference(BaseModel):
 
 Adaptar nuestro `TaskItem`, no crear un modelo paralelo innecesario:
 
-- [ ] Mantener `name` y `description`.
-- [ ] Mantener esfuerzo en `engineer_days`, como el modelo actual y LIDR.
-- [ ] Permitir esfuerzo nulo cuando no hay soporte.
-- [ ] Añadir `grounded: bool`.
-- [ ] Sustituir `sources: list[int]` por `sources: list[SourceReference]`.
-- [ ] `grounded=True` exige al menos una fuente.
-- [ ] `grounded=False` exige fuentes vacías y esfuerzo nulo.
-- [ ] No representar falta de datos mediante cero días.
-- [ ] Mantener las asunciones y la política global de contexto insuficiente.
+- [x] Mantener `name` y `description`.
+- [x] Mantener esfuerzo en `engineer_days`, como el modelo actual y LIDR.
+- [x] Permitir esfuerzo nulo cuando no hay soporte.
+- [x] Añadir `grounded: bool`.
+- [x] Sustituir `sources: list[int]` por `sources: list[SourceReference]`.
+- [x] `grounded=True` exige al menos una fuente.
+- [x] `grounded=False` exige fuentes vacías y esfuerzo nulo.
+- [x] No representar falta de datos mediante cero días.
+- [x] Mantener las asunciones y la política global de contexto insuficiente.
+
+Evidencia de este contrato: `TaskItem._grounding_integrity` y las pruebas de
+`tests/test_validation.py`, incluidos rechazo de cero y clasificación sin datos.
 
 El prompt debe pedir IDs exactos del contexto, documento correspondiente y
 evidencia literal, no paráfrasis. No inventar números ni fuentes.
@@ -359,8 +369,8 @@ estimaciones; conservar y registrar la configuración efectiva del generador.
 
 Entregables:
 
-1. [ ] Schema, prompt y función verificadora.
-2. [ ] Golden de generación Q1-Q5 con respuestas de referencia.
+1. [x] Schema, prompt y función verificadora. Evidencia: pasos 2-4 y tests.
+2. [x] Golden de generación Q1-Q5 con respuestas de referencia. Evidencia: paso 6.
 3. [ ] Script de evaluación, muestras trazables y tabla de cinco filas más promedio.
 4. [ ] Nota propia de 2-3 frases sobre los resultados reales.
 
@@ -556,8 +566,8 @@ No copiar `.env.example` sobre un `.env` existente ni ejecutar instrucciones
 históricas de limpieza de volúmenes del README.
 
 Sigue sin comprobarse la conexión a la base, los datos persistidos y los
-permisos reales de modelos. El siguiente paso de preparación es que el usuario
-ejecute el arranque documentado y comparta su resultado, sin mostrar secretos.
+permisos reales de modelos. La guía del paso 10 permite comprobarlo sin IA;
+no hace falta compartir salidas en un chat.
 
 ## 5. Política exacta de citaciones y sus límites
 
@@ -565,15 +575,18 @@ ejecute el arranque documentado y comparta su resultado, sin mostrar secretos.
 
 En el pipeline completo:
 
-1. [ ] Verificar contra **los chunks conservados tras truncar**, no todos los
+1. [x] Verificar contra **los chunks conservados tras truncar**, no todos los
    candidatos recuperados.
-2. [ ] Registrar el informe con `request_id`.
-3. [ ] Si hay IDs colgantes, pedir una corrección al generador.
-4. [ ] Verificar la respuesta corregida.
-5. [ ] Si persisten, warning `citations_unrepaired` y `confidence="low"`.
-6. [ ] Mantener el guard de coherencia; si una reparación posterior regenera la
+2. [x] Registrar el informe con `request_id`.
+3. [x] Si hay IDs colgantes, pedir una corrección al generador.
+4. [x] Verificar la respuesta corregida.
+5. [x] Si persisten, warning `citations_unrepaired` y `confidence="low"`.
+6. [x] Mantener el guard de coherencia; si una reparación posterior regenera la
    estimación, verificar también la respuesta final para no devolver otra
    generación sin comprobar.
+
+Evidencia: pruebas aisladas de `test_estimator.py` sobre reintento acotado,
+logs inicial/final, ID descartado y regeneración por coherencia.
 
 El punto 6 es una precaución directamente ligada al requisito de verificar lo
 que realmente se devuelve. Evitar bucles de reparación ilimitados y conservar
@@ -603,15 +616,19 @@ No crearlo entero solo para imitar una estructura del instructor.
 
 ### Paso 1. Revalidar estado y hacer inventario de afectados
 
-- [ ] **Paso 1 completado y comprobado.**
+- [x] **Paso 1 completado y comprobado.** Evidencia: `git status`, `git log`,
+  referencias de `TaskItem` y búsquedas de consumidores en Python.
 
-1. [ ] Comprobar que seguimos en las ramas y commits de la sección 1.
-2. [ ] Revisar cambios nuevos del usuario y no revertirlos.
-3. [ ] Buscar referencias a `TaskItem`, `task.sources`, `engineer_days`,
+1. [x] Comprobar que seguimos en las ramas y commits de la sección 1.
+2. [x] Revisar cambios nuevos del usuario y no revertirlos.
+3. [x] Buscar referencias a `TaskItem`, `task.sources`, `engineer_days`,
    `validate_citations`, `GenerateResult` y deserializaciones de `Estimate`.
-4. [ ] Leer los tests afectados antes de cambiar contratos.
-5. [ ] No modificar infraestructura, modelos de BD, migraciones ni recuperación
+4. [x] Leer los tests afectados antes de cambiar contratos.
+5. [x] No modificar infraestructura, modelos de BD, migraciones ni recuperación
    avanzada salvo dependencia demostrada del cambio.
+   Dependencia encontrada y reproducida: la recuperación básica perdía los IDs
+   documentales de transcripciones/docs. Se añaden solo esos metadatos en
+   `retriever.py` y `retrieval/search_pipeline.py`, sin tocar ranking o filtros.
 
 Las búsquedas ya realizadas localizaron consumidores directos en
 [test_estimator.py](../tests/test_estimator.py) y
@@ -620,21 +637,23 @@ Repetir la búsqueda sobre el estado de la sesión de implementación.
 
 ### Paso 2. Extender los modelos Pydantic
 
-- [ ] **Paso 2 completado y comprobado.**
+- [x] **Paso 2 completado y comprobado.** Evidencia: `schemas.SourceReference`,
+  `TaskItem._grounding_integrity`, `CitationReport` y `tests/test_validation.py`.
 
 En [schemas.py](../src/generation/rag/schemas.py):
 
-1. [ ] Añadir `SourceReference`.
-2. [ ] Cambiar `TaskItem` conservando la estructura módulos/tareas:
+1. [x] Añadir `SourceReference`.
+2. [x] Cambiar `TaskItem` conservando la estructura módulos/tareas:
    `engineer_days: int | None`, `grounded` y fuentes tipadas.
-3. [ ] Añadir un `model_validator(mode="after")` para las tres reglas de integridad.
-4. [ ] Añadir `LineCitation` y `CitationReport`, con los campos y estados de LIDR:
+3. [x] Añadir un `model_validator(mode="after")` para las tres reglas de integridad.
+4. [x] Añadir `LineCitation` y `CitationReport`, con los campos y estados de LIDR:
    contadores, IDs citados/colgantes, detalle por módulo/tarea y `has_dangling`.
-5. [ ] Mantener `SourceCitation` global y `Estimate` globalmente insuficiente.
+5. [x] Mantener `SourceCitation` global y `Estimate` globalmente insuficiente.
 6. [ ] Actualizar contratos dependientes solo si tienen consumidores reales. Si se
    adapta `GenerateResult`, cambiar los IDs colgantes a strings y contemplar el
    informe opcional como LIDR, sin añadir endpoints muertos.
-7. [ ] No convertir el Wizard de sesión 10 a este modelo.
+   No aplica: `GenerateResult` no tiene consumidores; se conserva sin ampliarlo.
+7. [x] No convertir el Wizard de sesión 10 a este modelo.
 
 Conservar días enteros como LIDR evita ampliar el cambio a unidades nuevas.
 Conservar también el texto y las aproximaciones del golden de LIDR, conforme a
@@ -643,25 +662,30 @@ la decisión 15. No reescribirlo con equivalencias exactas.
 ### Paso 3. Propagar documento y reforzar el prompt
 
 - [ ] **Paso 3 completado y comprobado.**
+  En curso: implementación y contratos offline comprobados en
+  `test_context_assembler.py`; falta comprobar metadatos de la BD real en fase 2.
 
 En [context_assembler.py](../src/generation/rag/context_assembler.py):
 
-1. [ ] Añadir `document_id` al `<source>`, usando procedencia real del chunk.
-2. [ ] Conservar soporte de distancia ausente.
-3. [ ] Conservar chunks completos y presupuesto calculado sobre el XML envuelto:
+1. [x] Añadir `document_id` al `<source>`, usando `source_id` o `budget_id`;
+   si faltan ambos se lanza `RetrievalError`, sin identificador ficticio.
+2. [x] Conservar soporte de distancia ausente.
+3. [x] Conservar chunks completos y presupuesto calculado sobre el XML envuelto:
    el atributo nuevo también consume tokens.
+   Evidencia: prueba del límite exacto, incluidos los separadores entre chunks.
 4. [ ] Verificar procedencia en nuestros resultados reales de presupuestos.
 
 En [prompt_builder.py](../src/generation/rag/prompt_builder.py):
 
-1. [ ] Definir explícitamente que cada tarea es una línea.
-2. [ ] Exigir `grounded=true`, referencias exactas y evidencia literal si hay soporte.
-3. [ ] Exigir `grounded=false`, `engineer_days=null` y fuentes vacías si no lo hay.
-4. [ ] Pedir que se explicite el alcance sin soporte en las asunciones.
-5. [ ] Mantener contexto global insuficiente y suma de tareas fundamentadas.
-6. [ ] Conservar el tratamiento de unidades del prompt de LIDR; no añadir una
+1. [x] Definir explícitamente que cada tarea es una línea.
+2. [x] Exigir `grounded=true`, referencias exactas y evidencia literal si hay soporte.
+3. [x] Exigir `grounded=false`, `engineer_days=null` y fuentes vacías si no lo hay.
+4. [x] Pedir que se explicite el alcance sin soporte en las asunciones.
+5. [x] Mantener contexto global insuficiente y suma de tareas fundamentadas.
+6. [x] Conservar el tratamiento de unidades del prompt de LIDR; no añadir una
    instrucción propia de conversión a días de 8 horas, conforme a la decisión 15.
-7. [ ] Conservar la descomposición actual; no optimizar el prompt para inflar RAGAS.
+7. [x] Conservar la descomposición actual; no optimizar el prompt para inflar RAGAS.
+   Evidencia de 1-7: `prompt_builder.build_system_prompt`.
 
 La propuesta de aclarar adicionalmente las unidades fue rechazada por el usuario
 para conservar el criterio de LIDR. El motivo y el riesgo están documentados en
@@ -669,28 +693,30 @@ para conservar el criterio de LIDR. El motivo y el riesgo están documentados en
 
 ### Paso 4. Implementar verificador, integración y observabilidad
 
-- [ ] **Paso 4 completado y comprobado.**
+- [x] **Paso 4 completado y comprobado.** Evidencia: pruebas de verificador,
+  reintento, coherencia, request ID, contexto truncado e idempotencia.
 
 En [validation.py](../src/generation/rag/validation.py):
 
-1. [ ] Implementar `verify_citations` como función pura.
-2. [ ] Recorrer módulos/tareas y clasificar cada línea.
-3. [ ] Agregar citas globales a la detección de IDs inventados.
-4. [ ] Ordenar y deduplicar IDs colgantes; no deduplicar los contadores de
+1. [x] Implementar `verify_citations` como función pura.
+2. [x] Recorrer módulos/tareas y clasificar cada línea.
+3. [x] Agregar citas globales a la detección de IDs inventados.
+4. [x] Ordenar y deduplicar IDs colgantes; no deduplicar los contadores de
    referencias si se sigue la semántica de LIDR.
-5. [ ] Resolver los consumidores de `validate_citations`: sustituirlos; mantener un
+5. [x] Resolver los consumidores de `validate_citations`: sustituirlos; mantener un
    adaptador solo si quedan usos reales que lo necesiten.
-6. [ ] Mantener `check_coherence`.
+   No se conserva adaptador: no quedan consumidores.
+6. [x] Mantener `check_coherence`.
 
 En [estimator.py](../src/generation/rag/estimator.py):
 
-1. [ ] Usar los IDs de `kept` y la política de la sección 5.
-2. [ ] Registrar informe inicial y resultado final si hubo regeneración, para que
+1. [x] Usar los IDs de `kept` y la política de la sección 5.
+2. [x] Registrar informe inicial y resultado final si hubo regeneración, para que
    el log no muestre solo una versión descartada.
-3. [ ] Mantener `request_id` de HTTP o generar uno en ejecución no HTTP.
-4. [ ] Conservar selección de modelo, reasoning, techo de tokens, hilo de trabajo,
+3. [x] Mantener `request_id` de HTTP o generar uno en ejecución no HTTP.
+4. [x] Conservar selección de modelo, reasoning, techo de tokens, hilo de trabajo,
    errores, soft-fail e idempotencia.
-5. [ ] No añadir el gate semántico de la sesión completa.
+5. [x] No añadir el gate semántico de la sesión completa.
 
 Compatibilidad de caché:
 
@@ -698,44 +724,52 @@ Compatibilidad de caché:
   Una entrada antigua con fuentes enteras ya no cumple el schema nuevo.
 - Su código actual trata errores de deserialización como miss y elimina solo
   la clave concreta. No purgar Redis para resolverlo.
-- [ ] Añadir una prueba de transición si el cambio afecta ese comportamiento.
-- [ ] No reinterpretar automáticamente una fuente antigua como nueva evidencia:
+- [x] Añadir una prueba de transición si el cambio afecta ese comportamiento.
+  Evidencia: `test_legacy_cached_sources_invalidate_only_that_key`, con fakeredis.
+- [x] No reinterpretar automáticamente una fuente antigua como nueva evidencia:
   no tenemos documento/evidencia en esos enteros.
 
 ### Paso 5. Adaptación mínima a Streamlit
 
-- [ ] **Paso 5 completado y comprobado.**
+- [x] **Paso 5 implementado y comprobado offline.** Evidencia:
+  `wizard_ui.render_grounded_estimate`, llamada separada en `streamlit_app.py`,
+  AppTest de fuentes/null/request ID/error HTTP y regresión del Wizard.
+  La comprobación de interfaz contra la API real queda en fase 2.
 
 Esta parte no es una traducción de cambios Rails: no los hubo. El usuario ya
 aprobó añadir el panel separado y mantener el Wizard actual. También decidió
 no añadir una presentación del informe detallado que LIDR no muestra.
-No implementar hasta aprobar el plan completo.
+El plan completo ya está aprobado.
 
-1. [ ] Conservar intacto el recorrido principal del RAG Wizard de sesión 10.
-2. [ ] Añadir dentro de la pestaña RAG un panel secundario claramente separado:
+1. [x] Conservar intacto el recorrido principal del RAG Wizard de sesión 10.
+2. [x] Añadir dentro de la pestaña RAG un panel secundario claramente separado:
    `Grounded RAG estimate`.
-3. [ ] El panel enviará una transcripción al endpoint ya existente
+3. [x] El panel enviará una transcripción al endpoint ya existente
    `POST /v1/estimate/from-transcript`, con `ESTIMATE_API_KEY`.
-4. [ ] Streamlit seguirá siendo cliente HTTP: no importar el generador, abrir BD,
+4. [x] Streamlit seguirá siendo cliente HTTP: no importar el generador, abrir BD,
    consultar Redis o llamar al LLM desde este panel.
-5. [ ] Mostrar por módulo/tarea:
-   - [ ] nombre y descripción;
-   - [ ] días estimados o `Insufficient source data`, sin convertir null en cero;
-   - [ ] indicador declarado `grounded`;
-   - [ ] chunk, documento y evidencia literal por fuente;
-   - [ ] confianza, asunciones y explicación global de contexto insuficiente.
-6. [ ] Conservar el JSON de respuesta y mostrar `X-Request-ID` para correlacionar
+5. [x] Mostrar por módulo/tarea:
+   - [x] nombre y descripción;
+   - [x] días estimados o `Insufficient source data`, sin convertir null en cero;
+   - [x] indicador declarado `grounded`;
+   - [x] chunk, documento y evidencia literal por fuente;
+   - [x] confianza, asunciones y explicación global de contexto insuficiente.
+6. [x] Conservar el JSON de respuesta y mostrar `X-Request-ID` para correlacionar
    con el informe real del backend.
-7. [ ] Mostrar errores HTTP/transporte explícitos; no tratar un fallo como una
+7. [x] Mostrar errores HTTP/transporte explícitos; no tratar un fallo como una
    estimación vacía válida.
-8. [ ] Advertir que una respuesta con confianza baja requiere revisión.
-9. [ ] No etiquetar una línea como `verified` solo porque el modelo devuelve
+8. [x] Advertir que una respuesta con confianza baja requiere revisión.
+9. [x] No etiquetar una línea como `verified` solo porque el modelo devuelve
    `grounded=true`: el endpoint actual devuelve `Estimate`, no el contexto ni
    `CitationReport`. La comprobación efectiva se observa en logs y muestras
    de evaluación.
-10. [ ] No inventar un informe local sin conocer `kept` ni añadir un panel de
+10. [x] No inventar un informe local sin conocer `kept` ni añadir un panel de
     `CitationReport`. Mantener el informe detallado en logs y evaluación,
     conforme a la decisión 14; conservar el contrato HTTP de este endpoint.
+
+Evidencia común de 1-10: `render_grounded_estimate`, llamada en el desplegable
+de `streamlit_app.py`, `test_grounded_panel_uses_http_and_displays_sources_and_missing_data`,
+`test_grounded_panel_http_error_is_not_an_empty_estimate` y pruebas previas del Wizard.
 
 Archivos previstos: [streamlit_app.py](../streamlit_app.py),
 [wizard_ui.py](../src/wizard_ui.py) y su test existente. Reutilizar patrones HTTP
@@ -743,22 +777,24 @@ locales; no crear un cliente genérico ni un nuevo framework de interfaz.
 
 ### Paso 6. Construir el golden de generación
 
-- [ ] **Paso 6 completado y comprobado.**
+- [x] **Paso 6 completado y comprobado.** Evidencia: `cmp` del golden del alumno
+  y del instructor sin diferencias; lectura de las cinco referencias y contraste
+  con componentes/horas del corpus mediante Python local. Q6-Q8 no se modifican.
 
-1. [ ] Copiar sin modificar su contenido
+1. [x] Copiar sin modificar su contenido
    `estimator/evals/golden_generation_s11.json` de la referencia correcta a
    `evals/golden_generation_s11.json` del alumno.
-2. [ ] Mantener IDs y `query` idénticos a Q1-Q5 del golden de recuperación.
-3. [ ] Mantener las transcripciones enriquecidas del instructor si se verifican
+2. [x] Mantener IDs y `query` idénticos a Q1-Q5 del golden de recuperación.
+3. [x] Mantener las transcripciones enriquecidas del instructor si se verifican
    contra sus consultas; no inventar requisitos nuevos.
-4. [ ] Revisar cada `ground_truth` contra los presupuestos reales para conocer
+4. [x] Revisar cada `ground_truth` contra los presupuestos reales para conocer
    sus diferencias, sin modificar la referencia:
 
-   - [ ] Q1: comprobar componentes, alcance, unidades y suma.
-   - [ ] Q2: comprobar componentes, alcance, unidades y suma.
-   - [ ] Q3: comprobar componentes, alcance, unidades y suma.
-   - [ ] Q4: comprobar componentes, alcance, unidades y suma.
-   - [ ] Q5: comprobar componentes, alcance, unidades y suma.
+   - [x] Q1: AUTH/PSD2/TXN/NOTIF; 120+160+140+60=480 h; redondeos suman 61 d.
+   - [x] Q2: CATALOG/CART/RECO/STORE; 150+140+110+60=460 h; referencia ~59 d.
+   - [x] Q3: FHIR/APPT/VIDEO/CONSENT; 190+150+160+60=560 h; redondeos suman 71 d.
+   - [x] Q4: TELE/PRED/SCADA; 170+200+130=500 h; referencia ~62 d.
+   - [x] Q5: GATE/FRAUD/RECON/DASH; 220+200+120+60=600 h; referencia ~76 d.
 
    | Query | Presupuesto principal | Total histórico | Equivalencia exacta |
    | --- | --- | ---: | ---: |
@@ -768,61 +804,73 @@ locales; no crear un cliente genérico ni un nuevo framework de interfaz.
    | Q4 IoT | BUD-2024-013 | 500 h | 62.5 días |
    | Q5 pagos | BUD-2024-003 | 600 h | 75 días |
 
-5. [ ] Conservar los totales aproximados de LIDR, incluidos 59 días para Q2 y
+5. [x] Conservar los totales aproximados de LIDR, incluidos 59 días para Q2 y
    76 para Q5, sin presentarlos como conversiones exactas de las horas.
-6. [ ] Comprobar que el golden copiado coincide con el de la referencia
+6. [x] Comprobar que el golden copiado coincide con el de la referencia
    `3292744` y que las diferencias conocidas siguen documentadas en
    [sesion11_porting_drift.md](sesion11_porting_drift.md).
-7. [ ] Identificar las respuestas como referencias heredadas de LIDR y revisadas
+7. [x] Identificar las respuestas como referencias heredadas de LIDR y revisadas
    contra datos; no afirmar que el usuario o un experto las ha validado si no
    ocurrió.
-8. [ ] No modificar el golden después de ver resultados para mejorar puntuaciones
+8. [x] No modificar el golden después de ver resultados para mejorar puntuaciones
    sin documentar una nueva versión de la baseline.
-9. [ ] No copiar los resultados RAGAS del instructor como si fueran nuestros.
+9. [x] No copiar los resultados RAGAS del instructor como si fueran nuestros.
+   Evidencia de 5-9: comparación literal, nota de drift e informe de preparación
+   sin tabla numérica propia.
 
 ### Paso 7. Implementar el harness de recolección
 
-- [ ] **Paso 7 completado y comprobado.**
+- [x] **Paso 7 implementado y comprobado offline.** Evidencia:
+  `scripts/eval_ragas_s11.py` y `tests/test_eval_ragas_s11.py`, incluyendo contexto
+  retenido, integridad de muestras y persistencia de resultados válidos.
+  No se ha ejecutado recolección real.
 
 Crear `scripts/eval_ragas_s11.py`, adaptando la referencia:
 
-1. [ ] Resolver imports de nuestro layout `src`; no usar `app.*`.
-2. [ ] Reutilizar dependencias y helpers existentes. El helper real es
+1. [x] Resolver imports de nuestro layout `src`; no usar `app.*`.
+2. [x] Reutilizar dependencias y helpers existentes. El helper real es
    [scripts/s08/s08_common.py](../scripts/s08/s08_common.py#L41), no
    `scripts/s08_common.py` ni `scripts/s08/common.py`.
-3. [ ] Separar recogida de muestras de scoring para repetir RAGAS sin volver a
+3. [x] Separar recogida de muestras de scoring para repetir RAGAS sin volver a
    pagar generación.
-4. [ ] Para Q1-Q5 ejecutar reformulación, embedding, búsqueda híbrida/reranking,
+4. [x] Implementar para Q1-Q5 reformulación, embedding, búsqueda híbrida/reranking,
    truncado, ensamblado y generación con nuestras funciones compartidas.
-5. [ ] Registrar la configuración real usada; la referencia usa umbral permisivo
+   Evidencia: prueba aislada de `collect_sample`; no implica ejecución online.
+5. [x] Registrar la configuración real usada; la referencia usa umbral permisivo
    `1.2` para evaluar generación, no el soft-fail del endpoint.
-6. [ ] No afirmar que esta configuración equivale a todos los defaults HTTP.
-7. [ ] Verificar las citas sobre los chunks enviados al LLM.
-8. [ ] Guardar pregunta, respuesta textual, contextos exactos y ground truth,
+6. [x] No afirmar que esta configuración equivale a todos los defaults HTTP.
+7. [x] Verificar las citas sobre los chunks enviados al LLM.
+8. [x] Guardar pregunta, respuesta textual, contextos exactos y ground truth,
    además del informe de citación e identificadores de consulta.
-9. [ ] Guardar procedencia de chunks y parámetros suficientes para explicar la
+9. [x] Guardar procedencia de chunks y parámetros suficientes para explicar la
    ejecución; no inventar métricas o metadatos de coste no medidos.
-10. [ ] El texto de respuesta debe incluir alcance, cifras/unidades, falta de datos,
+10. [x] El texto de respuesta debe incluir alcance, cifras/unidades, falta de datos,
     asunciones y razonamiento relevantes, sin omitir afirmaciones problemáticas
     para favorecer la puntuación.
-11. [ ] Si una consulta no tiene contexto o falla, mostrarlo como fallo real.
+11. [x] Si una consulta no tiene contexto o falla, mostrarlo como fallo real.
     No sustituirla por ejemplos estáticos, eliminarla del promedio ni generar
     una tabla aparentemente completa.
-12. [ ] Añadir `--collect-only PATH`, scoring de muestras guardadas y salida de
-    informe. `--limit` puede servir para diagnóstico, pero no cumple la entrega.
+12. [x] Añadir `--collect-only PATH`, scoring de muestras guardadas y salida de
+    informe. Se omite `--limit`: la entrega exige las cinco consultas.
+    Evidencia de 1-12: `collect_samples`, `EvaluationSample._traceability`,
+    `load_samples`, `render_estimate_text`, modos CLI comprobados con `--help`
+    y pruebas de `test_eval_ragas_s11.py`.
 
 ### Paso 8. Configurar RAGAS sin copiar hacks por defecto
 
 - [ ] **Paso 8 completado y comprobado.**
 
-En [pyproject.toml](../pyproject.toml) y [uv.lock](../uv.lock):
+En [score_ragas_s11.py](../scripts/score_ragas_s11.py), manifiesto PEP 723:
 
-1. [ ] Añadir a dependencias de desarrollo las dependencias de evaluación realmente
-   necesarias. LIDR añadió `ragas` y `datasets`; ya tenemos `langchain-openai`.
+1. [x] Declarar RAGAS 0.4.3, datasets y un conjunto de LangChain anterior a 0.4
+   en el scorer aislado. No añadir estas dependencias al entorno de la API.
 2. [ ] Resolver con `uv`, no editar el lock a mano.
+   Bloqueado: `uv lock --offline --script scripts/score_ragas_s11.py` falla
+   porque `ragas` no está en la caché. No hay lock del scorer todavía.
 3. [ ] Verificar importaciones y compatibilidad real de versiones instaladas.
-4. [ ] Instalar/restaurar solo después de cambiar el manifiesto o de un fallo real
-   por dependencia ausente.
+   Bloqueado: `--check-deps` confirma que falta `datasets` en el entorno actual;
+   tampoco está instalado `ragas`. Resolver y comprobar en el paso manual 10.1.B.
+4. [x] No instalar ni descargar automáticamente. Se ha respetado la fase offline.
 
 Advertencia de la referencia:
 
@@ -830,36 +878,49 @@ Advertencia de la referencia:
   importación Vertex de `langchain-community`.
 - `score_ragas_s11.py` introduce módulos ficticios en `sys.modules` para
   esquivarla y se ejecuta en un entorno separado.
-- **No se ha reproducido ese fallo en el alumno.** No presentarlo como hecho
-  local ni copiar los shims preventivamente.
+- Comprobación local: `langchain-community` instalado es 0.4.2 y
+  `find_spec("langchain_community.chat_models.vertexai")` devuelve `None`.
+  Coincide con la ruta ausente que describe LIDR. No se ha importado RAGAS local,
+  porque no está instalado: no afirmar que se ha reproducido su traceback.
 - Preferir un conjunto de versiones compatible y verificable. Si hay conflicto
   demostrado, aislar solo el scorer con dependencias declaradas/reproducibles
   y explicar la causa; no degradar el entorno principal ni añadir mocks de
   proveedores para hacer pasar imports.
 
-El scorer puede ser una parte del script o un archivo
-`scripts/score_ragas_s11.py` si el aislamiento lo requiere. Mantener una única
-implementación de cálculo/formato, no duplicar el código de tablas de LIDR.
+Se usa `scripts/score_ragas_s11.py` como entrada aislada con dependencias
+declaradas; cálculo, validación y tabla viven únicamente en
+`scripts/eval_ragas_s11.py`. No hay shims ni proveedores ficticios. El
+`pyproject.toml` y `uv.lock` de la aplicación quedan intactos: no se degrada
+LangChain en la API ni queda un manifiesto principal desincronizado.
+El rango aislado aún debe resolverse y probarse; no se presenta como validado.
 
 Cálculo:
 
-1. [ ] Juez OpenAI `gpt-4o-mini`, temperatura 0 donde la API lo permita.
-2. [ ] Embeddings `text-embedding-3-small`.
+1. [x] Configurar juez OpenAI `gpt-4o-mini`, temperatura 0.
+   Evidencia: golden y construcción de `ChatOpenAI` en `score_samples`.
+2. [x] Configurar embeddings `text-embedding-3-small`.
+   Evidencia: golden y construcción de `OpenAIEmbeddings`.
 3. [ ] Adaptar los cuatro nombres de entrada a la API de la versión elegida.
 4. [ ] Calcular las cuatro métricas requeridas por consulta.
-5. [ ] Validar que hay exactamente Q1-Q5, sin duplicados, con métricas finitas.
-6. [ ] Una métrica ausente/NaN no es un cero: error explícito y baseline incompleta.
-7. [ ] Promedio aritmético por columna sobre cinco consultas válidas.
-8. [ ] Persistir JSON válido y tabla Markdown. No serializar `NaN` como si fuera
+5. [x] Validar que hay exactamente Q1-Q5, sin duplicados, con métricas finitas.
+6. [x] Una métrica ausente/NaN no es un cero: error explícito y baseline incompleta.
+7. [x] Promedio aritmético por columna sobre cinco consultas válidas.
+8. [x] Persistir JSON válido y tabla Markdown. No serializar `NaN` como si fuera
    JSON estándar ni promediar silenciosamente solo las filas válidas.
-9. [ ] Registrar versión/modelos y conservar muestras para trazabilidad.
-10. [ ] El scorer aislado debe recibir la clave por entorno o cargar la configuración
+9. [x] Implementar registro de versión/modelos y conservar muestras para trazabilidad.
+10. [x] El scorer aislado debe recibir la clave por entorno o cargar la configuración
     de forma segura: no asumir que LangChain lee nuestro `.env` automáticamente.
     Nunca pedir al usuario que pegue la clave en el chat.
+    Evidencia offline de 5-10: `validate_scores`, `markdown_table`, `score_samples`,
+    pruebas con salida numérica y NaN. Los puntos 3-4 y los resultados reales
+    permanecen pendientes del entorno RAGAS y de fase 2.
 
 ### Paso 9. Pruebas y demo offline
 
-- [ ] **Paso 9 completado y comprobado.**
+- [x] **Paso 9 completado y comprobado con el entorno disponible.**
+  Evidencia: pruebas dirigidas y demo sin conexiones; comandos/resultados en
+  el cierre offline de este documento. El import real de RAGAS pertenece al
+  bloqueo explícito del paso 8, no se ha sustituido por un mock de importación.
 
 Este paso pertenece a la fase 1. Ejecutar aquí todas las comprobaciones posibles
 sin infraestructura, incluida la demo. Antes de usar los comandos orientativos,
@@ -870,41 +931,49 @@ Preferir ampliar archivos existentes. Casos mínimos:
 
 **Schema y verificador**
 
-- [ ] Fuente válida y línea fundamentada.
-- [ ] `grounded=True` sin fuentes: error Pydantic.
-- [ ] `grounded=False` con fuentes: error.
-- [ ] `grounded=False` con cifra, incluido cero: error.
-- [ ] Línea sin datos con esfuerzo nulo: válida y clasificada `insufficient`.
-- [ ] ID inventado en una línea: `dangling`.
-- [ ] ID inventado solo en la cita global: también se detecta.
-- [ ] Mezcla de líneas correctas, colgantes y sin datos; contadores y detalles.
-- [ ] Chunk recuperado pero descartado por presupuesto: citarlo se detecta como
+- [x] Fuente válida y línea fundamentada.
+- [x] `grounded=True` sin fuentes: error Pydantic.
+- [x] `grounded=False` con fuentes: error.
+- [x] `grounded=False` con cifra, incluido cero: error.
+- [x] Línea sin datos con esfuerzo nulo: válida y clasificada `insufficient`.
+- [x] ID inventado en una línea: `dangling`.
+- [x] ID inventado solo en la cita global: también se detecta.
+- [x] Mezcla de líneas correctas, colgantes y sin datos; contadores y detalles.
+- [x] Chunk recuperado pero descartado por presupuesto: citarlo se detecta como
   colgante respecto al contexto realmente usado.
+  Evidencia del bloque: `test_validation.py`, `test_dropped_chunk_is_not_a_valid_citation`.
 
 **Integración**
 
-- [ ] Camino correcto, soft-fail sin generación e idempotencia conservados.
-- [ ] Corrección de cita una vez.
-- [ ] Persistencia del error: warning y confianza baja, como LIDR.
-- [ ] Informe correlacionado por `request_id`.
-- [ ] Respuesta final regenerada por coherencia no sale sin verificación.
-- [ ] XML con documento y con distancia ausente; presupuesto sigue respetándose.
-- [ ] Actualizar fixtures que antes usaban `sources=[1]`; ahora deben describir una
+- [x] Camino correcto, soft-fail sin generación e idempotencia conservados.
+- [x] Corrección de cita una vez.
+- [x] Persistencia del error: warning y confianza baja, como LIDR.
+- [x] Informe correlacionado por `request_id`.
+- [x] Respuesta final regenerada por coherencia no sale sin verificación.
+- [x] XML con documento y con distancia ausente; presupuesto sigue respetándose.
+- [x] Actualizar fixtures que antes usaban `sources=[1]`; ahora deben describir una
   fuente completa y `grounded=True`.
+  Evidencia del bloque: `test_estimator.py`, `test_idempotency.py`,
+  `test_context_assembler.py`. Se aisló la configuración de Redis de los tests
+  HTTP de idempotencia para evitar consultar un servicio real.
 
 **Evaluación y Streamlit**
 
-- [ ] Prueba offline de adaptación de muestra: los contextos corresponden a `kept`.
-- [ ] Prueba de rechazo de métricas ausentes/no finitas y de tabla con promedio.
-- [ ] Prueba de visualización de línea sin soporte y fuentes por línea.
-- [ ] Regresión: el Wizard mantiene la edición humana y no permite confirmar horas
+- [x] Prueba offline de adaptación de muestra: los contextos corresponden a `kept`.
+- [x] Prueba de rechazo de métricas ausentes/no finitas y de tabla con promedio.
+- [x] Prueba de visualización de línea sin soporte y fuentes por línea.
+- [x] Regresión: el Wizard mantiene la edición humana y no permite confirmar horas
   ausentes; ya hay pruebas en
   [test_wizard_ui.py](../tests/test_wizard_ui.py).
+  Evidencia del bloque: `test_eval_ragas_s11.py`, AppTest en `test_wizard_ui.py`,
+  `test_rag_runs.py` y pruebas de horas.
 
-- [ ] Añadir una demo offline equivalente a
+- [x] Añadir una demo offline equivalente a
   `scripts/demo_verify_citations_s11.py`: ejemplo determinista con fuente real,
   cita inventada y línea sin datos. Debe poder ejecutarse sin clave ni BD y
   terminar con un fallo visible si no detecta el caso inventado.
+  Evidencia: ejecución local terminó con
+  `PASS: grounded=1, dangling=1, insufficient=1; invented citation detected.`
 
 Archivos de tests existentes inspeccionados:
 
@@ -919,29 +988,24 @@ tests/test_task_hours_vector_validity.py
 tests/test_wizard_ui.py
 ```
 
-Comandos orientativos, desde el proyecto, ajustando la lista a archivos creados:
+Los comandos exactos utilizados y sus resultados están en el cierre offline,
+al final de este documento; no hay marcadores de archivos que completar.
 
-```bash
-rtk proxy uv run --locked pytest \
-  tests/test_validation.py tests/test_estimator.py \
-  tests/test_context_assembler.py tests/test_idempotency.py \
-  tests/test_rag_runs.py tests/test_task_hours.py \
-  tests/test_task_hours_vector_validity.py tests/test_wizard_ui.py
-
-rtk proxy uv run --locked ruff check <changed-python-files>
-```
-
-- [ ] Ejecutar las pruebas dirigidas, incluyendo los tests del harness si se
-  crea un archivo nuevo, y registrar comando, resultado y evidencia.
-- [ ] Ejecutar lint sobre los archivos Python cambiados y registrar el resultado.
-  No ejecutar comandos con el marcador `<changed-python-files>` literalmente.
+- [x] Ejecutar las pruebas dirigidas, incluyendo los tests del harness.
+  Evidencia: suite detallada en el cierre offline.
+- [x] Ejecutar lint dirigido sobre todos los archivos Python cambiados.
+  Evidencia: Ruff `--select E4,E7,E9,F`, resultado `All checks passed!`.
 - [ ] Usar las herramientas de tipos existentes si las hay; no añadir un framework
   de type checking solo por este ejercicio. Ampliar a suite completa únicamente
   si las pruebas dirigidas o los cambios compartidos lo justifican.
+  No aplica: no se encontró configuración de mypy/pyright en el proyecto.
+  No se ha instalado un checker ni se afirma haber superado uno.
 
 ### Paso 10. Preparar la guía autónoma y ejecutar manualmente la fase 2
 
-- [ ] Guía autónoma completa, revisada offline y entregada en la fase 1.
+- [x] Guía autónoma entregada y revisada contra argumentos, rutas y configuración.
+  Evidencia: guía 10.1, `--help` de ambos scripts, Compose y README.
+  Esto no verifica sus comandos online ni resuelve el bloqueo de dependencias.
 - [ ] **Paso 10 completado: fase 2 ejecutada y comprobada por el usuario.**
 
 **El asistente prepara; el usuario ejecuta.** No gastar llamadas de generación
@@ -950,10 +1014,10 @@ La preparación de esta guía pertenece a la fase 1; las casillas de ejecución
 siguientes quedan pendientes hasta que el usuario las complete manualmente.
 La guía final debe quedar en este documento, con enlaces relativos a los
 apartados necesarios del README, y cumplir el formato de la sección 0.2.
-La lista y los comandos previstos siguientes son el alcance que debe
-concretarse tras implementar, no una guía manual ya terminada.
+La lista siguiente sirve para registrar la ejecución. Las instrucciones que
+debes seguir están desarrolladas en la guía 10.1.
 
-Secuencia manual que debe concretar la guía:
+Lista de ejecución manual, todavía pendiente:
 
 1. [ ] Explicar qué se va a probar y qué llamadas/coste implica.
 2. [ ] Usar el montaje aprobado en la decisión 16: Compose para API, PostgreSQL
@@ -998,42 +1062,420 @@ Secuencia manual que debe concretar la guía:
 Comandos previstos después de implementar y verificar el harness:
 
 ```bash
-# Desde /home/basf/wsTakeoff/ai-engineering/estimador-cag
+# Desde /home/basf/wsTakeoff/ai-engineering/estimador-cag, tras el paso 10.1.B
 rtk proxy uv run --locked python scripts/eval_ragas_s11.py \
   --collect-only evals/ragas_samples_s11.json
 
-rtk proxy uv run --locked python scripts/eval_ragas_s11.py \
+rtk proxy uv run --locked --script scripts/score_ragas_s11.py \
   --score-file evals/ragas_samples_s11.json \
   --out evals/ragas_baseline_s11.json
 ```
 
-Si el scorer finalmente requiere aislamiento, sustituir el último comando por
-el ejecutable/entorno documentado y probado. No presentar esa ruta como decidida
-antes de resolver dependencias.
+El segundo comando usa el entorno aislado declarado por el script. Requiere
+crear primero su lock y comprobar imports siguiendo la guía siguiente.
 
 El primer uso del reranker puede descargar su modelo y consumir tiempo/memoria.
 No confundir esa descarga o su calentamiento con un bloqueo de RAGAS.
 
+### 10.1 Guía manual: empezar aquí
+
+Esta parte se ejecuta **por ti, sin IA**, cuando quieras hacer la fase 2. No es
+un informe de cosas ya hechas. Los comandos que arrancan servicios, consultan
+la base o llaman a modelos **no se han ejecutado durante la fase 1**.
+
+Lee primero cada paso completo. Si un comando falla, no pases al siguiente.
+No necesitas entender Python para seguir la secuencia, pero sí comprobar que
+ves el resultado esperado. No cambies versiones, puertos o claves por tanteo.
+
+#### A. Preparar las terminales y comprobar dónde estás
+
+Necesitas tres terminales del mismo equipo:
+
+- **Terminal A:** preparación, comprobaciones y evaluación.
+- **Terminal B:** Streamlit; se quedará ocupada mientras la pantalla esté abierta.
+- **Terminal C:** guardar y consultar logs del backend.
+
+En cada terminal entra en el proyecto:
+
+```bash
+cd /home/basf/wsTakeoff/ai-engineering/estimador-cag
+rtk git branch --show-current
+```
+
+Debes ver `session-11/pre-work`. Si ves otra rama, **para**: no hagas checkout
+con cambios pendientes. Antes de seguir, asegúrate también de que este montaje
+local es tuyo. Los puertos 8000, 5432, 6379 y 8501 deben corresponder a tu
+proyecto, no a otra persona. Los comandos siguientes pueden arrancar la API y
+aplicar migraciones pendientes en la base `estimator`; no son una consulta
+inocua. Si no reconoces esa base como la tuya, no continúes.
+
+Las evidencias se guardarán en `evals/`. No publiques archivos de logs o muestras
+sin revisarlos: contienen transcripciones y texto recuperado, aunque los scripts
+no guardan las claves.
+
+#### B. Resolver el único bloqueo de preparación: dependencias del scorer
+
+Este paso requiere Internet, pero **todavía no llama a modelos ni consume
+saldo de OpenAI**. Se dejó para ti porque durante la fase 1 no se permitían
+descargas. No repitas los tests de citación: ya pasaron offline.
+
+En la terminal A:
+
+```bash
+rtk proxy uv sync --locked
+rtk proxy uv lock --script scripts/score_ragas_s11.py
+rtk proxy uv run --locked --script scripts/score_ragas_s11.py --check-deps
+```
+
+El primer comando prepara el entorno normal sin cambiar su lock. El segundo
+crea `scripts/score_ragas_s11.py.lock` para el entorno pequeño de evaluación.
+El tercero descarga lo que falte en ese entorno, importa RAGAS de verdad y
+construye las cuatro métricas, sin enviar preguntas al juez.
+
+**Éxito:** termina sin traceback y muestra:
+
+```text
+PASS: real RAGAS imports and four metrics are available; no model calls made.
+```
+
+Guarda esa línea, la fecha y las versiones en este documento, junto al paso 8.
+Conserva también el lock recién generado. No marques el paso 8 antes de ver
+el `PASS`.
+
+Si aparece `No solution found`, un error de certificados, descarga o un
+`ModuleNotFoundError`, **detente aquí antes de gastar llamadas**. Un fallo de
+red permite repetir estos mismos comandos cuando vuelva la conexión; no
+borres la caché ni cambies el entorno principal. Si el error es de dependencias
+incompatibles o del módulo `vertexai`, la preparación sigue bloqueada: guarda
+la salida exacta en una nota local y no intentes resolverlo instalando paquetes
+al azar, bajando LangChain de la API o copiando los shims de LIDR. No hace falta
+arrancar servicios para diagnosticar ese bloqueo. Este caso requiere corregir
+y volver a validar el conjunto declarado antes de continuar; no hay una
+compatibilidad comprobada que podamos prometer de antemano.
+
+#### C. Revisar configuración sin mostrar secretos
+
+Abre el `.env` existente con el editor. **No lo sustituyas por `.env.example`**.
+Comprueba visualmente que tienes `OPENAI_API_KEY` y `ESTIMATE_API_KEY`.
+No copies sus valores a este documento, al historial de comandos ni al chat.
+Necesitas permiso y saldo para el generador configurado, el reformulador,
+`gpt-4o-mini` y `text-embedding-3-small`.
+
+En la terminal A comprueba únicamente si están presentes:
+
+```bash
+rtk proxy env PYTHONPATH=src uv run --locked python -c "from config import get_settings; s=get_settings(); print('OPENAI_API_KEY configured:', bool(s.OPENAI_API_KEY)); print('ESTIMATE_API_KEY configured:', bool(s.ESTIMATE_API_KEY)); print('Generator:', s.GENERATION_MODEL); print('Reformulator:', s.REFORMULATION_MODEL)"
+```
+
+**Éxito:** las dos primeras líneas dicen `True`. Los nombres de los modelos
+no son secretos; anótalos. Un `True` no demuestra que la clave sea válida:
+solo evita empezar sin ella.
+
+Para las llamadas desde el host usaremos explícitamente la conexión local
+aprobada: PostgreSQL en `127.0.0.1:5432`, base `estimator`, usuario y contraseña
+de desarrollo `postgres`. Estos valores salen de Compose; no son credenciales
+de producción. No cambies el `.env` para sustituir nombres internos del
+contenedor: el comando de recolección lleva su conexión local propia.
+
+#### D. Arrancar el montaje habitual y comprobar salud
+
+En la terminal A, sigue el arranque del [README](../README.md#docker):
+
+```bash
+rtk proxy docker compose up --build -d
+rtk proxy docker compose ps
+rtk proxy curl --fail-with-body --silent --show-error http://localhost:8000/health
+```
+
+La construcción puede tardar y descargar paquetes. El arranque de la API
+ejecuta `alembic upgrade head`: aplica las migraciones pendientes; no ejecutes
+otra migración en paralelo. Se usan los volúmenes existentes, sin borrarlos.
+
+**Éxito:** Compose muestra los servicios `estimator`, `postgres` y `redis`
+levantados; cuando terminen sus comprobaciones, deben estar sanos. `/health`
+devuelve HTTP 200 con `"status":"healthy"` y `"llm_configured":true`.
+Ese estado todavía no demuestra que el corpus exista.
+
+Si la API está arrancando, espera unos 30 segundos y repite **solo** `ps` y
+`curl`. Si sigue fallando, consulta:
+
+```bash
+rtk proxy docker compose logs --tail 100 estimator
+rtk proxy docker compose logs --tail 50 postgres redis
+```
+
+- `docker: 'compose' is not a docker command`: falta el plugin de Compose en
+  tu terminal. No cambies esta receta a otra herramienta ni sigas con un
+  arranque parcial. Habilita Docker Compose siguiendo la instalación de tu
+  equipo y vuelve a comprobar `docker compose version`.
+- `port is already allocated`: puede ser otro proceso o usuario. **No lo
+  mates ni cambies puertos por tu cuenta.** Detente y aclara quién usa el puerto.
+- Un error de Alembic o PostgreSQL exige parar la secuencia y guardar el error.
+  No uses `down -v`, no borres tablas ni reinicies la base como arreglo genérico.
+- Si salud dice `llm_configured:false`, revisa la configuración del paso C;
+  no gastes peticiones de generación intentando que se arregle.
+
+Guarda la fecha y el resultado de salud, sin secretos, como evidencia del
+arranque. No ejecutes `docker compose config`: puede imprimir el entorno.
+
+#### E. Comprobar el corpus que hay de verdad en PostgreSQL
+
+En la terminal A, las siguientes consultas son de **solo lectura**:
+
+```bash
+rtk proxy docker compose exec -T postgres psql -U postgres -d estimator -v ON_ERROR_STOP=1 -c "SELECT metadata->>'budget_id' AS budget_id, COUNT(*) AS chunks, COUNT(embedding) AS vectors, COUNT(DISTINCT document_id) AS documents FROM chunks WHERE chunk_type = 'budget_component' GROUP BY metadata->>'budget_id' ORDER BY budget_id;"
+
+rtk proxy docker compose exec -T postgres psql -U postgres -d estimator -v ON_ERROR_STOP=1 -c "SELECT source_path, COUNT(*) AS copies FROM documents WHERE document_type = 'historical_budget' GROUP BY source_path HAVING COUNT(*) > 1;"
+```
+
+La muestra de este proyecto contiene **17 presupuestos**. Para una baseline
+comparable necesitas el corpus completo, con IDs `BUD-2024-001` a
+`BUD-2024-017`, no solo las tareas sintéticas del Wizard. En cada fila el número
+de vectores debe coincidir con el de chunks, el ID no debe estar vacío y debe
+haber un único documento para ese presupuesto. La segunda consulta debe
+devolver cero filas. Si hay otro corpus mezclado **con tipo `budget_component`**,
+no lo borres; detén la evaluación hasta aclarar qué estás midiendo. Las tareas
+del Wizard y las otras colecciones pueden coexistir: el harness las excluye.
+
+Si faltan presupuestos y has confirmado que es tu instancia local, ejecuta:
+
+```bash
+rtk proxy env ESTIMATOR_BASE_URL=http://localhost:8000 uv run --locked python scripts/query_examples.py
+```
+
+**Aviso antes de ejecutarlo:** inserta los presupuestos que faltan y paga
+embeddings. Además hace cinco búsquedas de prueba, también con embeddings.
+Los documentos ya existentes devuelven 409 y se omiten; no se borran datos.
+
+**Éxito:** aparece `Corpus: 17 budgets` y cada documento está ingerido u
+omitido por existir. Repite después las dos consultas de solo lectura y
+comprueba los 17 IDs, vectores y ausencia de duplicados.
+
+Si la ingesta devuelve 401/403/429 del proveedor, revisa permisos/saldo/límite;
+no la repitas en bucle. Si devuelve 409 pero los metadatos o vectores están
+mal, repetir no los reparará: detente, conserva los datos y registra el caso.
+No cargues el corpus sintético de tareas para tapar este problema.
+
+#### F. Probar la pantalla y seguir su request ID
+
+En la terminal C, antes de enviar la petición:
+
+```bash
+rtk proxy docker compose logs --follow --tail 0 estimator > evals/s11_backend.log 2>&1
+```
+
+Déjala abierta. Está capturando logs, no levantando otro backend. El comando
+sobrescribe ese archivo: si ya contiene evidencia que quieras guardar,
+renómbralo antes con el editor.
+
+En la terminal B:
+
+```bash
+rtk proxy uv run --locked streamlit run streamlit_app.py
+```
+
+Abre `http://localhost:8501`. Entra en **RAG Wizard**, baja hasta el desplegable
+**Grounded RAG estimate** y ábrelo. No pulses los botones del Wizard principal
+para esta prueba: son otro recorrido.
+
+Abre `evals/golden_generation_s11.json` con el editor. Copia únicamente el
+contenido de `transcript` de Q1, sin el nombre del campo ni las comillas del
+JSON, y pégalo en **Transcript for grounded estimation**.
+Pulsa **Generate grounded estimate** una sola vez. **Esta acción paga llamadas
+de reformulación, embedding y generación; puede tardar varios minutos.**
+
+**Éxito de la prueba de pantalla:**
+
+1. Ves `Request ID`, confianza y razonamiento.
+2. Cada tarea muestra días, o `Insufficient source data` sin convertirlo en cero.
+3. Las tareas declaradas fundamentadas muestran chunk, documento y evidencia.
+4. Una confianza `low` muestra un aviso de revisión. No significa por sí sola
+   que haya citas inventadas: hay que mirar el informe.
+5. El JSON completo está en **Response JSON**. `Declared grounded` es una
+   declaración del modelo, no una etiqueta de verificación.
+
+Apunta el request ID. Detén **solo la captura de logs de la terminal C** con
+Ctrl+C; no detengas los servicios. Abre `evals/s11_backend.log` y busca ese ID.
+Para esa petición debes encontrar `citation_report` con `phase=initial` y
+`phase=final`. Mira `dangling_citations` del informe final: debe estar vacío
+para dar por buena su integridad referencial. Si no lo está, el warning
+`citations_unrepaired` y la confianza baja dejan visible el fallo: **la
+petición ha terminado, pero la calidad de sus citas no ha pasado**.
+No pulses de nuevo para esconder ese resultado.
+
+Ante errores:
+
+- **401 de nuestra API:** `ESTIMATE_API_KEY` falta o no coincide entre host y
+  contenedor. No pegues la clave en curl. Revisa ambos entornos; si acabas de
+  modificar `.env`, el proceso que ya estaba en marcha puede conservar el
+  valor antiguo. Solo si confirmas que es tu API local, vuelve a ejecutar el
+  arranque del paso D para aplicar la configuración y reinicia únicamente tu
+  Streamlit con Ctrl+C y el comando anterior.
+- **422:** la transcripción debe tener entre 100 y 50.000 caracteres.
+- **429 de nuestra API:** espera un minuto; el endpoint admite 10 peticiones/min.
+- **502:** busca `estimate_failed` y el mismo request ID en los logs. Un error
+  del proveedor se resuelve revisando permisos/saldo/modelo, no reingiriendo datos.
+- **Timeout de la pantalla:** la API podría seguir trabajando y consumiendo.
+  Mira primero los logs; no reenvíes a ciegas la petición.
+- **`no document provenance`:** hay un chunk sin presupuesto/documento trazable.
+  Detén la evaluación y conserva el ID. No lo sustituyas por `"unknown"`.
+
+#### G. Recoger las cinco muestras una sola vez
+
+Este es el paso de mayor coste variable: cinco reformulaciones, cinco embeddings
+de consulta y cinco generaciones, más los reintentos internos de Instructor si
+el modelo devuelve un schema inválido. El generador puede usar hasta su techo
+configurado de tokens; no hay un coste fijo prometido. Revisa antes el saldo y
+los límites del proyecto OpenAI. La descarga inicial del reranker usa Internet,
+tiempo y memoria local, no es una llamada al juez de RAGAS.
+
+En la terminal A:
+
+```bash
+rtk proxy env DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/estimator REDIS_URL=redis://127.0.0.1:6379 uv run --locked python scripts/eval_ragas_s11.py --collect-only evals/ragas_samples_s11.json
+```
+
+El evaluador reutiliza funciones de la aplicación, pero **no llama al endpoint
+HTTP**. Fuerza híbrida, reranking, umbral 1.2 y `budget_component`, sin filtro
+sectorial; no usa routing, expansión ni filtrado temporal avanzado. Genera
+una vez por consulta y audita, sin el bucle HTTP de reparación. Esas diferencias
+quedan registradas en `configuration`; no compares resultados como si fueran
+los mismos parámetros del botón.
+
+**Éxito:** aparecen Q1, Q2, Q3, Q4 y Q5 y el mensaje
+`Saved all five samples ... No RAGAS scoring has run.`. Después ejecuta:
+
+```bash
+rtk proxy uv run --locked python scripts/eval_ragas_s11.py --inspect-samples evals/ragas_samples_s11.json
+```
+
+Debes ver cinco resúmenes y `PASS: five complete, traceable samples`.
+El comando comprueba también que contextos, respuesta e informe corresponden
+a los chunks guardados, y que pregunta y referencia siguen siendo las del golden.
+
+Abre el JSON con el editor y revisa Q1 completa:
+
+- `question`, `answer`, `contexts` y `ground_truth` tienen contenido.
+- `answer` conserva la estimación entera, también asunciones y alcance sin datos.
+- Cada `chunk_id` citado por una línea fundamentada figura en `kept_chunks`.
+- `document_id` y `evidence` se pueden contrastar con el chunk correspondiente.
+  Esa lectura humana es necesaria: el verificador no prueba esos dos campos.
+- Las cifras están en días, no horas copiadas como días. Si detectas confusión
+  de unidades, **consérvala como hallazgo**, no cambies el golden ni la muestra.
+
+Revisa los cinco `citation_report`. Si hay IDs colgantes, registra el fallo;
+no los borres ni repitas generaciones hasta conseguir cero. Puedes puntuar
+esas muestras para medir su calidad, pero no dar por superada la integridad.
+Si falta contexto, el script falla en vez de fabricar una muestra.
+
+Si hay un fallo a mitad de recolección, el JSON guarda las consultas terminadas
+con `complete:false`; no lo puntúes como baseline. Los scripts no sobrescriben
+una colección existente. Para hacer un nuevo intento tras resolver la causa,
+renombra el archivo anterior con el editor, por ejemplo a
+`ragas_samples_s11_failed_01.json`, y repite el comando original. **Se volverán
+a pagar también las consultas anteriores**; no hay reanudación parcial.
+No repitas la ingesta para arreglar un fallo del juez o del generador.
+
+#### H. Puntuar las muestras guardadas, sin regenerarlas
+
+En la terminal A, tras superar B y G:
+
+```bash
+rtk proxy uv run --locked --script scripts/score_ragas_s11.py --score-file evals/ragas_samples_s11.json --out evals/ragas_baseline_s11.json
+```
+
+Este comando sí paga llamadas al juez `gpt-4o-mini` y embeddings de evaluación
+`text-embedding-3-small`. Una consulta puede requerir varias llamadas por
+métrica; no son solo cinco peticiones. No recupera chunks ni genera otra
+estimación. La clave se carga de forma segura desde el entorno o el `.env`
+normal del proyecto, sin copiarla a la línea de comandos.
+
+**Éxito:** la terminal imprime una tabla con las filas Q1-Q5 y `average`.
+Se guardan dos archivos:
+
+- `evals/ragas_baseline_s11.json`: valores completos, medias, versiones,
+  configuración y hash del archivo de muestras.
+- `evals/ragas_baseline_s11.md`: la tabla que debes traer al directo.
+
+El script rechaza métricas ausentes, NaN, infinitas o fuera de 0-1; no las
+convierte en cero y no promedia cuatro consultas como si fueran cinco.
+Un **0.000 numérico sí es un resultado válido**, aunque sea malo.
+
+Ante un error de proveedor, revisa el saldo/permisos/límite y espera si es una
+limitación temporal. Una vez resuelta la causa puedes repetir **solo H** usando
+el mismo archivo de muestras. Eso repite coste del juez, pero no de generación.
+Si ya hay informes, renómbralos con el editor antes: el scorer no los pisa.
+Si hay NaN u otro resultado inválido, conserva el error; no escribas una tabla
+manualmente ni sustituyas ese valor por cero.
+
+#### I. Cerrar la baseline y escribir tus 2-3 frases
+
+Abre la tabla Markdown y el JSON de resultados con el editor. Comprueba:
+
+1. Hay exactamente cinco filas de consultas y una de media.
+2. Hay cuatro métricas numéricas en cada fila, entre 0 y 1.
+3. El JSON contiene `average`, con medias calculadas sobre las cinco consultas.
+4. Conservas el archivo de muestras que corresponde a su `samples_sha256`.
+
+Después abre `evals/RAGAS_BASELINE_S11.md`, que ahora solo describe preparación,
+y añade un enlace a `ragas_baseline_s11.md`, la fecha, los comandos que realmente
+ejecutaste y la nota de hallazgos. No sustituyas cifras por las del instructor.
+Para interpretar sin IA:
+
+- **faithfulness baja:** el juez no encuentra soporte para afirmaciones de la
+  respuesta en los contextos. Busca una cifra o afirmación concreta.
+- **answer_relevancy baja:** el juez ve poca correspondencia entre pregunta y
+  respuesta; inspecciona el alcance, sin asumir automáticamente que es un bug.
+- **context_precision baja:** los contextos contienen material que el juez
+  considera poco útil para responder.
+- **context_recall baja:** falta soporte en los contextos para parte de la
+  respuesta de referencia; compara un componente del golden con lo recuperado.
+
+Plantilla para redactar, **no para copiar sin rellenar**:
+
+> La consulta con menor [nombre de métrica] fue [Q], con [valor], frente a una
+> media de [valor]. Al revisar su muestra observé [una cifra, componente o
+> afirmación concreta]; [posible explicación] es una hipótesis, no una causa
+> demostrada. El verificador encontró [número] IDs colgantes y [número] líneas
+> sin datos suficientes.
+
+La suma de las cifras aproximadas de algunas referencias no coincide con su
+total; está documentado en `docs/sesion11_porting_drift.md`. No lo corrijas
+después de ver la puntuación: cambiaría el experimento.
+
+Marca las casillas online del plan solo cuando hayas guardado esas evidencias.
+No hace falta hacer commit. Tampoco hace falta apagar el montaje para cerrar:
+si decides hacerlo más tarde, coordínalo antes con quien comparta la máquina.
+Ctrl+C en tu Streamlit y en tu captura de logs solo detiene esos procesos;
+no borres volúmenes, corpus ni claves de Redis.
+
 ### Paso 11. Documentación, resultados y entrega
 
 - [ ] **Paso 11 completado y comprobado.**
+  En curso: documentación de preparación entregada; tabla y hallazgos reales
+  pendientes de ejecución manual, no de escritura adicional del generador.
 
-1. [ ] Actualizar el README solo en los apartados directamente afectados:
+1. [x] Actualizar el README solo en los apartados directamente afectados:
    nuevo resultado, uso de UI, evaluación y límites.
-2. [ ] Crear `evals/RAGAS_BASELINE_S11.md` con:
-   - [ ] configuración y procedencia del golden;
+   Evidencia: apartado Session 11 pre-work.
+2. [ ] Completar `evals/RAGAS_BASELINE_S11.md` con:
+   - [x] configuración y procedencia del golden; documento creado sin números ficticios;
    - [ ] comandos reales utilizados;
    - [ ] tabla propia Q1-Q5 más promedio;
    - [ ] resumen de informes de citas;
    - [ ] nota de 2-3 frases basada en nuestros números;
-   - [ ] desviaciones respecto a Responses API y rechazo estricto;
-   - [ ] diferencias efectivas respecto a la referencia, si las hay.
+   - [x] desviaciones respecto a Responses API y rechazo estricto;
+   - [x] diferencias efectivas respecto a la referencia, si las hay.
+   Evidencia de lo preparado: apartados de configuración, bloqueo y límites.
 3. [ ] Guardar muestras e informe JSON en las rutas documentadas, sin secretos.
    Revisar su contenido antes de proponer incluirlos en Git.
-4. [ ] No generar una tabla ficticia si el usuario aún no ha ejecutado el scorer.
+4. [x] No generar una tabla ficticia si el usuario aún no ha ejecutado el scorer.
    Dejar estado explícitamente pendiente.
-5. [ ] Revisar el diff final, tests y worktree; no incluir `src/alembic.ini`.
-6. [ ] Dejar la revisión al usuario. No hacer commit.
+   Evidencia: informe de preparación sin métricas propias.
+5. [x] Revisar el diff final, tests y worktree; no incluir `src/alembic.ini`.
+   Evidencia: diff de contratos/UI/metadatos, 75 tests dirigidos, Ruff y
+   `git diff --check`. No se ha tocado el archivo ajeno ni el índice.
+6. [x] Dejar la revisión al usuario. No hacer commit.
 
 Preparar en fase 1 el README, las instrucciones y la estructura de los informes,
 sin datos ficticios. Completar resultados, tabla y hallazgos únicamente después
@@ -1092,34 +1534,50 @@ Tampoco:
 
 ## 9. Criterios de cierre verificables
 
-- [ ] Plan revisado y aprobado; correcciones del usuario incorporadas.
-- [ ] Referencia comprobada: `session_11` / `3292744`.
-- [ ] Cada tarea fundamentada tiene fuentes tipadas.
-- [ ] Tarea no fundamentada no puede tener fuentes ni esfuerzo numérico.
-- [ ] XML propaga documento sin romper distancias ausentes ni truncado.
-- [ ] Prompt exige ID exacto y evidencia literal, conservando el tratamiento
+- [x] Plan revisado y aprobado; correcciones del usuario incorporadas.
+  Evidencia: aprobación de implementación al inicio.
+- [x] Referencia comprobada: `session_11` / `3292744`.
+  Evidencia: `git status` y `git log` del instructor.
+- [x] Cada tarea fundamentada tiene fuentes tipadas.
+- [x] Tarea no fundamentada no puede tener fuentes ni esfuerzo numérico.
+  Evidencia de ambas: schema y pruebas de integridad en `test_validation.py`.
+- [x] XML propaga documento sin romper distancias ausentes ni truncado.
+  Evidencia: pruebas del ensamblador y de ambos caminos de recuperación básica.
+- [x] Prompt exige ID exacto y evidencia literal, conservando el tratamiento
       de unidades de LIDR sin la modificación rechazada.
-- [ ] Verificador detecta el ID inventado y el ID de un chunk descartado.
-- [ ] Verifica también citas globales.
-- [ ] Logs iniciales/finales se correlacionan por `request_id`.
-- [ ] Se conserva el comportamiento de LIDR ante citas persistentes y se explica
+  Evidencia: revisión de `build_system_prompt` y nota de drift.
+- [x] Verificador detecta el ID inventado y el ID de un chunk descartado.
+- [x] Verifica también citas globales.
+- [x] Logs iniciales/finales se correlacionan por `request_id`.
+- [x] Se conserva el comportamiento de LIDR ante citas persistentes y se explica
       que es confianza baja, no rechazo HTTP.
-- [ ] La respuesta final no evade la verificación por una reparación posterior.
+- [x] La respuesta final no evade la verificación por una reparación posterior.
+  Evidencia de este bloque: tests de `test_estimator.py`/`test_validation.py`,
+  captura de logs y demo determinista.
 - [ ] CAG, conversaciones y Wizard previo mantienen su comportamiento.
-- [ ] Streamlit muestra fuentes y falta de datos sin afirmar garantías que no recibe.
-- [ ] Golden Q1-Q5 trazable, con referencias revisadas y Q6-Q8 intactas.
+  Wizard probado offline; CAG/conversaciones no se han modificado ni reejecutado.
+- [x] Streamlit muestra fuentes y falta de datos sin afirmar garantías que no recibe.
+  Evidencia: AppTest del panel separado y del error HTTP.
+- [x] Golden Q1-Q5 trazable, con referencias revisadas y Q6-Q8 intactas.
+  Evidencia: `cmp`, contraste de componentes y ausencia de cambios en Q6-Q8.
 - [ ] Muestras propias contienen los cuatro campos y el contexto realmente usado.
 - [ ] Dependencias/imports de RAGAS probados, sin shims preventivos.
-- [ ] Tests dirigidos y lint de cambios pasan.
+- [x] Tests dirigidos y lint de cambios pasan.
+  Evidencia: 75 passed, Ruff dirigido y diff sin errores de whitespace.
 - [ ] Fase 1: implementación completa y validaciones sin servicios registradas.
-- [ ] Fase 1: guía manual autónoma de fase 2 entregada, con resultados esperados,
+  Código entregado; lock/import real del scorer bloqueados por falta de caché.
+- [x] Fase 1: guía manual autónoma de fase 2 entregada, con resultados esperados,
       acciones ante fallos y advertencias, sin dependencia de IA.
+  Evidencia: sección 10.1 y modos CLI inspeccionados con `--help`.
 - [ ] Fase 2: usuario ejecutó generación y scoring siguiendo la guía autónoma.
 - [ ] Cinco consultas, cuatro métricas finitas cada una y promedio correcto.
 - [ ] Tabla, informe y nota propios persistidos.
-- [ ] Desviación de Responses API documentada.
-- [ ] Ningún secreto, dato ajeno o archivo no rastreado previo incluido.
-- [ ] Ningún commit sin autorización.
+- [x] Desviación de Responses API documentada.
+  Evidencia: README e informe de preparación de baseline.
+- [x] Ningún secreto, dato ajeno o archivo no rastreado previo incluido por el asistente.
+  Evidencia: revisión del diff; no se ha leído `.env`, añadido al índice ni
+  modificado `src/alembic.ini`.
+- [x] Ningún commit creado por el asistente.
 
 ## 10. Incertidumbres que siguen abiertas
 
@@ -1129,7 +1587,9 @@ No se han verificado aún:
 - [ ] Servicios en ejecución y quién los utiliza.
 - [ ] Corpus realmente cargado, duplicados y metadatos de los chunks persistidos.
 - [ ] Versiones efectivas y compatibilidad de RAGAS en el entorno del alumno.
-- [ ] Importaciones, tests, lint, ejecución de Streamlit y resultados reales.
+- [x] Importaciones de código propio, tests dirigidos y lint básico offline.
+  Evidencia: cierre offline siguiente. No incluye dependencias del scorer.
+- [ ] Ejecución de Streamlit contra servicios y resultados reales.
 - [ ] Coste y duración de una evaluación completa.
 
 Para la revisión del plan, las propuestas que merecen atención especial son:
@@ -1159,3 +1619,85 @@ Para la revisión del plan, las propuestas que merecen atención especial son:
 
 No son bloqueos para redactar este plan. Sí deben quedar aceptadas o corregidas
 en su revisión antes de tratarlas como instrucciones de implementación.
+
+## 11. Evidencia del cierre offline
+
+Fecha: 17 de noviembre de 2026. Entorno local disponible: Python 3.13,
+pytest 9.1.1, Ruff 0.16.9 y Pydantic 2.13.5. No se instaló ni descargó nada.
+El asistente no arrancó contenedores, servicios, bases de datos o modelos,
+ni realizó ingestas, migraciones o consultas a infraestructura existente.
+
+### Pruebas ejecutadas
+
+Desde la raíz del repositorio alumno se ejecutó:
+
+```bash
+rtk proxy env PYTHONPATH=/root/.copilot/session-state/17fda1c7-2f50-4103-9d83-f1ec6e4834c3/files UV_OFFLINE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 LITELLM_LOCAL_MODEL_COST_MAP=True DATABASE_URL= REDIS_URL=redis://127.0.0.1:1 OPENAI_API_KEY= ANTHROPIC_API_KEY= estimador-cag/.venv/bin/python -m pytest -p offline_guard -q \
+  estimador-cag/tests/test_validation.py \
+  estimador-cag/tests/test_estimator.py \
+  estimador-cag/tests/test_context_assembler.py \
+  estimador-cag/tests/test_idempotency.py \
+  estimador-cag/tests/test_wizard_ui.py \
+  estimador-cag/tests/test_rag_runs.py \
+  estimador-cag/tests/test_task_hours.py \
+  estimador-cag/tests/test_task_hours_vector_validity.py \
+  estimador-cag/tests/test_eval_ragas_s11.py \
+  estimador-cag/tests/test_retriever.py \
+  estimador-cag/tests/test_hybrid_retrieve.py
+```
+
+Resultado: **75 passed, 2 warnings**, en aproximadamente dos segundos.
+Los avisos son de deprecación de LangChain existente, no fallos de los tests.
+`offline_guard` es un helper de validación de esta sesión, no una dependencia
+del proyecto: bloquea `socket.connect`, `connect_ex` y `getaddrinfo` antes de
+importar la aplicación. El comando anterior documenta la ejecución histórica;
+no es un requisito ni un paso a repetir en la guía manual.
+
+Se reprodujeron y corrigieron seis fallos de procedencia antes del resultado
+final: el adaptador básico descartaba los IDs de transcripciones/documentos.
+También se corrigió la prueba HTTP de idempotencia para aislar su configuración
+de recuperación de Redis. No se usó un Redis real.
+
+### Lint y comprobaciones auxiliares
+
+```bash
+rtk proxy estimador-cag/.venv/bin/ruff check --select E4,E7,E9,F \
+  estimador-cag/src/generation/rag/schemas.py \
+  estimador-cag/src/generation/rag/validation.py \
+  estimador-cag/src/generation/rag/context_assembler.py \
+  estimador-cag/src/generation/rag/prompt_builder.py \
+  estimador-cag/src/generation/rag/estimator.py \
+  estimador-cag/src/generation/rag/retriever.py \
+  estimador-cag/src/generation/rag/retrieval/search_pipeline.py \
+  estimador-cag/src/wizard_ui.py estimador-cag/streamlit_app.py \
+  estimador-cag/scripts/eval_ragas_s11.py \
+  estimador-cag/scripts/score_ragas_s11.py \
+  estimador-cag/scripts/demo_verify_citations_s11.py \
+  estimador-cag/tests/test_estimator.py estimador-cag/tests/test_validation.py \
+  estimador-cag/tests/test_context_assembler.py estimador-cag/tests/test_idempotency.py \
+  estimador-cag/tests/test_wizard_ui.py estimador-cag/tests/test_eval_ragas_s11.py \
+  estimador-cag/tests/test_retriever.py estimador-cag/tests/test_hybrid_retrieve.py
+
+rtk git --no-pager diff --check
+rtk proxy estimador-cag/.venv/bin/python estimador-cag/scripts/demo_verify_citations_s11.py
+rtk proxy cmp estimador-cag/evals/golden_generation_s11.json /home/basf/wsTakeoff/ai-engineering-lidr/estimator/evals/golden_generation_s11.json
+```
+
+Resultados: Ruff dirigido `All checks passed!`; diff sin errores de whitespace;
+demo con tres estados y `PASS`; golden literal sin diferencias.
+Se comprobaron también los argumentos reales de ambos scripts con `--help`.
+No se ejecutó un checker de tipos ni la suite global de CAG/conversaciones.
+El lint ampliado de la instalación detecta reglas de estilo previas en archivos
+legacy; no se han corregido temas ajenos ni se afirma haber pasado esas reglas
+adicionales. La selección E4/E7/E9/F anterior es la validación dirigida realizada.
+
+### Lo único bloqueado en preparación y lo pendiente online
+
+- **Preparación:** lock e import real del scorer aislado. `uv lock --offline`
+  no encuentra `ragas` en caché; el entorno principal no tiene `datasets`/`ragas`.
+  Se entrega manifiesto PEP 723, no un lock escrito a mano ni un import simulado.
+  El paso B permite resolver y comprobar eso antes de pagar ninguna llamada.
+- **Online:** permisos de modelos, servicios propios, corpus persistido,
+  prueba de pantalla con API, Q1-Q5 reales, cuatro métricas finitas y medias,
+  tabla propia y nota sobre esos resultados. Nada de ello se ha marcado como
+  superado con pruebas que usan dobles.

@@ -13,14 +13,20 @@ Two anti-patterns this module exists to avoid:
 
 from __future__ import annotations
 
+from xml.sax.saxutils import quoteattr
+
+from generation.rag.errors import RetrievalError
 from generation.rag.schemas import RetrievedChunk
 
 
 def _wrap_chunk(chunk: RetrievedChunk) -> str:
     """Render a single chunk as a self-describing ``<source>`` XML element."""
     distance = f"{chunk.distance:.4f}" if chunk.distance is not None else "not-scored"
+    document_id = chunk.source_id or chunk.budget_id
+    if not document_id:
+        raise RetrievalError(f"Retrieved chunk {chunk.id} has no document provenance.")
     return (
-        f'<source id="{chunk.id}" sector="{chunk.sector}" '
+        f'<source id="{chunk.id}" document_id={quoteattr(document_id)} sector="{chunk.sector}" '
         f'project_year="{chunk.project_year}" chunk_type="{chunk.chunk_type}" '
         f'distance="{distance}">\n'
         f"{chunk.content}\n"
@@ -74,11 +80,10 @@ def truncate_to_token_budget(
         The leading subset that fits within the budget.
     """
     kept: list[RetrievedChunk] = []
-    used = 0
     for chunk in chunks:
-        cost = len(encoder.encode(_wrap_chunk(chunk)))
-        if used + cost > max_context_tokens:
+        # Count separators too: the complete block is what the generator receives.
+        cost = len(encoder.encode(build_context_block([*kept, chunk])))
+        if cost > max_context_tokens:
             break
         kept.append(chunk)
-        used += cost
     return kept

@@ -997,6 +997,43 @@ The independent engineer-days flow is implemented in
 [`/search` sequence](docs/search-sequence.mmd) remains a separate, simpler
 semantic-search endpoint.
 
+## Session 11 pre-work: line-level citations and RAGAS
+
+The **Grounded RAG estimate** expander below the Wizard calls
+`POST /v1/estimate/from-transcript`; it does not change the persisted Wizard.
+Each generated task carries `grounded` and typed `sources` with `chunk_id`,
+`document_id` and verbatim `evidence`. Unsupported tasks have null
+`engineer_days` and no sources, displayed as **Insufficient source data**.
+
+The backend verifies chunk membership against the context retained after
+truncation, including global citations. It logs initial/final `citation_report`
+events with the response's `X-Request-ID`. A dangling citation triggers one
+correction; remaining failures produce `citations_unrepaired` and low
+confidence, **not an HTTP rejection**. Document identity, evidence text and
+semantic support are not programmatically verified. Generation still uses
+Instructor/LiteLLM, not the exercise's literal Responses API requirement.
+
+The generation golden set inherits Q1-Q5 from LIDR without changing the existing
+retrieval Q1-Q8. Its known approximations are documented in
+[porting decisions](docs/sesion11_porting_drift.md). Collection stores complete
+answers, retained chunks, citation reports and effective configuration; scoring
+rejects partial/non-finite results and writes five rows plus arithmetic averages.
+RAGAS runs in an isolated script environment to avoid downgrading the API's
+LangChain. Its lock and real imports still require the manual dependency step;
+no generation baseline has been measured yet.
+
+Use the [manual Session 11 guide](docs/pre_sesion11_plan.md#101-guía-manual-empezar-aquí)
+for dependency preparation, the normal Compose/Streamlit startup, corpus checks,
+paid collection and scoring. Do not start paid calls before its dependency check
+passes. Offline citation demo, without services or keys:
+
+```bash
+rtk proxy uv run --locked python scripts/demo_verify_citations_s11.py
+```
+
+See [baseline status](evals/RAGAS_BASELINE_S11.md) for what has actually been
+verified and what remains pending.
+
 ### Hours wizard
 
 1. **Start:** Streamlit sends the transcript; the API creates an execution and

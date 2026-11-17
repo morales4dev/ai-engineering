@@ -179,6 +179,11 @@ async def search_chunks(
             distance=float(row.distance),
             has_vector_distance=True,
             budget_id=row.metadata_.get("budget_id"),
+            source_id=(
+                row.metadata_.get("source_id")
+                or row.metadata_.get("transcript_id")
+                or row.metadata_.get("doc_id")
+            ),
             estimated_hours=row.metadata_.get("estimated_hours"),
         )
         for row in rows

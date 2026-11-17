@@ -16,13 +16,13 @@ import httpx  # noqa: E402
 import streamlit as st  # noqa: E402
 
 from config import get_settings  # noqa: E402
-from wizard_ui import render_wizard  # noqa: E402
 from schemas.estimation import (  # noqa: E402
     OUT_OF_SCOPE_PREFIX,
     DetailLevel,
     OutputFormat,
     ProjectType,
 )
+from wizard_ui import render_grounded_estimate, render_wizard  # noqa: E402
 
 st.set_page_config(
     page_title="Software estimation",
@@ -45,6 +45,7 @@ COMPARISONS_ENDPOINT = f"{API_BASE_URL}/embeddings/comparisons"
 CONFIG_ENDPOINT = f"{API_BASE_URL}/api/v1/config/models"
 RETRIEVAL_CONFIG_ENDPOINT = f"{API_BASE_URL}/api/v1/config/retrieval"
 RAG_RUNS_ENDPOINT = f"{API_BASE_URL}/v1/estimate/runs"
+GROUNDED_ESTIMATE_ENDPOINT = f"{API_BASE_URL}/v1/estimate/from-transcript"
 COMPARE_TIMEOUT_SECONDS = 600
 
 # Same six canned strings as data/test_queries.json. Hardcoded: they are demo
@@ -922,6 +923,9 @@ with lab_tab:
 if rag_tab.open:
     with rag_tab:
         render_wizard(RAG_RUNS_ENDPOINT, settings.ESTIMATE_API_KEY)
+        st.divider()
+        with st.expander("Grounded RAG estimate"):
+            render_grounded_estimate(GROUNDED_ESTIMATE_ENDPOINT, settings.ESTIMATE_API_KEY)
 
 with ajustes_tab:
     st.subheader("Ajustes")

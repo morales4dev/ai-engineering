@@ -46,3 +46,62 @@ def test_existing_run_renders_structure_and_cost_editors(monkeypatch):
     assert not app.exception
     assert any("no matching task" in warning.value for warning in app.warning)
     assert any("Hours is required" in warning.value for warning in app.warning)
+
+
+def test_grounded_panel_uses_http_and_displays_sources_and_missing_data(monkeypatch):
+    import httpx
+
+    calls = []
+
+    def post(url, **kwargs):
+        calls.append((url, kwargs))
+        return httpx.Response(
+            200, request=httpx.Request("POST", url), headers={"X-Request-ID": "req-11"},
+            json={
+                "confidence": "low", "reasoning": "Partial evidence.",
+                "modules": [{"name": "Auth", "tasks": [
+                    {"name": "Login", "engineer_days": 2, "grounded": True, "sources": [
+                        {"chunk_id": "1", "document_id": "BUD-1", "evidence": "16 hours"},
+                    ]},
+                    {"name": "Novel scope", "grounded": False, "engineer_days": None},
+                ]}],
+            },
+        )
+
+    monkeypatch.setattr("wizard_ui.httpx.post", post)
+    app = AppTest.from_string(
+        "from wizard_ui import render_grounded_estimate\n"
+        "render_grounded_estimate('http://test/from-transcript', 'key')"
+    ).run()
+    app.text_area[0].set_value("x" * 100)
+    app.button[0].click().run()
+    assert not app.exception
+    assert calls[0][1]["headers"] == {"X-API-Key": "key"}
+    assert calls[0][1]["json"] == {"transcript": "x" * 100}
+    text = " ".join(element.value for element in app.markdown)
+    assert "Insufficient source data" in text
+    assert "Document: BUD-1" in text
+    assert app.code[0].value == "16 hours"
+    assert any("req-11" in element.value for element in app.caption)
+    assert any("Low confidence" in element.value for element in app.warning)
+    assert not app.error
+
+
+def test_grounded_panel_http_error_is_not_an_empty_estimate(monkeypatch):
+    import httpx
+
+    monkeypatch.setattr(
+        "wizard_ui.httpx.post",
+        lambda url, **kwargs: httpx.Response(
+            401, request=httpx.Request("POST", url), text="Unauthorized",
+        ),
+    )
+    app = AppTest.from_string(
+        "from wizard_ui import render_grounded_estimate\n"
+        "render_grounded_estimate('http://test/from-transcript', 'key')"
+    ).run()
+    app.text_area[0].set_value("x" * 100)
+    app.button[0].click().run()
+    assert not app.exception
+    assert "401" in app.error[0].value
+    assert "grounded_rag_result" not in app.session_state

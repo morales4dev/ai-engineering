@@ -7,6 +7,87 @@ import math
 import httpx
 import pandas as pd
 import streamlit as st
+from generation.rag.schemas import Estimate
+
+
+def render_grounded_estimate(endpoint: str, api_key: str | None) -> None:
+    """HTTP-only client for the independent, historically grounded pipeline."""
+    st.subheader("Grounded RAG estimate")
+    st.caption(
+        "Independent of the Wizard. Generates effort and per-line sources from historical budgets. "
+        "This action calls paid models."
+    )
+    if not api_key:
+        st.error("Configure ESTIMATE_API_KEY to use grounded estimation.")
+        return
+    with st.form("grounded_rag"):
+        transcript = st.text_area("Transcript for grounded estimation", height=200)
+        submitted = st.form_submit_button("Generate grounded estimate")
+    if submitted:
+        st.session_state.pop("grounded_rag_result", None)
+        if not 100 <= len(transcript.strip()) <= 50_000:
+            st.error("The transcript must contain between 100 and 50,000 characters.")
+        else:
+            try:
+                with st.spinner("Generating grounded estimate..."):
+                    response = httpx.post(
+                        endpoint, headers={"X-API-Key": api_key},
+                        json={"transcript": transcript.strip()},
+                        timeout=httpx.Timeout(600, connect=10),
+                    )
+                    response.raise_for_status()
+                    body = response.json()
+                    Estimate.model_validate(body)
+            except httpx.HTTPStatusError as exc:
+                st.error(f"Service returned {exc.response.status_code}: {exc.response.text}")
+                st.caption(f"Request ID: {exc.response.headers.get('X-Request-ID', 'not returned')}")
+            except (httpx.HTTPError, ValueError) as exc:
+                st.error(f"Could not use the grounded RAG API: {exc}")
+            else:
+                st.session_state["grounded_rag_result"] = {
+                    "estimate": body, "request_id": response.headers.get("X-Request-ID"),
+                }
+
+    saved = st.session_state.get("grounded_rag_result")
+    if not saved:
+        return
+    estimate = Estimate.model_validate(saved["estimate"])
+    st.caption(f"Request ID: {saved.get('request_id') or 'not returned'}")
+    st.write(f"Confidence: {estimate.confidence}")
+    if estimate.confidence == "low":
+        st.warning("Low confidence: review this estimate and its sources before using it.")
+    if estimate.insufficient_context_explanation:
+        st.warning(estimate.insufficient_context_explanation)
+    if estimate.total_engineer_days is not None:
+        st.write(f"Total: {estimate.total_engineer_days} engineer-days")
+    if estimate.duration_weeks is not None:
+        st.write(f"Duration: {estimate.duration_weeks} weeks")
+    st.write(estimate.reasoning)
+    st.caption(
+        "Grounded is the model's declaration, not a verified label. "
+        "Citation membership reports are available in backend logs using the request ID; "
+        "document identity and evidence semantics are not programmatically verified."
+    )
+    for module in estimate.modules:
+        st.markdown(f"#### {module.name}")
+        if module.description:
+            st.write(module.description)
+        for task in module.tasks:
+            effort = (
+                f"{task.engineer_days} engineer-days"
+                if task.engineer_days is not None else "Insufficient source data"
+            )
+            st.write(f"{task.name}: {effort}")
+            if task.description:
+                st.write(task.description)
+            st.caption(f"Declared grounded: {task.grounded}")
+            for source in task.sources:
+                st.write(f"Chunk: {source.chunk_id} | Document: {source.document_id}")
+                st.code(source.evidence, language=None)
+    if estimate.assumptions:
+        st.write("Assumptions:", [a.model_dump() for a in estimate.assumptions])
+    with st.expander("Response JSON"):
+        st.json(saved["estimate"])
 
 
 def _text(value: object) -> str:
