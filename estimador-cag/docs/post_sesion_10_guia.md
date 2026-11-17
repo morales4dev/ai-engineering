@@ -44,9 +44,6 @@ revisar las cifras y el orden obtenidos.
   curl --fail-with-body http://localhost:8000/health
   ```
 
-  Si utilizas `docker-compose` con guion, sustituye `docker compose` por
-  `docker-compose` en los comandos de esta guía.
-
   **Comprueba:** los tres servicios están activos, `/health` responde y la
   revisión de Alembic es `0006_session10_wizard` o una posterior. La
   documentación de la API está en <http://localhost:8000/docs>.

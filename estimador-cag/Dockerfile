@@ -48,6 +48,7 @@ COPY src/ /app/
 COPY data/ /app/data/
 COPY alembic/ /app/alembic/
 COPY alembic.ini /app/alembic.ini
+COPY evals/ /app/evals/
 
 # Ensure the non-root user owns everything it needs to run.
 RUN chown -R appuser:appgroup /app /opt/venv
