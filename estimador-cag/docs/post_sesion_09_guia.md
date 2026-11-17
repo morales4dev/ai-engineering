@@ -16,11 +16,8 @@ Necesitáis Docker con Compose, Python 3.11 o superior, `uv` y una clave de Open
 
 Los valores de ejemplo están explicados en [.env.example](/home/basf/wsTakeoff/ai-engineering/estimador-cag/.env.example). Si cambiáis el `.env`, recread el servicio para que recoja la configuración.
 
-En la máquina que he consultado está disponible `docker-compose` —con guion—, pero no el plugin `docker compose`. Usando esa variante:
-
 ```bash
-docker-compose up -d --build
-docker-compose ps
+docker compose up --build
 ```
 
 Compose levanta la API, PostgreSQL con pgvector y Redis. Al arrancar la API aplica las migraciones, incluida la tabla nueva para las ejecuciones del asistente. Comprobad que los servicios están activos y abrid [http://localhost:8000/health](http://localhost:8000/health) y [http://localhost:8000/docs](http://localhost:8000/docs).
