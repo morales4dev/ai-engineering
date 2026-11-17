@@ -20,9 +20,6 @@ para comparar la recuperación.
   docker compose exec -T estimator python -m generation.rag.retrieval.verify_reranker
   ```
 
-  Si tu instalación solo dispone de `docker-compose`, sustituye `docker compose`
-  por esa variante en los comandos de la guía.
-
   **Comprueba:** la API responde en <http://localhost:8000/health> y el verificador
   termina mostrando `Reranker loaded:` seguido del nombre del modelo. La primera
   descarga puede tardar; necesita acceso a Hugging Face.
