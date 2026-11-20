@@ -2,9 +2,8 @@
 
 Wires the four stages into the loop the project has been missing since day one:
 ``transcript → query understanding → retrieval → augmentation → generation``,
-producing a grounded :class:`Estimate`. Generation goes through ``LLMWrapper``
-(Instructor) — the same primitive the rest of the service uses — never the raw
-Responses API.
+producing a grounded :class:`Estimate`. Generation uses native OpenAI Responses
+through ``LLMWrapper`` and LiteLLM; other structured callers retain Instructor.
 
 Public functions keep the locked async signatures; the synchronous wrapper and
 embedder calls are pushed to threads so the HTTP path never blocks the event
@@ -80,15 +79,13 @@ async def _generate(
 
     try:
         estimate, _meta = await asyncio.to_thread(
-            wrapper.complete_structured,
+            wrapper.complete_structured_responses,
             system_prompt=build_system_prompt(),
             user_message=user_message,
             response_model=Estimate,
             model_override=settings.GENERATION_MODEL,
             reasoning_effort=settings.GENERATION_REASONING_EFFORT,
-            # gpt-5 reasoning tokens count against max_tokens; the 4000 default
-            # is exhausted by reasoning alone and truncates the JSON. See
-            # Settings.GENERATION_MAX_TOKENS.
+            # Responses counts reasoning and output against max_output_tokens.
             max_tokens=settings.GENERATION_MAX_TOKENS,
         )
         return estimate

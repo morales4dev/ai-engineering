@@ -152,6 +152,8 @@ async def collect_samples(path: Path) -> None:
         "configuration": {
             "reformulation_model": settings.REFORMULATION_MODEL,
             "generation_model": settings.GENERATION_MODEL,
+            "generation_api": "openai_responses",
+            "generation_client": "litellm.responses",
             "generation_reasoning_effort": settings.GENERATION_REASONING_EFFORT,
             "generation_max_tokens": settings.GENERATION_MAX_TOKENS,
             "retrieval_embedding_model": settings.EMBEDDING_MODEL,

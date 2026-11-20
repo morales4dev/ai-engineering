@@ -149,16 +149,14 @@ async def test_soft_fail_skips_generation(wire):
 
 
 async def test_generate_estimate_passes_reasoning_token_budget(monkeypatch):
-    """gpt-5 reasoning tokens count against max_tokens; _generate must pass the
-    configured ceiling (and the reasoning effort) to the wrapper, or the call
-    truncates with finish_reason='length'."""
+    """The grounded generator uses Responses with its reasoning/output ceiling."""
     captured: dict = {}
 
-    def fake_complete_structured(**kwargs):
+    def fake_complete_structured_responses(**kwargs):
         captured.update(kwargs)
         return _good_estimate(), {}
 
-    wrapper = SimpleNamespace(complete_structured=fake_complete_structured)
+    wrapper = SimpleNamespace(complete_structured_responses=fake_complete_structured_responses)
     monkeypatch.setattr(orch, "get_settings", lambda: _SETTINGS)
     monkeypatch.setattr(deps, "get_llm_wrapper", lambda: wrapper)
 
@@ -170,6 +168,31 @@ async def test_generate_estimate_passes_reasoning_token_budget(monkeypatch):
     assert captured["max_tokens"] == _SETTINGS.GENERATION_MAX_TOKENS
     assert captured["reasoning_effort"] == "high"
     assert captured["model_override"] == "gpt-5"
+    assert captured["response_model"] is Estimate
+
+
+async def test_responses_generation_preserves_feedback_and_surfaces_failure(monkeypatch):
+    from generation.rag.errors import GenerationError
+
+    captured = {}
+    failure = ValueError("Structured Responses output was refused.")
+
+    def fail(**kwargs):
+        captured.update(kwargs)
+        raise failure
+
+    monkeypatch.setattr(orch, "get_settings", lambda: _SETTINGS)
+    monkeypatch.setattr(
+        deps, "get_llm_wrapper", lambda: SimpleNamespace(complete_structured_responses=fail),
+    )
+    with pytest.raises(GenerationError) as caught:
+        await orch._generate(
+            '<source id="1">x</source>', EstimationQuery(function="checkout"),
+            feedback="Only cite source 1.",
+        )
+
+    assert caught.value.__cause__ is failure
+    assert "<correction>\nOnly cite source 1.\n</correction>" in captured["user_message"]
 
 
 async def test_idempotency_hit_short_circuits_pipeline(wire):

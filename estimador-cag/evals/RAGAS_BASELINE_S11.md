@@ -22,6 +22,10 @@ Empieza por la preparación de dependencias, no por generación.
 - Juez: `gpt-4o-mini`; embeddings del evaluador: `text-embedding-3-small`.
 - Generador/reformulador: los configurados en la aplicación, registrados al
   recoger muestras; no se presupone que coincidan con el juez.
+- Generador fundamentado: Responses API nativa mediante `litellm.responses`
+  desde el wrapper compartido, con esquema estricto y validación Pydantic local.
+  El reformulador sigue con Instructor/LiteLLM. Las muestras registran
+  `generation_api` y `generation_client`.
 - Recuperación del harness: híbrida, reranking, umbral 1.2, solo
   `budget_component`, sin filtro sectorial ni recuperación avanzada.
 - Generación del harness: una respuesta y auditoría, sin autorreparación HTTP.
@@ -41,13 +45,18 @@ respuesta o un nuevo golden exige identificar otra ejecución.
 - Comparación literal del golden con el instructor: sin diferencias.
 - Contraste del corpus: Q1 480 h; Q2 460 h; Q3 560 h; Q4 500 h; Q5 600 h.
 - Lint dirigido: ver comando y resultado en el cierre offline del plan.
+- Revalidación del agregador: 98 tests superados, incluidos LiteLLM real
+  con HTTP en memoria y validación Pydantic, métodos anteriores del wrapper, generador,
+  evaluación, Wizard y smoke de conversaciones con runtime Redis aislado.
+  Dos avisos de deprecación de LangChain; Ruff dirigido sin errores.
+  No es una comprobación del proveedor real ni una ejecución de RAGAS.
 
 Las pruebas con dobles comprueban contratos, persistencia de tabla y rechazo de
 NaN; **no** demuestran que un juez real devuelva métricas ni que RAGAS importe.
 
-### Bloqueo de dependencias, sin ocultarlo
+### Dependencias pendientes de comprobar
 
-En el entorno actual faltan `ragas` y `datasets`. El intento
+En la comprobación de dependencias faltaban `ragas` y `datasets`. El intento
 `uv lock --offline --script scripts/score_ragas_s11.py` falla porque `ragas` no
 está en caché. No se descargó nada ni se escribió un lock ficticio.
 
@@ -79,14 +88,17 @@ El scorer escribirá `ragas_baseline_s11.json` y `ragas_baseline_s11.md`, con Q1
 las cuatro métricas y la media aritmética. No existen todavía: no usar una tabla
 de ceros ni la del instructor como sustituto.
 
-Después de medir, anotar aquí fecha, comando real, configuración efectiva,
+Después de medir, anotar aquí comando real, configuración efectiva,
 versiones y enlace a la tabla. Añadir 2-3 frases sobre una anomalía observada,
 citando consulta, métrica y contenido concreto de su muestra. La plantilla
 para hacerlo sin IA está en el paso I de la guía.
 
 ## Límites aceptados
 
-- Instructor/LiteLLM en lugar de `client.responses.parse`.
+- Responses API en el generador fundamentado; el esquema estricto y los
+  validadores se prueban offline, pero falta la generación con el modelo real.
+- Se usa `litellm.responses`, no el método literal `client.responses.parse` del
+  enunciado; se conserva el agregador y se valida explícitamente con Pydantic.
 - Citas persistentes visibles como warning/confianza baja, no rechazo HTTP.
 - El verificador prueba pertenencia del chunk, no identidad documental ni
   literalidad o veracidad semántica de la evidencia.

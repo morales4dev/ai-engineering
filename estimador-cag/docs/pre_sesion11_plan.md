@@ -1,53 +1,34 @@
-# Pre-sesión 11: plan de implementación y relevo de sesión
+# Pre-sesión 11: estado del trabajo y guía de ejecución
 
-## 0. Estado y cómo utilizar este documento
+## 0. Estado actual y qué hacer ahora
 
-Este documento es el entregable de planificación solicitado por el usuario. Debe
-permitir continuar en otra sesión sin disponer del historial del chat.
+El plan está aprobado. El código de citación por
+línea, el golden, los scripts y la guía manual están implementados. Las pruebas
+offline de esa implementación figuran en la sección 11.
 
-**Estado: aprobado por el usuario el 17 de noviembre de 2026 con «ok, impementa
-ya!». Código implementado y pruebas offline ejecutadas.** La preparación de
-dependencias del scorer queda bloqueada por falta de paquetes en caché; no se
-ha usado red para resolverla. La fase 2 no se ha ejecutado y no existe todavía
-una tabla propia de métricas. Para continuar manualmente, ir al
-[paso 10, guía de ejecución](#101-guía-manual-empezar-aquí).
+El generador fundamentado usa Responses API a través del wrapper compartido
+y del agregador LiteLLM. Los demás recorridos
+conservan Instructor/LiteLLM. El alcance y las comprobaciones de este ajuste
+figuran en los pasos 4 y 9 y en el cierre offline.
 
-Antes de aprobar la implementación hay que cerrar todas las decisiones de
-diseño y preparación con el usuario. Preguntar de una en una, explicar en
-palabras llanas qué significa cada opción, recomendar una y justificarla,
-esperar su respuesta y registrarla aquí antes de continuar. No aplazar esas
-decisiones a la sesión de implementación ni interpretar una aprobación parcial
-como aprobación del plan completo.
+**Todavía no se ha ejecutado la fase 2 ni existe una tabla propia de métricas.**
+El lock y los imports reales del scorer siguen pendientes. El usuario ha
+confirmado que resolverá las dependencias o versiones si resulta necesario.
 
-Estado histórico al redactar el plan, antes de aprobar la implementación:
+Para continuar, sigue la [guía manual del apartado 10.1](#101-guía-manual-empezar-aquí).
+No hay que volver a aprobar el plan ni repetir por defecto las pruebas ya
+superadas. Las casillas indican qué se ha comprobado y qué falta comprobar.
+Las secciones de contexto y decisiones explican el alcance; no son pasos que
+debas repetir. La sección 11 distingue las evidencias de cada implementación, para no
+confundir una comprobación anterior con una validación del código actual.
 
-- Solo se han inspeccionado archivos y el historial de Git. No se han ejecutado
-  tests, llamadas a modelos, ingestas, migraciones, instalaciones ni servicios.
-- No se ha implementado el ejercicio ni generado una baseline propia.
-- No se ha creado ningún commit.
-- El único archivo nuevo que se pretende dejar en esta sesión es este plan.
-- Las referencias de líneas siguientes corresponden al estado inspeccionado y
-  pueden desplazarse durante la implementación.
-
-Orden para retomar:
-
-1. [x] Leer este documento completo. Evidencia: revisión de las secciones 0-10.
-2. [x] Leer la respuesta del usuario. Evidencia: aprobación citada arriba.
-3. [x] Comprobar ramas y estado. Evidencia: alumno `session-11/pre-work`,
-   instructor `session_11` / `3292744`; no se cambió de rama.
-4. [x] Implementar únicamente el alcance aprobado. Evidencia: pasos 1-9.
-5. [ ] Completar todas las validaciones offline y entregar la guía autónoma.
-   Bloqueado únicamente el lock/import real del scorer: ver pasos 8 y 10.
-   La guía y las pruebas que usan el entorno ya disponible están entregadas.
-6. [x] No se han creado commits ni añadido archivos al índice por parte del
-   asistente. En la revisión final ya había tests en el índice; se han
-   respetado, sin deshacer ni modificar el staging ajeno.
+No hacer commit ni añadir archivos al índice: el usuario quiere revisar primero.
 
 ### 0.1 Seguimiento persistente y verificable por una persona
 
-Todas las casillas empiezan vacías, incluidas las comprobaciones que habrá que
-repetir en la sesión de implementación. Las evidencias históricas de este
-documento no significan que esos pasos futuros estén completados.
+Una casilla marcada acredita la comprobación que figura junto a ella. Si el
+código cambia, hay que validar de nuevo lo afectado y registrar la nueva
+evidencia; una prueba antigua no demuestra que una modificación posterior pase.
 
 - Usar `[ ]` para pendiente y `[x]` únicamente para completado y comprobado.
 - Actualizar este mismo archivo al completar cada subpaso o validar cada
@@ -74,7 +55,7 @@ documento no significan que esos pasos futuros estén completados.
 
 ### 0.2 Dos fases de trabajo: offline y online
 
-Acuerdo del 17 de noviembre de 2026: la separación depende de si se necesitan
+La separación depende de si se necesitan
 servicios levantados, no de si se ejecutan comandos.
 
 **Fase 1 — Implementación completa y validación offline**
@@ -147,10 +128,9 @@ Proyecto Python instructor:
 
 La rama del alumno comprobada es `session-11/pre-work`.
 
-El estado inicial del alumno contiene un archivo no rastreado ajeno al trabajo:
-[src/alembic.ini](../src/alembic.ini). No borrarlo, incluirlo en cambios ni
-sobrescribirlo. Volver a comprobar el estado antes de editar por si hay cambios
-adicionales del usuario.
+En la revisión inicial había un archivo no rastreado ajeno al trabajo,
+[src/alembic.ini](../src/alembic.ini), que se respetó. Antes de editar, comprobar
+el estado actual de Git y conservar los cambios del usuario.
 
 ### 1.2 La referencia correcta es session_11, no la sesión completa
 
@@ -225,14 +205,20 @@ literalmente a Streamlit.
 4. Podemos copiar código y datos del instructor, pero solo si encajan y nos
    parecen correctos; no copiar por imitación.
 5. No incorporar Rails/Ruby. La interfaz del alumno es Streamlit.
-6. Conservar Instructor/LiteLLM; no migrar a Responses API para este ejercicio.
+6. **Decisión vigente:** usar `litellm.responses` en el método nuevo del wrapper
+   compartido y llamarlo únicamente desde `_generate`
+   del generador fundamentado. Conservar Instructor/LiteLLM para el reformulador,
+   el Wizard y los demás consumidores. No evitar el wrapper ni el agregador.
+   Usar Responses nativa de OpenAI, sin puente a Chat Completions, con esquema
+   estricto y validación Pydantic local. Esta elección difiere del método
+   `client.responses.parse` exigido literalmente por el enunciado.
 7. Para las citaciones colgantes, seguir el comportamiento de LIDR, descrito en
    la sección 5. No introducir por nuestra cuenta un rechazo HTTP distinto.
 8. Las llamadas de pago están autorizadas, **pero el usuario quiere ejecutarlas
    personalmente para aprender**. La autorización no es una orden para que el
    asistente las ejecute en su lugar.
 9. Entregar instrucciones de ejecución real paso a paso, autónomas y verificables.
-   Actualizado el 17 de noviembre de 2026: el usuario ejecutará la fase 2
+   El usuario ejecutará la fase 2
    manualmente, sin IA; no depender de ayuda interactiva para interpretar
    resultados o decidir cómo continuar. Ver sección 0.2.
 10. Código nuevo en inglés: nombres, comentarios, docstrings, mensajes, logs,
@@ -243,8 +229,8 @@ literalmente a Streamlit.
 12. No hacer inferencias sobre credenciales, servicios, datos cargados o
     resultados de métricas.
 13. Añadir un apartado separado de estimación fundamentada en Streamlit y
-    mantener el Wizard actual sin cambios. Aprobado el 17 de noviembre de 2026:
-    el usuario eligió la opción 1 condicionada a que esa función existiera solo
+    mantener el Wizard actual sin cambios. El usuario eligió la opción 1
+    condicionada a que esa función existiera solo
     como endpoint sin pantalla propia en nuestro cliente. Se comprobó esa
     condición en `src/routers/rag_estimate.py` y buscando `from-transcript` y
     `estimate_from_transcript` en `streamlit_app.py`, `src/` y `scripts/`:
@@ -268,14 +254,14 @@ literalmente a Streamlit.
     [sesion11_porting_drift.md](sesion11_porting_drift.md). No confundir conservar
     las referencias con copiar sus métricas: generar nuestra propia baseline.
 16. Usar el entorno local habitual: API, PostgreSQL y Redis con Docker Compose,
-    y Streamlit aparte en esta misma máquina. Confirmado por el usuario el
-    17 de noviembre de 2026 con esa opción explícita. No crear otro despliegue
+    y Streamlit aparte en esta misma máquina. Confirmado por el usuario.
+    No crear otro despliegue
     ni otra base de datos para este ejercicio. Los pasos de ejecución deben
     concretar las rutas/conexiones de ese montaje, no pedir elegir entorno
     durante la implementación.
 
-El usuario aprobó después la implementación de la fase 1. Se mantiene la
-prohibición de arrancar servicios, hacer llamadas de pago o ejecutar la fase 2.
+La fase 1 está aprobada, incluido el ajuste de Responses.
+La fase 2 sigue reservada a la ejecución manual del usuario.
 
 ### 2.2 Restricciones prácticas
 
@@ -377,20 +363,20 @@ Entregables:
 No dar por terminado el apartado de métricas hasta tener las cuatro métricas
 numéricas para las cinco consultas y sus promedios.
 
-## 4. Evidencias del proyecto alumno y correspondencia con LIDR
+## 4. Arquitectura del alumno y correspondencia con LIDR
 
 ### 4.1 Generación y contratos
 
 | Archivo alumno | Hecho comprobado |
 | --- | --- |
-| [schemas.py](../src/generation/rag/schemas.py#L256) | `TaskItem.engineer_days` es entero obligatorio y `sources` es `list[int]`; no existe `grounded`. |
-| [schemas.py](../src/generation/rag/schemas.py#L236) | `SourceCitation` global usa `source_id: int`, `relevance` y `used_for`. No eliminarlo sin necesidad. |
-| [schemas.py](../src/generation/rag/schemas.py#L295) | `Estimate` tiene módulos, totales, asunciones, confianza y explicación de contexto insuficiente. |
-| [schemas.py](../src/generation/rag/schemas.py#L385) | Existe `GenerateResult`, aunque no hay router de etapas que lo exponga actualmente. |
-| [estimator.py](../src/generation/rag/estimator.py#L31) | Generación y orquestación del flujo RAG fundamentado. |
-| [validation.py](../src/generation/rag/validation.py#L18) | `validate_citations` comprueba IDs globales y de tareas, pero no distingue líneas sin soporte. |
-| [prompt_builder.py](../src/generation/rag/prompt_builder.py#L14) | Ya pide fuentes por tarea y no inventar números; aún no exige `SourceReference`, `grounded` ni evidencia literal. |
-| [context_assembler.py](../src/generation/rag/context_assembler.py#L19) | Cada source incluye ID, sector, año, tipo y distancia; falta `document_id`. |
+| [schemas.py](../src/generation/rag/schemas.py) | `TaskItem` tiene `engineer_days: int \| None`, `grounded` obligatorio y `sources: list[SourceReference]`, con validación de integridad. |
+| [schemas.py](../src/generation/rag/schemas.py) | Se conserva `SourceCitation` global con `source_id: int`, `relevance` y `used_for`. |
+| [schemas.py](../src/generation/rag/schemas.py) | `Estimate` conserva módulos, totales, asunciones, confianza y explicación de contexto insuficiente. |
+| [schemas.py](../src/generation/rag/schemas.py) | `GenerateResult` no tiene consumidores ni un router de etapas registrado; no se ha ampliado. |
+| [estimator.py](../src/generation/rag/estimator.py) | Generación y orquestación del flujo RAG fundamentado, a través del wrapper compartido. |
+| [validation.py](../src/generation/rag/validation.py) | `verify_citations` comprueba citas por línea y globales y distingue líneas fundamentadas, colgantes y sin datos. |
+| [prompt_builder.py](../src/generation/rag/prompt_builder.py) | Exige `SourceReference`, `grounded`, IDs exactos y evidencia literal; prohíbe cifras para tareas sin soporte. |
+| [context_assembler.py](../src/generation/rag/context_assembler.py) | Cada fuente incluye ID, documento, sector, año, tipo y distancia; falla si no hay procedencia documental. |
 
 Nuestro `RetrievedChunk.id` es un entero de base de datos. El ID trazable de
 presupuesto viaja en `budget_id`, y existe `source_id` genérico opcional.
@@ -398,17 +384,16 @@ No confundir esos campos con `SourceCitation.source_id`, que es el ID numérico
 del chunk. En las nuevas referencias usar `chunk_id=str(chunk.id)`.
 
 LIDR expone `document_id = chunk.source_id or chunk.budget_id or "unknown"` en el
-XML. La prioridad es reutilizable, pero `"unknown"` no prueba procedencia:
-verificar que las muestras presupuestarias tienen realmente `budget_id`.
-No fabricar documentos ni presentar ese marcador como identificación verificada.
+XML. El alumno conserva esa prioridad, pero falla cuando faltan ambos IDs:
+`"unknown"` no prueba procedencia. La comprobación de metadatos persistidos
+sigue pendiente de fase 2.
 
-Nuestro ensamblador soporta `distance=None` con `not-scored` y el modelo lleva
-`has_vector_distance`. Preservar esta mejora del alumno al adaptar el XML;
-copiar la interpolación numérica de LIDR rompería ese caso.
+Nuestro ensamblador conserva `distance=None` con `not-scored` y el modelo lleva
+`has_vector_distance`; esa compatibilidad está cubierta por pruebas offline.
 
-### 4.2 Wrapper de modelos y desviación respecto al enunciado
+### 4.2 Wrapper compartido y Responses API
 
-[LLMWrapper](../src/services/llm_wrapper.py#L95) usa:
+[LLMWrapper](../src/services/llm_wrapper.py) conserva sus métodos anteriores:
 
 ```text
 instructor.from_litellm(litellm.completion)
@@ -416,22 +401,41 @@ instructor.from_litellm(litellm.completion)
     -> response_model de Pydantic
 ```
 
-`complete_structured` conserva selección de modelo, timeout, delimitación de
-contenido no confiable, logs, tokens, latencia y coste. Tiene reintentos de
-Instructor cuando fallan validadores Pydantic. El generador RAG conserva además
-sus reintentos de citación/coherencia: no son el mismo mecanismo.
+El método nuevo, `complete_structured_responses`, usa:
 
-| Aspecto | Enunciado literal: lado A | Repositorios actuales: lado B |
-| --- | --- | --- |
-| API de generación | `client.responses.parse`, formato estricto | Instructor sobre LiteLLM |
-| Validación de negocio | Hay que implementarla | También; Pydantic e Instructor permiten validación y reintento |
-| Veracidad de una cita | No la demuestra la API | Tampoco; requiere cotejo con el contexto |
-| Impacto de elegir A | Añadir/cambiar integración y comprobar equivalencia del wrapper | B mantiene la integración existente |
+```text
+litellm.responses(text_format=Estimate, custom_llm_provider="openai")
+    -> OpenAI /v1/responses, sin puente a Chat Completions
+    -> text.format con json_schema y strict=true
+    -> output_text validado con Estimate.model_validate_json
+```
 
-**Decisión del usuario: B.** Documentar que no se cumple literalmente el punto
-del enunciado que obliga a Responses API. No afirmar que el wrapper actual
-garantiza exactamente el mismo `text.format` estricto: no se ha comprobado.
-No migrar el resto de llamadas del proyecto.
+Solo `_generate` del flujo fundamentado llama a ese método. Conserva el modelo
+configurado, timeout, delimitación de contenido no confiable, logs y formato de
+metadatos. Traduce `max_tokens` a `max_output_tokens` y el esfuerzo a
+`reasoning.effort`. Usa la clave OpenAI y falla explícitamente si se configura
+otro proveedor; no hace fallback a Instructor. Se desactiva el puente a Chat
+Completions y se impide descartar silenciosamente parámetros.
+
+Los errores de validación Pydantic permiten hasta seis intentos, con información
+de corrección y sin inventar datos. Una respuesta no completada, rechazada o sin
+resultado estructurado no se devuelve como estimación válida. Los reintentos de
+citación/coherencia del orquestador siguen siendo un mecanismo separado.
+
+Tokens y coste describen la respuesta exitosa, igual que en el método anterior.
+Los intentos que fallan la validación local registran su uso reportado y coste
+estimado por separado; no se consideran gratuitos ni se suman silenciosamente
+al resultado final. Los errores de proveedor se propagan mediante LiteLLM.
+
+El esquema estricto se comprueba offline inspeccionando la petición HTTP que
+genera LiteLLM. La aceptación del modelo configurado y una generación
+real quedan pendientes de fase 2. Ninguna API demuestra por sí sola que una
+citación sea verdadera: se mantiene `verify_citations`.
+
+Se conserva la API Responses requerida, pero no el método cliente literal
+`client.responses.parse`. La diferencia está aceptada para mantener el agregador:
+LiteLLM solicita el esquema estricto y el wrapper valida explícitamente con
+Pydantic.
 
 ### 4.3 Los dos caminos existentes no son una decisión pendiente
 
@@ -516,9 +520,9 @@ un corpus español.
 La [guía de sesión 10](post_sesion_10_guia.md) documenta Docker, corpus y Wizard.
 No ejecutar sus pasos de borrado de corpus: no son requisito de este ejercicio.
 
-### 4.6 Estado local comprobado durante la revisión del plan
+### 4.6 Arranque aprobado y comprobación histórica del entorno
 
-Comprobación de solo lectura el 17 de noviembre de 2026:
+Comprobación de solo lectura durante la preparación:
 
 ```text
 docker: 29.1.3
@@ -536,18 +540,10 @@ Se usó `rtk proxy docker-compose -f
 Los códigos de salida no demuestran por sí solos la causa de la parada.
 No se ha arrancado, reiniciado ni modificado ningún servicio.
 
-El usuario indicó después: «mira el readme si quieres ver como arrancar los
-servicios... no te lo inventes». Se volvió a leer el README: su apartado Docker
-documenta `docker compose up --build` y el apartado de arranque para pruebas
-documenta `docker compose up --build -d`; Streamlit se arranca en host con
-`uv run streamlit run streamlit_app.py`.
-
-**Seguir ese procedimiento documentado.** No sustituirlo por un arranque
-parcial de PostgreSQL y Redis: esa propuesta del asistente no fue aprobada.
-Tampoco cambiar el procedimiento del usuario a `docker-compose` por el fallo
-de una consulta en la terminal del asistente. Si el usuario encuentra un error
-al ejecutar el comando documentado, recoger su salida exacta y resolver ese
-error sin asumir la causa.
+**El procedimiento aprobado es el del README:** Compose para el montaje
+completo y Streamlit en host. No sustituirlo por un arranque parcial ni cambiar
+a `docker-compose` por el fallo histórico de la consulta anterior. El diagnóstico
+de errores de arranque está en la guía 10.1.D.
 
 Comandos de arranque documentados, con el prefijo `rtk` del entorno:
 
@@ -612,7 +608,7 @@ No crearlo entero solo para imitar una estructura del instructor.
   la propagación dentro de este alcance; no reemplazar por un identificador
   ficticio con apariencia de éxito.
 
-## 6. Plan de implementación, en orden
+## 6. Seguimiento de implementación y comprobaciones
 
 ### Paso 1. Revalidar estado y hacer inventario de afectados
 
@@ -630,10 +626,9 @@ No crearlo entero solo para imitar una estructura del instructor.
    documentales de transcripciones/docs. Se añaden solo esos metadatos en
    `retriever.py` y `retrieval/search_pipeline.py`, sin tocar ranking o filtros.
 
-Las búsquedas ya realizadas localizaron consumidores directos en
+Las búsquedas de implementación localizaron consumidores directos en
 [test_estimator.py](../tests/test_estimator.py) y
 [test_validation.py](../tests/test_validation.py), además del orquestador.
-Repetir la búsqueda sobre el estado de la sesión de implementación.
 
 ### Paso 2. Extender los modelos Pydantic
 
@@ -718,6 +713,22 @@ En [estimator.py](../src/generation/rag/estimator.py):
    errores, soft-fail e idempotencia.
 5. [x] No añadir el gate semántico de la sesión completa.
 
+**Ajuste de Responses desde el wrapper**
+
+- [x] Añadir `LLMWrapper.complete_structured_responses` sin modificar las
+  interfaces anteriores de Instructor/LiteLLM.
+  Evidencia: LiteLLM real con HTTP local y prueba de ambos métodos anteriores.
+- [x] Usarlo desde `_generate`, incluidas las reparaciones del orquestador y la
+  generación que reutiliza el evaluador, manteniendo las firmas públicas.
+  Evidencia: pruebas de presupuesto, feedback, error y reintentos en `test_estimator.py`.
+- [x] Comprobar formato estricto, protección del prompt, parámetros, parsing,
+  reintentos acotados, errores y metadatos.
+  Evidencia: `tests/test_llm_wrapper.py`, con LiteLLM 1.103.0 y `httpx.MockTransport`;
+  se comprueba `/v1/responses` y el JSON estricto que recibe el transporte.
+- [x] Revalidar offline los caminos afectados.
+  Evidencia: 98 tests y Ruff dirigido superados; comando en la sección 11.
+- [ ] Verificar una generación con el modelo real en fase 2, siguiendo F y G.
+
 Compatibilidad de caché:
 
 - [idempotency.py](../src/generation/rag/idempotency.py#L56) deserializa `Estimate`.
@@ -736,10 +747,8 @@ Compatibilidad de caché:
   AppTest de fuentes/null/request ID/error HTTP y regresión del Wizard.
   La comprobación de interfaz contra la API real queda en fase 2.
 
-Esta parte no es una traducción de cambios Rails: no los hubo. El usuario ya
-aprobó añadir el panel separado y mantener el Wizard actual. También decidió
-no añadir una presentación del informe detallado que LIDR no muestra.
-El plan completo ya está aprobado.
+El panel separado está aprobado e implementado, sin cambiar el Wizard ni
+añadir una presentación del informe detallado que LIDR no muestra.
 
 1. [x] Conservar intacto el recorrido principal del RAG Wizard de sesión 10.
 2. [x] Añadir dentro de la pestaña RAG un panel secundario claramente separado:
@@ -771,7 +780,7 @@ Evidencia común de 1-10: `render_grounded_estimate`, llamada en el desplegable
 de `streamlit_app.py`, `test_grounded_panel_uses_http_and_displays_sources_and_missing_data`,
 `test_grounded_panel_http_error_is_not_an_empty_estimate` y pruebas previas del Wizard.
 
-Archivos previstos: [streamlit_app.py](../streamlit_app.py),
+Archivos afectados: [streamlit_app.py](../streamlit_app.py),
 [wizard_ui.py](../src/wizard_ui.py) y su test existente. Reutilizar patrones HTTP
 locales; no crear un cliente genérico ni un nuevo framework de interfaz.
 
@@ -825,7 +834,7 @@ locales; no crear un cliente genérico ni un nuevo framework de interfaz.
   retenido, integridad de muestras y persistencia de resultados válidos.
   No se ha ejecutado recolección real.
 
-Crear `scripts/eval_ragas_s11.py`, adaptando la referencia:
+Implementación de `scripts/eval_ragas_s11.py`, adaptada de la referencia:
 
 1. [x] Resolver imports de nuestro layout `src`; no usar `app.*`.
 2. [x] Reutilizar dependencias y helpers existentes. El helper real es
@@ -900,8 +909,11 @@ Cálculo:
    Evidencia: golden y construcción de `ChatOpenAI` en `score_samples`.
 2. [x] Configurar embeddings `text-embedding-3-small`.
    Evidencia: golden y construcción de `OpenAIEmbeddings`.
-3. [ ] Adaptar los cuatro nombres de entrada a la API de la versión elegida.
-4. [ ] Calcular las cuatro métricas requeridas por consulta.
+3. [ ] Comprobar con RAGAS real la adaptación de los cuatro nombres de entrada.
+   El código está escrito en `score_samples`; su compatibilidad aún no se ha
+   probado en el entorno del scorer.
+4. [ ] Ejecutar el cálculo real de las cuatro métricas por consulta.
+   La llamada está implementada; no hay resultados reales todavía.
 5. [x] Validar que hay exactamente Q1-Q5, sin duplicados, con métricas finitas.
 6. [x] Una métrica ausente/NaN no es un cero: error explícito y baseline incompleta.
 7. [x] Promedio aritmético por columna sobre cinco consultas válidas.
@@ -922,12 +934,12 @@ Cálculo:
   el cierre offline de este documento. El import real de RAGAS pertenece al
   bloqueo explícito del paso 8, no se ha sustituido por un mock de importación.
 
-Este paso pertenece a la fase 1. Ejecutar aquí todas las comprobaciones posibles
-sin infraestructura, incluida la demo. Antes de usar los comandos orientativos,
-revisar fixtures, imports y hooks; separar los casos que requieren servicios
-reales y documentarlos en la guía de fase 2, sin ejecutarlos ahora.
+Este paso registra pruebas sin infraestructura. Las evidencias distinguen
+la implementación inicial del ajuste de Responses. Los comandos históricos
+están en el cierre offline,
+no son pasos que debas repetir para ejecutar la guía manual.
 
-Preferir ampliar archivos existentes. Casos mínimos:
+Casos cubiertos por las pruebas:
 
 **Schema y verificador**
 
@@ -1008,18 +1020,13 @@ al final de este documento; no hay marcadores de archivos que completar.
   Esto no verifica sus comandos online ni resuelve el bloqueo de dependencias.
 - [ ] **Paso 10 completado: fase 2 ejecutada y comprobada por el usuario.**
 
-**El asistente prepara; el usuario ejecuta.** No gastar llamadas de generación
-o scoring de fondo mientras el usuario cree que solo se está preparando código.
-La preparación de esta guía pertenece a la fase 1; las casillas de ejecución
-siguientes quedan pendientes hasta que el usuario las complete manualmente.
-La guía final debe quedar en este documento, con enlaces relativos a los
-apartados necesarios del README, y cumplir el formato de la sección 0.2.
-La lista siguiente sirve para registrar la ejecución. Las instrucciones que
-debes seguir están desarrolladas en la guía 10.1.
+**La fase 2 la ejecuta el usuario.** Las casillas siguientes registran esa
+ejecución, no la escritura de la guía. Sigue las instrucciones del apartado
+10.1 y guarda las evidencias antes de marcarlas.
 
 Lista de ejecución manual, todavía pendiente:
 
-1. [ ] Explicar qué se va a probar y qué llamadas/coste implica.
+1. [ ] Leer qué se va a probar y qué llamadas/coste implica.
 2. [ ] Usar el montaje aprobado en la decisión 16: Compose para API, PostgreSQL
    y Redis, y Streamlit en host. Comprobar su estado sin cambiar de instancia.
    Seguir los comandos de arranque del README, sin sustituirlos por una receta
@@ -1059,7 +1066,7 @@ Lista de ejecución manual, todavía pendiente:
     una plantilla preparada en fase 1, con instrucciones para interpretar los
     números sin IA y sin inventar conclusiones.
 
-Comandos previstos después de implementar y verificar el harness:
+Comandos de evaluación, después de las comprobaciones de la guía:
 
 ```bash
 # Desde /home/basf/wsTakeoff/ai-engineering/estimador-cag, tras el paso 10.1.B
@@ -1138,7 +1145,7 @@ construye las cuatro métricas, sin enviar preguntas al juez.
 PASS: real RAGAS imports and four metrics are available; no model calls made.
 ```
 
-Guarda esa línea, la fecha y las versiones en este documento, junto al paso 8.
+Guarda esa línea y las versiones en este documento, junto al paso 8.
 Conserva también el lock recién generado. No marques el paso 8 antes de ver
 el `PASS`.
 
@@ -1215,7 +1222,7 @@ rtk proxy docker compose logs --tail 50 postgres redis
 - Si salud dice `llm_configured:false`, revisa la configuración del paso C;
   no gastes peticiones de generación intentando que se arregle.
 
-Guarda la fecha y el resultado de salud, sin secretos, como evidencia del
+Guarda el resultado de salud, sin secretos, como evidencia del
 arranque. No ejecutes `docker compose config`: puede imprimir el entorno.
 
 #### E. Comprobar el corpus que hay de verdad en PostgreSQL
@@ -1297,7 +1304,11 @@ de reformulación, embedding y generación; puede tardar varios minutos.**
 Apunta el request ID. Detén **solo la captura de logs de la terminal C** con
 Ctrl+C; no detengas los servicios. Abre `evals/s11_backend.log` y busca ese ID.
 Para esa petición debes encontrar `citation_report` con `phase=initial` y
-`phase=final`. Mira `dangling_citations` del informe final: debe estar vacío
+`phase=final`, además de `llm_responses_call_completed` para la generación.
+Si solo aparece `retrieval_soft_fail`, no se ha probado el generador Responses:
+se devolvió contexto insuficiente antes de llamarlo. Conserva ese resultado
+y revisa la recuperación; no marques la generación real como comprobada.
+Mira `dangling_citations` del informe final: debe estar vacío
 para dar por buena su integridad referencial. Si no lo está, el warning
 `citations_unrepaired` y la confianza baja dejan visible el fallo: **la
 petición ha terminado, pero la calidad de sus citas no ha pasado**.
@@ -1323,9 +1334,11 @@ Ante errores:
 #### G. Recoger las cinco muestras una sola vez
 
 Este es el paso de mayor coste variable: cinco reformulaciones, cinco embeddings
-de consulta y cinco generaciones, más los reintentos internos de Instructor si
-el modelo devuelve un schema inválido. El generador puede usar hasta su techo
-configurado de tokens; no hay un coste fijo prometido. Revisa antes el saldo y
+de consulta y cinco generaciones, más los reintentos de validación del wrapper
+Responses si el modelo devuelve una estimación inválida. La reformulación sigue
+con Instructor; ambos caminos usan el agregador LiteLLM.
+El generador puede usar hasta su techo configurado de tokens; no hay un coste
+fijo prometido. Revisa antes el saldo y
 los límites del proyecto OpenAI. La descarga inicial del reranker usa Internet,
 tiempo y memoria local, no es una llamada al juez de RAGAS.
 
@@ -1340,7 +1353,10 @@ HTTP**. Fuerza híbrida, reranking, umbral 1.2 y `budget_component`, sin filtro
 sectorial; no usa routing, expansión ni filtrado temporal avanzado. Genera
 una vez por consulta y audita, sin el bucle HTTP de reparación. Esas diferencias
 quedan registradas en `configuration`; no compares resultados como si fueran
-los mismos parámetros del botón.
+los mismos parámetros del botón. `generation_api` debe indicar `openai_responses`
+y `generation_client`, `litellm.responses`;
+los reintentos de validación del wrapper son independientes de esa generación
+sin reparación HTTP.
 
 **Éxito:** aparecen Q1, Q2, Q3, Q4 y Q5 y el mensaje
 `Saved all five samples ... No RAGAS scoring has run.`. Después ejecuta:
@@ -1418,7 +1434,7 @@ Abre la tabla Markdown y el JSON de resultados con el editor. Comprueba:
 4. Conservas el archivo de muestras que corresponde a su `samples_sha256`.
 
 Después abre `evals/RAGAS_BASELINE_S11.md`, que ahora solo describe preparación,
-y añade un enlace a `ragas_baseline_s11.md`, la fecha, los comandos que realmente
+y añade un enlace a `ragas_baseline_s11.md`, los comandos que realmente
 ejecutaste y la nota de hallazgos. No sustituyas cifras por las del instructor.
 Para interpretar sin IA:
 
@@ -1464,7 +1480,8 @@ no borres volúmenes, corpus ni claves de Redis.
    - [ ] tabla propia Q1-Q5 más promedio;
    - [ ] resumen de informes de citas;
    - [ ] nota de 2-3 frases basada en nuestros números;
-   - [x] desviaciones respecto a Responses API y rechazo estricto;
+   - [x] uso de Responses API, diferencia respecto a `client.responses.parse`
+     y diferencia respecto al rechazo estricto;
    - [x] diferencias efectivas respecto a la referencia, si las hay.
    Evidencia de lo preparado: apartados de configuración, bloqueo y límites.
 3. [ ] Guardar muestras e informe JSON en las rutas documentadas, sin secretos.
@@ -1473,8 +1490,9 @@ no borres volúmenes, corpus ni claves de Redis.
    Dejar estado explícitamente pendiente.
    Evidencia: informe de preparación sin métricas propias.
 5. [x] Revisar el diff final, tests y worktree; no incluir `src/alembic.ini`.
-   Evidencia: diff de contratos/UI/metadatos, 75 tests dirigidos, Ruff y
-   `git diff --check`. No se ha tocado el archivo ajeno ni el índice.
+   Evidencia inicial: diff de contratos/UI/metadatos y 75 tests.
+   Revisión del ajuste: 98 tests, Ruff dirigido y `git diff --check`.
+   No se ha tocado el archivo ajeno ni el índice.
 6. [x] Dejar la revisión al usuario. No hacer commit.
 
 Preparar en fase 1 el README, las instrucciones y la estructura de los informes,
@@ -1482,7 +1500,7 @@ sin datos ficticios. Completar resultados, tabla y hallazgos únicamente despué
 de la ejecución manual de fase 2. El cierre offline debe enumerar las
 validaciones superadas, los bloqueos y todos los criterios online pendientes.
 
-## 7. Baseline de LIDR: contexto, no objetivo ni resultado nuestro
+## 7. Resultados históricos de LIDR: no son nuestra baseline
 
 La documentación de la referencia contiene esta tabla:
 
@@ -1527,7 +1545,8 @@ Tampoco:
 - Reescribir la búsqueda avanzada de sesión 10.
 - Unificar a la fuerza el generador fundamentado y el Wizard.
 - Cambiar la tecnología de UI o añadir Rails.
-- Refactorizar el wrapper compartido para Responses API.
+- Migrar los métodos existentes del wrapper o los demás recorridos a Responses.
+  La adición del método Responses y su uso por `_generate` sí están aprobados.
 - Cambiar todos los contratos de esfuerzo del proyecto a horas o floats.
 - Arreglar problemas antiguos no relacionados.
 - Declarar que tenemos una baseline antes de la ejecución real del usuario.
@@ -1555,7 +1574,8 @@ Tampoco:
   Evidencia de este bloque: tests de `test_estimator.py`/`test_validation.py`,
   captura de logs y demo determinista.
 - [ ] CAG, conversaciones y Wizard previo mantienen su comportamiento.
-  Wizard probado offline; CAG/conversaciones no se han modificado ni reejecutado.
+  Wizard y smoke de conversaciones revalidados offline.
+  CAG no se ha reejecutado; no se afirma una validación global ni online.
 - [x] Streamlit muestra fuentes y falta de datos sin afirmar garantías que no recibe.
   Evidencia: AppTest del panel separado y del error HTTP.
 - [x] Golden Q1-Q5 trazable, con referencias revisadas y Q6-Q8 intactas.
@@ -1563,7 +1583,8 @@ Tampoco:
 - [ ] Muestras propias contienen los cuatro campos y el contexto realmente usado.
 - [ ] Dependencias/imports de RAGAS probados, sin shims preventivos.
 - [x] Tests dirigidos y lint de cambios pasan.
-  Evidencia: 75 passed, Ruff dirigido y diff sin errores de whitespace.
+  Evidencia actual: 98 passed, Ruff dirigido y diff sin errores de whitespace.
+  La ejecución inicial de 75 tests se conserva en la sección 11.
 - [ ] Fase 1: implementación completa y validaciones sin servicios registradas.
   Código entregado; lock/import real del scorer bloqueados por falta de caché.
 - [x] Fase 1: guía manual autónoma de fase 2 entregada, con resultados esperados,
@@ -1572,8 +1593,10 @@ Tampoco:
 - [ ] Fase 2: usuario ejecutó generación y scoring siguiendo la guía autónoma.
 - [ ] Cinco consultas, cuatro métricas finitas cada una y promedio correcto.
 - [ ] Tabla, informe y nota propios persistidos.
-- [x] Desviación de Responses API documentada.
-  Evidencia: README e informe de preparación de baseline.
+- [x] Responses API en el generador fundamentado comprobada offline y documentada.
+  Evidencia: LiteLLM real con HTTP local, validación Pydantic, tests y documentación
+  del paso 4. El método cliente literal del enunciado no se utiliza.
+- [ ] Generación Responses comprobada con el modelo real en fase 2.
 - [x] Ningún secreto, dato ajeno o archivo no rastreado previo incluido por el asistente.
   Evidencia: revisión del diff; no se ha leído `.env`, añadido al índice ni
   modificado `src/alembic.ini`.
@@ -1592,12 +1615,12 @@ No se han verificado aún:
 - [ ] Ejecución de Streamlit contra servicios y resultados reales.
 - [ ] Coste y duración de una evaluación completa.
 
-Para la revisión del plan, las propuestas que merecen atención especial son:
+Decisiones cerradas durante la preparación inicial:
 
 1. [x] Revisar y aceptar o corregir el panel secundario de estimación fundamentada
    en Streamlit, sin alterar el Wizard.
    Evidencia: el usuario respondió «si es asi lo entiendo, la respuesta seria 1»
-   el 17 de noviembre de 2026. Condición comprobada en
+   al aprobar el panel. Condición comprobada en
    [rag_estimate.py](../src/routers/rag_estimate.py#L29) y mediante búsqueda de
    los usos del endpoint en el cliente: existe en la API, pero Streamlit no lo
    llama. Ver decisión 13 de la sección 2.1.
@@ -1617,12 +1640,15 @@ Para la revisión del plan, las propuestas que merecen atención especial son:
    Ver decisión 15 de la sección 2.1. La propuesta queda rechazada y los pasos
    de implementación se han actualizado para no aplicarla.
 
-No son bloqueos para redactar este plan. Sí deben quedar aceptadas o corregidas
-en su revisión antes de tratarlas como instrucciones de implementación.
+Estas tres decisiones están cerradas; no hay que volver a elegirlas para
+ejecutar la fase 2. La decisión vigente de transporte del generador se recoge
+en la sección 4.2.
 
-## 11. Evidencia del cierre offline
+## 11. Evidencias offline por implementación
 
-Fecha: 17 de noviembre de 2026. Entorno local disponible: Python 3.13,
+### Implementación inicial
+
+Entorno local disponible: Python 3.13,
 pytest 9.1.1, Ruff 0.16.9 y Pydantic 2.13.5. No se instaló ni descargó nada.
 El asistente no arrancó contenedores, servicios, bases de datos o modelos,
 ni realizó ingestas, migraciones o consultas a infraestructura existente.
@@ -1701,3 +1727,63 @@ adicionales. La selección E4/E7/E9/F anterior es la validación dirigida realiz
   prueba de pantalla con API, Q1-Q5 reales, cuatro métricas finitas y medias,
   tabla propia y nota sobre esos resultados. Nada de ello se ha marcado como
   superado con pruebas que usan dobles.
+
+### Ajuste de Responses y revisión del plan
+
+Se añadió Responses al wrapper compartido y se cambió únicamente el generador
+fundamentado para usar ese método. La configuración de las futuras muestras
+registra `generation_api="openai_responses"` y `generation_client="litellm.responses"`.
+No se cambiaron datos, servicios,
+dependencias, contratos HTTP ni los métodos anteriores de Instructor/LiteLLM.
+El repo del instructor se consultó, sin modificarlo.
+
+Se validó LiteLLM 1.103.0 mediante un transporte HTTP en memoria: el agregador
+construye la petición nativa `/v1/responses` con esquema estricto y el wrapper
+valida el JSON con Pydantic, sin contactar con OpenAI.
+Las pruebas cubren esquema estricto, frontera de datos no confiables, presupuesto
+y razonamiento, fuentes obligatorias, esfuerzo nulo sin soporte, reintentos
+acotados, respuesta incompleta, rechazo, ausencia de resultado/uso y error del
+proveedor. También comprueban los dos métodos anteriores de Instructor y la
+propagación de errores y feedback desde `_generate`.
+
+Comando ejecutado desde la raíz del repo alumno:
+
+```bash
+rtk proxy env PYTHONPATH=/root/.copilot/session-state/76763db3-6747-407f-8f49-51279e134a97/files TIKTOKEN_CACHE_DIR=/root/.cache/uv/archive-v0/CPIdYM2Gg--v5q7pPfdUm/litellm/litellm_core_utils/tokenizers UV_OFFLINE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 LITELLM_LOCAL_MODEL_COST_MAP=True DATABASE_URL= REDIS_URL=redis://127.0.0.1:1 OPENAI_API_KEY= ANTHROPIC_API_KEY= estimador-cag/.venv/bin/python -m pytest -p offline_guard -q \
+  estimador-cag/tests/test_llm_wrapper.py \
+  estimador-cag/tests/test_estimator.py \
+  estimador-cag/tests/test_query_reformulator.py \
+  estimador-cag/tests/test_eval_ragas_s11.py \
+  estimador-cag/tests/test_conversational_client.py \
+  estimador-cag/tests/test_validation.py \
+  estimador-cag/tests/test_context_assembler.py \
+  estimador-cag/tests/test_idempotency.py \
+  estimador-cag/tests/test_wizard_ui.py \
+  estimador-cag/tests/test_rag_runs.py \
+  estimador-cag/tests/test_task_hours.py \
+  estimador-cag/tests/test_task_hours_vector_validity.py \
+  estimador-cag/tests/test_retriever.py \
+  estimador-cag/tests/test_hybrid_retrieve.py
+
+rtk proxy estimador-cag/.venv/bin/ruff check --select E4,E7,E9,F \
+  estimador-cag/src/services/llm_wrapper.py \
+  estimador-cag/src/generation/rag/estimator.py \
+  estimador-cag/scripts/eval_ragas_s11.py \
+  estimador-cag/tests/test_llm_wrapper.py \
+  estimador-cag/tests/test_estimator.py
+```
+
+**Resultados:** 98 passed, 2 avisos de deprecación de LangChain; Ruff dirigido
+`All checks passed!`. No se ejecutó un checker de tipos ni la suite global.
+
+El helper `offline_guard` es exclusivo de la validación de esta sesión: bloquea
+conexiones y DNS. La primera ejecución se detuvo porque tiktoken intentó descargar
+su vocabulario; se localizó una copia ya disponible en la caché de LiteLLM y se
+usó sin descargar nada. Después, el smoke previo de conversaciones intentó
+consultar Redis. Se aisló únicamente ese backend con fakeredis en el helper,
+sin modificar la aplicación ni sus tests previos. El comando documenta una
+ejecución histórica, no un paso obligatorio para el usuario.
+
+La tabla y las muestras reales siguen pendientes, igual que los imports de
+RAGAS y la aceptación de Responses por el modelo configurado. No se hicieron
+llamadas de pago, arranques, ingestas, migraciones, staging ni commits.

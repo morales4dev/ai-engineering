@@ -50,7 +50,7 @@ reproducir literalmente la referencia.
 
 ### Decisión del usuario
 
-**Elegida la opción 2 el 17 de noviembre de 2026.**
+**Elegida la opción 2.**
 
 Respuesta: «el 2, pero anota esto en un archivo sesion11_porting_drift.md».
 
@@ -77,7 +77,7 @@ aritméticas exactas de las horas originales. Esta diferencia podría influir en
 la evaluación; no se ha medido su efecto en el alumno ni se afirma que explique
 por sí sola una métrica concreta.
 
-### Comprobaciones pendientes de implementación
+### Comprobaciones de la decisión
 
 - [x] El contenido del golden del alumno coincide con el del instructor en
   `3292744`, incluidas sus cifras aproximadas.
@@ -121,3 +121,27 @@ Las referencias también suman redondeos por componente: por ejemplo, Q1 lista
 15+20+18+8=61 días aunque anuncia aproximadamente 60, y Q3 lista
 24+19+20+8=71 aunque anuncia aproximadamente 70. Son cifras heredadas que se
 mantienen; no se atribuye de antemano a ellas ninguna puntuación.
+
+## D-03. Responses API solo para la generación fundamentada
+
+El usuario revisó la decisión inicial de conservar
+Instructor/LiteLLM también para este generador. El enunciado exige
+`client.responses.parse`; la referencia `3292744` sigue utilizando el wrapper
+Instructor y no aporta una implementación de Responses para copiar.
+
+`LLMWrapper.complete_structured_responses` llama a `litellm.responses` y se usa
+desde `_generate`. No se evita el wrapper ni el agregador, ni se migran sus
+métodos anteriores. El reformulador, el Wizard y los demás recorridos conservan
+Instructor/LiteLLM.
+
+LiteLLM instalado y fijado en el lock es 1.103.0. Su implementación convierte
+`text_format=Estimate` en `text.format` con `json_schema` y `strict=true`.
+Se comprueban offline la petición nativa `/v1/responses`, el puente a Chat
+Completions desactivado, ese cuerpo HTTP, los validadores Pydantic, los reintentos,
+los errores y los metadatos; la aceptación por el modelo real queda en fase 2.
+
+La elección conserva Responses API, pero no el método cliente literal
+`client.responses.parse`. La validación local se hace con
+`Estimate.model_validate_json` y los reintentos son del wrapper. Esta diferencia
+está aceptada para conservar LiteLLM; no se presenta como equivalencia literal.
+No se cambia la política de citas colgantes ni se promete verificación semántica.

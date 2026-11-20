@@ -1010,8 +1010,19 @@ truncation, including global citations. It logs initial/final `citation_report`
 events with the response's `X-Request-ID`. A dangling citation triggers one
 correction; remaining failures produce `citations_unrepaired` and low
 confidence, **not an HTTP rejection**. Document identity, evidence text and
-semantic support are not programmatically verified. Generation still uses
-Instructor/LiteLLM, not the exercise's literal Responses API requirement.
+semantic support are not programmatically verified. Grounded generation uses
+`litellm.responses` through `LLMWrapper.complete_structured_responses`.
+LiteLLM uses native OpenAI `/v1/responses`, with the Chat Completions bridge
+disabled, and sends a strict JSON schema. Pydantic validates the returned JSON
+and line integrity locally. This preserves the aggregator but differs from the
+exercise's literal `client.responses.parse` client method.
+The wrapper preserves prompt boundaries, model selection, timeout and usage
+logs, with up to six validation attempts. Refused, incomplete or missing parsed
+output fails explicitly. Other structured callers retain Instructor/LiteLLM.
+Token/cost metadata describes the successful response; reported usage for failed
+validation attempts is logged separately. Real Responses generation is still
+pending the manual validation below. Saved samples identify both the API and
+the `litellm.responses` client.
 
 The generation golden set inherits Q1-Q5 from LIDR without changing the existing
 retrieval Q1-Q8. Its known approximations are documented in
