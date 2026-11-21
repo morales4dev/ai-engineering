@@ -7,7 +7,7 @@ import math
 import httpx
 import pandas as pd
 import streamlit as st
-from generation.rag.schemas import Estimate
+from generation.rag.schemas import GroundedEstimate
 
 
 def render_grounded_estimate(endpoint: str, api_key: str | None) -> None:
@@ -37,7 +37,7 @@ def render_grounded_estimate(endpoint: str, api_key: str | None) -> None:
                     )
                     response.raise_for_status()
                     body = response.json()
-                    Estimate.model_validate(body)
+                    GroundedEstimate.model_validate(body)
             except httpx.HTTPStatusError as exc:
                 st.error(f"Service returned {exc.response.status_code}: {exc.response.text}")
                 st.caption(f"Request ID: {exc.response.headers.get('X-Request-ID', 'not returned')}")
@@ -51,7 +51,7 @@ def render_grounded_estimate(endpoint: str, api_key: str | None) -> None:
     saved = st.session_state.get("grounded_rag_result")
     if not saved:
         return
-    estimate = Estimate.model_validate(saved["estimate"])
+    estimate = GroundedEstimate.model_validate(saved["estimate"])
     st.caption(f"Request ID: {saved.get('request_id') or 'not returned'}")
     st.write(f"Confidence: {estimate.confidence}")
     if estimate.confidence == "low":
@@ -63,11 +63,27 @@ def render_grounded_estimate(endpoint: str, api_key: str | None) -> None:
     if estimate.duration_weeks is not None:
         st.write(f"Duration: {estimate.duration_weeks} weeks")
     st.write(estimate.reasoning)
-    st.caption(
-        "Grounded is the model's declaration, not a verified label. "
-        "Citation membership reports are available in backend logs using the request ID; "
-        "document identity and evidence semantics are not programmatically verified."
-    )
+    st.caption("Grounding checks are signals, not proof; review sources before using an estimate.")
+    if estimate.citation_report:
+        report = estimate.citation_report
+        st.write(
+            f"Citations: {report.grounded_lines} grounded, {report.dangling_lines} dangling, "
+            f"{report.insufficient_lines} without data."
+        )
+    if estimate.hallucination_report:
+        counts = {
+            status: sum(line.status == status for line in estimate.hallucination_report.lines)
+            for status in ("grounded", "degraded", "insufficient", "unverified")
+        }
+        st.write(
+            f"Evidence check: {counts['grounded']} supported, {counts['degraded']} flagged, "
+            f"{counts['insufficient']} without data, {counts['unverified']} unverified."
+        )
+        for line in estimate.hallucination_report.lines:
+            if line.status in ("degraded", "unverified"):
+                st.warning(f"{line.module} / {line.component}: {line.status} — {line.reason}")
+        if estimate.hallucination_report.judge_error:
+            st.warning(estimate.hallucination_report.judge_error)
     for module in estimate.modules:
         st.markdown(f"#### {module.name}")
         if module.description:
@@ -287,6 +303,12 @@ def render_wizard(endpoint: str, api_key: str | None) -> None:
                 if not result.get("has_match"):
                     st.warning(f"{result['module']} / {result['task']}: no matching task.")
                 else:
+                    hour_range = result.get("hours_range")
+                    if hour_range:
+                        st.warning(
+                            f"{result['module']} / {result['task']}: "
+                            f"{hour_range['low']}–{hour_range['high']} h. {hour_range['reason']}"
+                        )
                     st.write(
                         f"{result['module']} / {result['task']}: "
                         f"{result['estimated_hours']} h · similarity/agreement "

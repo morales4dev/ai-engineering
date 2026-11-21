@@ -15,6 +15,7 @@ def test_retrieval_settings_require_key_and_control_runtime(monkeypatch):
         RETRIEVAL_SEARCH_MODE="vector", RERANKER_ENABLED=False,
         RETRIEVAL_ROUTING_ENABLED=True, QUERY_TRANSFORM_ENABLED=True,
         TEMPORAL_DECAY_ENABLED=False, TASK_HOURS_TOP_K=5,
+        HALLUCINATION_GATE_ENABLED=True, AUGMENTATION_ENABLED=True, SYNTHESIS_ENABLED=True,
         TASK_HOURS_DISTANCE_THRESHOLD=0.45, RERANKER_MODEL="test",
         ESTIMATE_API_KEY="estimate", RETRIEVAL_API_KEY="retrieval",
     )

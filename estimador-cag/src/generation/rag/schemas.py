@@ -347,6 +347,25 @@ class CitationReport(BaseModel):
         return bool(self.dangling_citations)
 
 
+class LineGate(BaseModel):
+    module: str
+    component: str
+    status: Literal["grounded", "degraded", "insufficient", "unverified"]
+    reason: str | None = None
+
+
+class HallucinationReport(BaseModel):
+    lines: list[LineGate] = Field(default_factory=list)
+    judge_error: str | None = None
+
+
+class GroundedEstimate(Estimate):
+    """API result with audits, kept separate from the LLM's response schema."""
+
+    citation_report: CitationReport | None = None
+    hallucination_report: HallucinationReport | None = None
+
+
 # ---- HTTP request models for the Session 9 routers ------------------------
 # Named ``RetrievalRequest``/``EstimateRequest`` (not ``SearchRequest``) to
 # avoid colliding with the Session 8 ``SearchRequest`` above.

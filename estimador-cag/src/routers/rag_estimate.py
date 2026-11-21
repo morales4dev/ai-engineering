@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from generation.rag.errors import RagError
 from generation.rag.estimator import estimate_from_transcript
-from generation.rag.schemas import Estimate, EstimateRequest
+from generation.rag.schemas import EstimateRequest, GroundedEstimate
 from routers.rate_limiting import limiter
 from routers.security import require_estimate_key
 
@@ -27,11 +27,11 @@ router = APIRouter(prefix="/v1/estimate", tags=["estimate"])
 
 @router.post(
     "/from-transcript",
-    response_model=Estimate,
+    response_model=GroundedEstimate,
     dependencies=[Depends(require_estimate_key)],
 )
 @limiter.limit("10/minute")
-async def from_transcript(request: Request, payload: EstimateRequest) -> Estimate:
+async def from_transcript(request: Request, payload: EstimateRequest) -> GroundedEstimate:
     """Produce a grounded estimate from a raw transcript (idempotent on key)."""
     try:
         return await estimate_from_transcript(

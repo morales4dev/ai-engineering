@@ -148,6 +148,10 @@ def score_samples(source: Path, out: Path) -> None:
             {
                 "id": sample.id, **row, "ragas_answer": ragas_answer,
                 "citation_report": sample.citation_report.model_dump(),
+                "hallucination_report": (
+                    sample.hallucination_report.model_dump()
+                    if sample.hallucination_report else None
+                ),
             }
             for sample, row, ragas_answer in zip(samples, rows, ragas_answers, strict=True)
         ],

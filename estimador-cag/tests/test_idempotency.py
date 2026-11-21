@@ -96,6 +96,7 @@ def generate_calls(monkeypatch):
         deps, "get_runtime_retrieval_config",
         lambda: SimpleNamespace(
             effective_search_mode=lambda: "vector", effective_rerank=lambda: False,
+            effective_augmentation=lambda: False, effective_hallucination_gate=lambda: False,
         ),
     )
     monkeypatch.setattr(
@@ -156,3 +157,18 @@ def test_legacy_cached_sources_invalidate_only_that_key():
     assert store.get("old") is None
     assert redis.get("idempotency:estimate:old") is None
     assert redis.get("unrelated") == "keep"
+
+
+def test_cached_audit_reports_survive_round_trip():
+    from generation.rag.schemas import GroundedEstimate, HallucinationReport, LineGate
+
+    store = IdempotencyStore(redis_client=None)
+    estimate = GroundedEstimate(
+        confidence="low", reasoning="Evidence needs review.",
+        hallucination_report=HallucinationReport(lines=[
+            LineGate(module="Auth", component="Login", status="unverified", reason="offline"),
+        ]),
+    )
+    store.set("audit", estimate)
+    assert store.get("audit") == estimate
+    assert "hallucination_report" not in Estimate.model_json_schema()["properties"]

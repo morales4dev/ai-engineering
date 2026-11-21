@@ -13,6 +13,7 @@ def runtime(monkeypatch):
         effective_task_hours_distance_threshold=lambda: 0.3,
         effective_search_mode=lambda: "hybrid",
         effective_rerank=lambda: True,
+        effective_synthesis=lambda: True,
     )
     monkeypatch.setattr(task_hours, "get_runtime_retrieval_config", lambda: config)
     return config
@@ -27,6 +28,28 @@ def test_consensus_weights_nearest_and_penalizes_disagreement():
     assert 45 < hours <= 50
     assert 0 < reliability < 1
     assert dispersion > 0
+
+
+async def test_hours_disagreement_adds_range_without_changing_consensus(monkeypatch):
+    monkeypatch.setattr(task_hours, "get_embedder", lambda: SimpleNamespace(embed_one=lambda _: [0]))
+    monkeypatch.setattr(task_hours, "get_runtime_retrieval_config", lambda: SimpleNamespace(
+        effective_task_hours_top_k=lambda: 5, effective_task_hours_distance_threshold=lambda: 0.6,
+        effective_search_mode=lambda: "vector", effective_rerank=lambda: False,
+        effective_synthesis=lambda: True,
+    ))
+
+    async def search(*args, **kwargs):
+        return SimpleNamespace(chunks=[
+            SimpleNamespace(id=i, budget_id=str(i), estimated_hours=hours, distance=0.1,
+                            has_vector_distance=True)
+            for i, hours in enumerate([40, 90])
+        ])
+
+    monkeypatch.setattr(task_hours, "search_chunks", search)
+    request = StructureRequest(modules=[{"name": "Notifications", "tasks": [{"name": "Delivery"}]}])
+    task = (await task_hours.estimate_tasks(request))[0]
+    assert task.estimated_hours == 65
+    assert (task.hours_range.low, task.hours_range.high) == (40, 90)
 
 
 async def test_task_search_excludes_lexical_only_and_missing_hours(monkeypatch, runtime):

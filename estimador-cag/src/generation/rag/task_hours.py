@@ -5,11 +5,12 @@ from __future__ import annotations
 import asyncio
 import statistics
 
+from config import get_settings
 from dependencies import get_embedder, get_runtime_retrieval_config
 from generation.rag.chunk_types import HISTORICAL_TASK
 from generation.rag.errors import RetrievalError
 from generation.rag.retriever import search_chunks
-from generation.rag.wizard import StructureRequest, TaskHours, TaskNeighbor
+from generation.rag.wizard import HourRange, StructureRequest, TaskHours, TaskNeighbor
 
 
 def consensus(neighbors: list[TaskNeighbor]) -> tuple[int, float, float]:
@@ -78,6 +79,14 @@ async def estimate_tasks(request: StructureRequest) -> list[TaskHours]:
         if not neighbors:
             return TaskHours(module=module.name, task=task.name, has_match=False)
         hours, reliability, dispersion = consensus(neighbors)
+        hours_range = None
+        if runtime.effective_synthesis() and dispersion > get_settings().SYNTHESIS_CONTRADICTION_THRESHOLD:
+            low = min(n.estimated_hours for n in neighbors)
+            high = max(n.estimated_hours for n in neighbors)
+            hours_range = HourRange(
+                low=low, high=high,
+                reason=f"Historical sources disagree ({low}–{high} h); review their scope.",
+            )
         return TaskHours(
             module=module.name,
             task=task.name,
@@ -86,6 +95,7 @@ async def estimate_tasks(request: StructureRequest) -> list[TaskHours]:
             reliability=reliability,
             dispersion=dispersion,
             neighbors=neighbors,
+            hours_range=hours_range,
         )
 
     return list(await asyncio.gather(

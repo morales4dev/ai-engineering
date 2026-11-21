@@ -86,6 +86,12 @@ class Settings(BaseSettings):
     ROUTER_MAX_TARGETS: int = 3
     TASK_HOURS_TOP_K: int = 5
     TASK_HOURS_DISTANCE_THRESHOLD: float = 0.45
+    HALLUCINATION_GATE_ENABLED: bool = True
+    HALLUCINATION_JUDGE_MODEL: str = "gpt-4o-mini"
+    HALLUCINATION_NUMERIC_TOLERANCE: float = 0.5
+    AUGMENTATION_ENABLED: bool = True
+    SYNTHESIS_ENABLED: bool = True
+    SYNTHESIS_CONTRADICTION_THRESHOLD: float = 0.35
     # Token budget for the assembled <source> context block (tiktoken cl100k_base).
     MAX_CONTEXT_TOKENS: int = 16384
     # Idempotency cache for POST /v1/estimate/from-transcript (seconds; 24h).

@@ -117,7 +117,8 @@ def wire(monkeypatch):
         monkeypatch.setattr(
             deps, "get_runtime_retrieval_config",
             lambda: SimpleNamespace(
-                effective_search_mode=lambda: "vector", effective_rerank=lambda: False
+                effective_search_mode=lambda: "vector", effective_rerank=lambda: False,
+                effective_augmentation=lambda: False, effective_hallucination_gate=lambda: False,
             ),
         )
         return calls, store
@@ -134,6 +135,34 @@ async def test_happy_path_runs_all_stages(wire):
     assert result.confidence == "high"
     assert result.total_engineer_days == 18
     assert calls == {"reformulate": 1, "search": 1, "generate": 1, "embed": 1}
+
+
+async def test_semantic_gate_attaches_reports_and_downgrades_unverified(wire, monkeypatch):
+    from generation.rag.schemas import HallucinationReport, LineGate
+
+    retrieval = RetrievalResult(chunks=[_chunk(1)], low_confidence=False, candidates_evaluated=1)
+    wire(retrieval=retrieval, estimate=_good_estimate())
+    monkeypatch.setattr(orch, "get_settings", lambda: SimpleNamespace(
+        **vars(_SETTINGS), HALLUCINATION_NUMERIC_TOLERANCE=0.5,
+    ))
+    monkeypatch.setattr(deps, "get_runtime_retrieval_config", lambda: SimpleNamespace(
+        effective_search_mode=lambda: "vector", effective_rerank=lambda: False,
+        effective_augmentation=lambda: False, effective_hallucination_gate=lambda: True,
+    ))
+    monkeypatch.setattr(deps, "get_runtime_config", lambda: SimpleNamespace(
+        effective=lambda _: "test-model",
+    ))
+
+    async def gate(estimate, chunks, **kwargs):
+        return HallucinationReport(lines=[
+            LineGate(module="Checkout", component="Cart", status="unverified", reason="offline"),
+        ])
+
+    monkeypatch.setattr(orch, "gate_estimate", gate)
+    result = await orch.estimate_from_transcript("x" * 200)
+    assert result.confidence == "low"
+    assert result.citation_report.grounded_lines == 1
+    assert result.hallucination_report.lines[0].status == "unverified"
 
 
 async def test_soft_fail_skips_generation(wire):

@@ -81,6 +81,12 @@ class TaskNeighbor(BaseModel):
     distance: float = Field(ge=0, le=2)
 
 
+class HourRange(BaseModel):
+    low: int
+    high: int
+    reason: str
+
+
 class TaskHours(BaseModel):
     module: str
     task: str
@@ -89,6 +95,7 @@ class TaskHours(BaseModel):
     dispersion: float | None = None
     has_match: bool
     neighbors: list[TaskNeighbor] = Field(default_factory=list)
+    hours_range: HourRange | None = None
 
 
 class TaskHoursResponse(BaseModel):

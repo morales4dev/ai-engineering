@@ -18,6 +18,45 @@ The service also provides a separate **RAG** (Retrieval Augmented Generation)
 flow over historical budgets, with optional hybrid search and reranking.
 The original CAG endpoints remain unchanged.
 
+## Session 11 live
+
+The grounded RAG estimate now reports citation membership and an optional semantic evidence
+check; the judge is probabilistic and an unavailable or incomplete verdict is shown as
+unverified. Context augmentation, the evidence check and conflicting-hours ranges can be
+switched in **Ajustes**. The grounded generator still uses the existing Responses path.
+
+The **Corpus** tab adds budget JSON documents asynchronously and shows progress, failures,
+skips, history and before/after counts. Run `uv run alembic upgrade head` before using it.
+The migration adds the existing Session 8 halfvec HNSW index if missing; it does not delete
+an index on downgrade because the lab may already have created it. Duplicate detection checks
+budget ID and chunk type; it is not race-proof against simultaneous identical ingests.
+Background jobs run in the API process: a restart can leave a job unfinished.
+
+`data/task_corpus_contradictions.json` is synthetic. To ingest it using the existing task
+corpus pipeline with the API running:
+
+```bash
+uv run python scripts/s09/build_task_corpus.py --ingest-only --out data/task_corpus_contradictions.json
+```
+
+The script records the input file as the source path. If these projects were previously
+ingested with the old, incorrect `task_corpus_s10.json` source path, check for them before
+re-ingesting: the duplicate check uses the source path and would not recognize the old entries.
+
+For generation comparisons, collect and score a new traceable sample, then compare it
+with the local baseline:
+
+```bash
+uv run python scripts/eval_ragas_s11.py --collect-only samples.json --augment --gate
+uv run --locked --script scripts/score_ragas_s11_v2.py --score-file samples.json --out scores.json
+uv run python scripts/eval_generation_s11.py --gate scores.json
+```
+
+Choose new output paths; existing evidence is not overwritten. `--augment` and `--gate`
+are optional. Embeddings, generation, the judge and RAGAS scoring incur provider costs. The companion
+`--monitor scores.json` reads a saved scored report; it does not collect production traffic.
+This generation evaluation does not exercise the separate task-hours synthesis workflow.
+
 ## Requirements
 
 - Python **3.11+**
