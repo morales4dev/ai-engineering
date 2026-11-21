@@ -2,9 +2,8 @@
 
 Wires the four stages into the loop the project has been missing since day one:
 ``transcript → query understanding → retrieval → augmentation → generation``,
-producing a grounded :class:`Estimate`. Generation goes through ``LLMWrapper``
-(Instructor) — the same primitive the rest of the service uses — never the raw
-Responses API.
+producing a grounded :class:`Estimate`. Generation uses native OpenAI Responses
+through ``LLMWrapper`` and LiteLLM; other structured callers retain Instructor.
 
 Public functions keep the locked async signatures; the synchronous wrapper and
 embedder calls are pushed to threads so the HTTP path never blocks the event
@@ -26,7 +25,7 @@ from generation.rag.prompt_builder import build_system_prompt, build_user_messag
 from generation.rag.query_reformulator import compose_search_text, reformulate_query
 from generation.rag.retriever import search_chunks
 from generation.rag.schemas import Estimate, EstimationQuery
-from generation.rag.validation import check_coherence, validate_citations
+from generation.rag.validation import check_coherence, verify_citations
 
 log = structlog.get_logger()
 
@@ -80,15 +79,13 @@ async def _generate(
 
     try:
         estimate, _meta = await asyncio.to_thread(
-            wrapper.complete_structured,
+            wrapper.complete_structured_responses,
             system_prompt=build_system_prompt(),
             user_message=user_message,
             response_model=Estimate,
             model_override=settings.GENERATION_MODEL,
             reasoning_effort=settings.GENERATION_REASONING_EFFORT,
-            # gpt-5 reasoning tokens count against max_tokens; the 4000 default
-            # is exhausted by reasoning alone and truncates the JSON. See
-            # Settings.GENERATION_MAX_TOKENS.
+            # Responses counts reasoning and output against max_output_tokens.
             max_tokens=settings.GENERATION_MAX_TOKENS,
         )
         return estimate
@@ -207,17 +204,16 @@ async def estimate_from_transcript(
         estimate = await generate_estimate(context_block, structured_query=query)
 
     # 6. Validate citations; one corrective retry on fabricated ids.
-    fabricated = validate_citations(estimate, kept)
-    if fabricated:
+    kept_ids = {str(chunk.id) for chunk in kept}
+    report = verify_citations(estimate, kept_ids)
+    log.info("citation_report", request_id=request_id, phase="initial", **report.model_dump())
+    if report.has_dangling:
         feedback = (
-            f"your previous response cited invalid source ids: {fabricated}. "
+            f"Your previous response cited invalid source ids: {report.dangling_citations}. "
             "Only cite ids that appear in the <sources> block."
         )
-        with log_stage("citation_retry", request_id, fabricated=fabricated):
+        with log_stage("citation_retry", request_id, fabricated=report.dangling_citations):
             estimate = await _generate(context_block, query, feedback=feedback)
-        if validate_citations(estimate, kept):
-            log.warning("citations_unrepaired", request_id=request_id)
-            estimate = estimate.model_copy(update={"confidence": "low"})
 
     # 7. Coherence guard: one repair attempt, then reject.
     if not check_coherence(estimate):
@@ -233,6 +229,16 @@ async def estimate_from_transcript(
             raise MalformedEstimateError(
                 "Estimate violates the insufficient-context coherence rule."
             )
+
+    # Coherence repairs also regenerate citations; audit the response actually returned.
+    report = verify_citations(estimate, kept_ids)
+    log.info("citation_report", request_id=request_id, phase="final", **report.model_dump())
+    if report.has_dangling:
+        log.warning(
+            "citations_unrepaired", request_id=request_id,
+            dangling_citations=report.dangling_citations,
+        )
+        estimate = estimate.model_copy(update={"confidence": "low"})
 
     # 8. Persist for idempotent retries.
     if idempotency_key:

@@ -1,4 +1,4 @@
-"""LiteLLM client for Instructor structured calls."""
+"""Shared structured calls through LiteLLM Chat Completions or native Responses."""
 
 from __future__ import annotations
 
@@ -9,7 +9,10 @@ from typing import Any, TypeVar
 import instructor
 import litellm
 import structlog
-from pydantic import BaseModel
+from litellm.types.llms.openai import ResponsesAPIResponse
+from openai.types.responses import ResponseOutputMessage
+from openai.types.shared import ReasoningEffort
+from pydantic import BaseModel, ValidationError
 
 from services.prompt_boundary import (
     apply_untrusted_boundary,
@@ -33,8 +36,8 @@ def _normalise_model_name(model: str) -> str:
 def _catalog_model_name(model: str) -> str:
     """Price-table key: prefix off, then a trailing ``-YYYYMMDD`` snapshot if present.
 
-    ``claude-haiku-4-5-20251001`` and a future ``-20260301`` share one row.
-    ``claude-sonnet-4-5`` is untouched (``4-5`` is the version, not a date).
+    Dated snapshots share the base model's price row. Undated versioned names
+    keep their model version unchanged.
     """
     return _DATED_SUFFIX.sub("", _normalise_model_name(model))
 
@@ -80,6 +83,15 @@ def _tokens_from_raw(raw: Any) -> tuple[int, int]:
 
 def _structured_meta(raw: Any, *, target_model: str, latency_ms: int) -> dict[str, Any]:
     tokens_in, tokens_out = _tokens_from_raw(raw)
+    return _call_meta(
+        target_model=target_model, latency_ms=latency_ms,
+        tokens_in=tokens_in, tokens_out=tokens_out,
+    )
+
+
+def _call_meta(
+    *, target_model: str, latency_ms: int, tokens_in: int, tokens_out: int,
+) -> dict[str, Any]:
     model = _normalise_model_name(target_model)
     return {
         "model": model,
@@ -187,6 +199,106 @@ class LLMWrapper:
             cost_usd=meta["cost_usd"],
         )
         return result, meta
+
+    def complete_structured_responses(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        response_model: type[T],
+        model_override: str | None = None,
+        max_tokens: int = 4000,
+        max_attempts: int = 6,
+        reasoning_effort: ReasoningEffort = None,
+    ) -> tuple[T, dict[str, Any]]:
+        """Use native LiteLLM Responses and validate the JSON with Pydantic.
+
+        Token metadata describes the successful response, as with Instructor.
+        Failed validation attempts also log their reported usage.
+        """
+        target_model = model_override or self.primary_model
+        log.info(
+            "llm_responses_call_started",
+            model=target_model, response_model=response_model.__name__,
+        )
+        t0 = time.perf_counter()
+        try:
+            if _provider_from_model(target_model) != "openai":
+                raise ValueError("Structured Responses calls require an OpenAI model.")
+            if not self.openai_api_key:
+                raise ValueError("Structured Responses calls require OPENAI_API_KEY.")
+            if max_attempts < 1:
+                raise ValueError("max_attempts must be at least one.")
+            bounded_system, bounded_user = apply_untrusted_boundary(system_prompt, user_message)
+            feedback = ""
+            for attempt in range(1, max_attempts + 1):
+                response = litellm.responses(
+                    model=_normalise_model_name(target_model),
+                    custom_llm_provider="openai",
+                    use_chat_completions_api=False,
+                    drop_params=False,
+                    stream=False,
+                    api_key=self.openai_api_key,
+                    timeout=self.timeout,
+                    instructions=bounded_system + feedback,
+                    input=bounded_user,
+                    text_format=response_model,
+                    max_output_tokens=max_tokens,
+                    reasoning=(
+                        {"effort": reasoning_effort}
+                        if reasoning_effort is not None else None
+                    ),
+                )
+                if not isinstance(response, ResponsesAPIResponse):
+                    raise TypeError("Structured Responses call returned an unexpected response type.")
+                if response.status != "completed":
+                    raise ValueError(
+                        f"Structured Responses output is {response.status}: "
+                        f"{response.incomplete_details or response.error}."
+                    )
+                for item in response.output:
+                    body = item if isinstance(item, dict) else item.model_dump()
+                    if body.get("type") != "message":
+                        continue
+                    message = ResponseOutputMessage.model_validate(body)
+                    if any(part.type == "refusal" for part in message.content):
+                        raise ValueError("Structured Responses output was refused.")
+                output_text = response.output_text
+                if not output_text.strip():
+                    raise ValueError("Structured Responses output has no text to parse.")
+                if response.usage is None:
+                    raise ValueError("Structured Responses output has no usage metadata.")
+                meta = _call_meta(
+                    target_model=target_model,
+                    latency_ms=int((time.perf_counter() - t0) * 1000),
+                    tokens_in=response.usage.input_tokens,
+                    tokens_out=response.usage.output_tokens,
+                )
+                try:
+                    result = response_model.model_validate_json(output_text)
+                except ValidationError as exc:
+                    log.warning(
+                        "llm_responses_validation_failed",
+                        **meta, attempt=attempt, max_attempts=max_attempts,
+                    )
+                    if attempt == max_attempts:
+                        raise
+                    feedback = (
+                        "\n\nCorrect the previous response's validation errors. "
+                        "Return a complete response using only the supplied source data:\n"
+                        + exc.json(include_input=False, include_url=False)
+                    )
+                    continue
+                log.info("llm_responses_call_completed", **meta, attempts=attempt)
+                return result, meta
+            raise RuntimeError("Structured Responses attempts ended without a result.")
+        except Exception as exc:
+            log.error(
+                "llm_responses_call_failed",
+                model=target_model, error_type=type(exc).__name__, error=str(exc),
+                latency_ms=int((time.perf_counter() - t0) * 1000),
+            )
+            raise
 
     def complete_structured_chat(
         self,

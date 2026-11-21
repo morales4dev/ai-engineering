@@ -7,6 +7,8 @@ short-circuits the whole pipeline).
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -62,6 +64,7 @@ def generate_calls(monkeypatch):
                     project_year=2024,
                     chunk_type="budget_component",
                     distance=0.4,
+                    budget_id="BUD-2024-005",
                 )
             ],
             low_confidence=False,
@@ -89,6 +92,12 @@ def generate_calls(monkeypatch):
     )
     monkeypatch.setattr(deps, "get_token_encoder", lambda: CharEncoder())
     monkeypatch.setattr(deps, "get_idempotency_store", lambda: store)
+    monkeypatch.setattr(
+        deps, "get_runtime_retrieval_config",
+        lambda: SimpleNamespace(
+            effective_search_mode=lambda: "vector", effective_rerank=lambda: False,
+        ),
+    )
     monkeypatch.setattr(
         security,
         "get_settings",
@@ -127,3 +136,23 @@ def test_distinct_idempotency_keys_run_the_pipeline_each_time(generate_calls):
     )
 
     assert generate_calls["generate"] == 2
+
+
+def test_legacy_cached_sources_invalidate_only_that_key():
+    import json
+
+    import fakeredis
+
+    redis = fakeredis.FakeRedis(decode_responses=True)
+    store = IdempotencyStore(redis_client=redis)
+    legacy = {
+        "confidence": "high", "reasoning": "legacy",
+        "modules": [{"name": "Auth", "tasks": [
+            {"name": "Login", "engineer_days": 2, "sources": [1]},
+        ]}],
+    }
+    redis.set("idempotency:estimate:old", json.dumps(legacy))
+    redis.set("unrelated", "keep")
+    assert store.get("old") is None
+    assert redis.get("idempotency:estimate:old") is None
+    assert redis.get("unrelated") == "keep"

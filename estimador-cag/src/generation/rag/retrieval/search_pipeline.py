@@ -29,6 +29,9 @@ def _row_to_chunk(row, *, distance: float | None) -> RetrievedChunk:
         distance=distance if distance is not None else 1.0,
         has_vector_distance=distance is not None,
         budget_id=metadata.get("budget_id"),
+        source_id=(
+            metadata.get("source_id") or metadata.get("transcript_id") or metadata.get("doc_id")
+        ),
         estimated_hours=metadata.get("estimated_hours"),
     )
 

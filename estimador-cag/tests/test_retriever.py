@@ -105,3 +105,17 @@ async def test_search_chunks_wraps_store_failure_in_retrieval_error(wire):
 
     with pytest.raises(RetrievalError):
         await search_chunks([0.0] * 1536)
+
+
+@pytest.mark.parametrize(("key", "document_id"), [
+    ("source_id", "SOURCE-1"), ("transcript_id", "TR-1"), ("doc_id", "DOC-1"),
+])
+async def test_vector_path_preserves_non_budget_provenance(wire, key, document_id):
+    from generation.rag.context_assembler import build_context_block
+
+    row = _row(1, 0.4)
+    row.metadata_ = {key: document_id}
+    row.chunk_type = "meeting_segment" if key == "transcript_id" else "doc_section"
+    wire(FakeStore(rows=[row], candidates=1))
+    result = await search_chunks([0.0], search_mode="vector", rerank=False)
+    assert f'document_id="{document_id}"' in build_context_block(result.chunks)

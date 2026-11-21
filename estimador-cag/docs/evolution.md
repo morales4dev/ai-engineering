@@ -1,6 +1,6 @@
 # Evolución del estimador-cag
 
-Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas de trabajo (`pre-session-08`, `session_08_forense`, `session_09_forense`, `session-10/pre-work` y `session_10_forense` incluidas).
+Cronología de cambios de producto/arquitectura, leída desde `main` y las ramas de trabajo (`pre-session-08`, `session_08_forense`, `session_09_forense`, `session-10/pre-work`, `session_10_forense` y `session-11/pre-work` incluidas).
 
 | Columna | Significado |
 |---|---|
@@ -30,6 +30,7 @@ Nombres de evento (como en las ramas, salvo `v2` y `sesion-02`, que no fueron ra
 - `session_09_forense` — port live de la sesión 9 (RAG estimation, API protegida, wizard Streamlit e historial)
 - `pre_sesion_10` — mejora del retrieval RAG: búsqueda híbrida, reranking y evaluación (rama `session-10/pre-work`)
 - `session_10_forense` — integración live de la sesión 10 (wizard de horas, recuperación avanzada y ajustes)
+- `pre_sesion_11` — citación verificable por tarea y evaluación de generación con RAGAS (rama `session-11/pre-work`)
 
 No entra `session1/` (ejercicios sueltos, no son el estimador).
 
@@ -143,3 +144,12 @@ No entra `session1/` (ejercicios sueltos, no son el estimador).
 | session_10_forense         | [x]     | Recuperación avanzada con transformación de consultas y ponderación opcional por antigüedad, además de búsqueda híbrida y reranking |                    |
 | session_10_forense         | [x]     | Ajustes de recuperación en caliente desde Streamlit y API, con valores globales y opciones por estimación o consulta |                    |
 | session_10_forense         | [x]     | Evaluación ampliada de recuperación: comparación de configuraciones A–H por precisión y latencia sobre las distintas colecciones |                    |
+| pre_sesion_11              | [x]     | Cada tarea de la estimación fundamentada identifica el presupuesto histórico que la respalda y muestra el fragmento concreto usado como evidencia |                    |
+| pre_sesion_11              | [x]     | Las tareas sin respaldo se señalan como datos insuficientes y quedan sin esfuerzo estimado, sin inventar cifras ni representar la falta de datos con cero |                    |
+| pre_sesion_11              | [x]     | Comprobación de que las fuentes citadas estaban entre los fragmentos realmente entregados al modelo, no entre los descartados; distingue tareas fundamentadas, citas inexistentes y tareas sin datos |                    |
+| pre_sesion_11              | [x]     | Corrección automática de citas inexistentes: un intento de reparación y, si persisten, advertencia y confianza baja sin rechazar la respuesta |                    |
+| pre_sesion_11              | [x]     | Seguimiento de las citas de la estimación inicial y final mediante el identificador de petición, también cuando se regenera la respuesta para corregirla |                    |
+| pre_sesion_11              | [x]     | Panel Streamlit de estimación fundamentada: transcripción, tareas, esfuerzo, fuentes y evidencia; separado del Wizard de horas existente |                    |
+| pre_sesion_11              | [x]     | Cinco consultas de evaluación de generación con respuestas de referencia, conservando el conjunto anterior de evaluación de recuperación |                    |
+| pre_sesion_11              | [x]     | Evaluación RAGAS de fidelidad de la respuesta, relevancia, precisión del contexto y cobertura del contexto, con resultados por consulta y promedios |                    |
+| pre_sesion_11              | [x]     | Respuestas y fuentes guardadas para repetir la evaluación sin regenerar las estimaciones; los resultados incompletos o inválidos no se convierten en una tabla aparentemente correcta |                    |
