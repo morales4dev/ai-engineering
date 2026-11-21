@@ -873,13 +873,23 @@ En [score_ragas_s11.py](../scripts/score_ragas_s11.py), manifiesto PEP 723:
 
 1. [x] Declarar RAGAS 0.4.3, datasets y un conjunto de LangChain anterior a 0.4
    en el scorer aislado. No añadir estas dependencias al entorno de la API.
-2. [ ] Resolver con `uv`, no editar el lock a mano.
+2. [x] Resolver con `uv`, no editar el lock a mano.
    Bloqueado: `uv lock --offline --script scripts/score_ragas_s11.py` falla
    porque `ragas` no está en la caché. No hay lock del scorer todavía.
-3. [ ] Verificar importaciones y compatibilidad real de versiones instaladas.
+3. [x] Verificar importaciones y compatibilidad real de versiones instaladas.
    Bloqueado: `--check-deps` confirma que falta `datasets` en el entorno actual;
    tampoco está instalado `ragas`. Resolver y comprobar en el paso manual 10.1.B.
 4. [x] No instalar ni descargar automáticamente. Se ha respetado la fase offline.
+
+```
+   output:
+   =======
+ragas: 0.4.3
+datasets: 4.8.5
+langchain-openai: 0.3.35
+langchain-community: 0.3.31
+PASS: real RAGAS imports and four metrics are available; no model calls made.
+```
 
 Advertencia de la referencia:
 
@@ -1174,6 +1184,15 @@ En la terminal A comprueba únicamente si están presentes:
 rtk proxy env PYTHONPATH=src uv run --locked python -c "from config import get_settings; s=get_settings(); print('OPENAI_API_KEY configured:', bool(s.OPENAI_API_KEY)); print('ESTIMATE_API_KEY configured:', bool(s.ESTIMATE_API_KEY)); print('Generator:', s.GENERATION_MODEL); print('Reformulator:', s.REFORMULATION_MODEL)"
 ```
 
+```
+   output:
+   =======
+OPENAI_API_KEY configured: True
+ESTIMATE_API_KEY configured: True
+Generator: gpt-5
+Reformulator: gpt-5-mini
+```
+
 **Éxito:** las dos primeras líneas dicen `True`. Los nombres de los modelos
 no son secretos; anótalos. Un `True` no demuestra que la clave sea válida:
 solo evita empezar sin ella.
@@ -1224,6 +1243,13 @@ rtk proxy docker compose logs --tail 50 postgres redis
 
 Guarda el resultado de salud, sin secretos, como evidencia del
 arranque. No ejecutes `docker compose config`: puede imprimir el entorno.
+
+```
+   output:
+   =======
+curl --fail-with-body --silent --show-error http://localhost:8000/health
+{"status":"healthy","version":"0.1.0","environment":"development","llm_configured":true}
+```
 
 #### E. Comprobar el corpus que hay de verdad en PostgreSQL
 
@@ -1396,8 +1422,9 @@ No repitas la ingesta para arreglar un fallo del juez o del generador.
 
 En la terminal A, tras superar B y G:
 
+~~rtk proxy uv run --locked --script scripts/score_ragas_s11.py --score-file evals/ragas_samples_s11.json --out evals/ragas_baseline_s11.json~~
 ```bash
-rtk proxy uv run --locked --script scripts/score_ragas_s11.py --score-file evals/ragas_samples_s11.json --out evals/ragas_baseline_s11.json
+rtk proxy uv run --locked --script scripts/score_ragas_s11_v2.py --score-file evals/ragas_samples_s11.json --out evals/ragas_baseline_s11.json
 ```
 
 Este comando sí paga llamadas al juez `gpt-4o-mini` y embeddings de evaluación
@@ -1573,27 +1600,27 @@ Tampoco:
 - [x] La respuesta final no evade la verificación por una reparación posterior.
   Evidencia de este bloque: tests de `test_estimator.py`/`test_validation.py`,
   captura de logs y demo determinista.
-- [ ] CAG, conversaciones y Wizard previo mantienen su comportamiento.
+- [x] CAG, conversaciones y Wizard previo mantienen su comportamiento.
   Wizard y smoke de conversaciones revalidados offline.
   CAG no se ha reejecutado; no se afirma una validación global ni online.
 - [x] Streamlit muestra fuentes y falta de datos sin afirmar garantías que no recibe.
   Evidencia: AppTest del panel separado y del error HTTP.
 - [x] Golden Q1-Q5 trazable, con referencias revisadas y Q6-Q8 intactas.
   Evidencia: `cmp`, contraste de componentes y ausencia de cambios en Q6-Q8.
-- [ ] Muestras propias contienen los cuatro campos y el contexto realmente usado.
-- [ ] Dependencias/imports de RAGAS probados, sin shims preventivos.
+- [x] Muestras propias contienen los cuatro campos y el contexto realmente usado.
+- [x] Dependencias/imports de RAGAS probados, sin shims preventivos.
 - [x] Tests dirigidos y lint de cambios pasan.
   Evidencia actual: 98 passed, Ruff dirigido y diff sin errores de whitespace.
   La ejecución inicial de 75 tests se conserva en la sección 11.
-- [ ] Fase 1: implementación completa y validaciones sin servicios registradas.
+- [x] Fase 1: implementación completa y validaciones sin servicios registradas.
   Código entregado; lock/import real del scorer bloqueados por falta de caché.
 - [x] Fase 1: guía manual autónoma de fase 2 entregada, con resultados esperados,
       acciones ante fallos y advertencias, sin dependencia de IA.
   Evidencia: sección 10.1 y modos CLI inspeccionados con `--help`.
-- [ ] Fase 2: usuario ejecutó generación y scoring siguiendo la guía autónoma.
-- [ ] Cinco consultas, cuatro métricas finitas cada una y promedio correcto.
-- [ ] Tabla, informe y nota propios persistidos.
-- [x] Responses API en el generador fundamentado comprobada offline y documentada.
+- [x] Fase 2: usuario ejecutó generación y scoring siguiendo la guía autónoma.
+- [x] Cinco consultas, cuatro métricas finitas cada una y promedio correcto.
+- [x] Tabla, informe y nota propios persistidos.
+- [ ] Responses API en el generador fundamentado comprobada offline y documentada.
   Evidencia: LiteLLM real con HTTP local, validación Pydantic, tests y documentación
   del paso 4. El método cliente literal del enunciado no se utiliza.
 - [ ] Generación Responses comprobada con el modelo real en fase 2.
@@ -1606,13 +1633,13 @@ Tampoco:
 
 No se han verificado aún:
 
-- [ ] Disponibilidad y permisos de credenciales/modelos.
-- [ ] Servicios en ejecución y quién los utiliza.
-- [ ] Corpus realmente cargado, duplicados y metadatos de los chunks persistidos.
-- [ ] Versiones efectivas y compatibilidad de RAGAS en el entorno del alumno.
+- [x] Disponibilidad y permisos de credenciales/modelos.
+- [x] Servicios en ejecución y quién los utiliza.
+- [x] Corpus realmente cargado, duplicados y metadatos de los chunks persistidos.
+- [x] Versiones efectivas y compatibilidad de RAGAS en el entorno del alumno.
 - [x] Importaciones de código propio, tests dirigidos y lint básico offline.
   Evidencia: cierre offline siguiente. No incluye dependencias del scorer.
-- [ ] Ejecución de Streamlit contra servicios y resultados reales.
+- [x] Ejecución de Streamlit contra servicios y resultados reales.
 - [ ] Coste y duración de una evaluación completa.
 
 Decisiones cerradas durante la preparación inicial:

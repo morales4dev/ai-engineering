@@ -1,0 +1,1696 @@
+{
+  "created_at": "2026-11-21T10:08:36.240387+00:00",
+  "samples_file": "evals/ragas_samples_s11.json",
+  "samples_sha256": "862586b551633bd0ab87c51a338099ccb31befb22c3ba14f3bf1267ce22098c7",
+  "answer_format": {
+    "name": "eval_answer_json_v2",
+    "schema": {
+      "$defs": {
+        "EvalModule": {
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "tasks": {
+              "items": {
+                "$ref": "#/$defs/EvalTask"
+              },
+              "title": "Tasks",
+              "type": "array"
+            }
+          },
+          "required": [
+            "name",
+            "tasks"
+          ],
+          "title": "EvalModule",
+          "type": "object"
+        },
+        "EvalTask": {
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "engineer_days": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Engineer Days"
+            },
+            "grounded": {
+              "title": "Grounded",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "engineer_days",
+            "grounded"
+          ],
+          "title": "EvalTask",
+          "type": "object"
+        }
+      },
+      "description": "Claims of an estimate as judged by RAGAS; citations are audited separately.",
+      "properties": {
+        "total_engineer_days": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Total Engineer Days"
+        },
+        "duration_weeks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Duration Weeks"
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            "insufficient"
+          ],
+          "title": "Confidence",
+          "type": "string"
+        },
+        "modules": {
+          "items": {
+            "$ref": "#/$defs/EvalModule"
+          },
+          "title": "Modules",
+          "type": "array"
+        },
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "reasoning": {
+          "title": "Reasoning",
+          "type": "string"
+        },
+        "insufficient_context_explanation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Insufficient Context Explanation"
+        }
+      },
+      "required": [
+        "total_engineer_days",
+        "duration_weeks",
+        "confidence",
+        "modules",
+        "assumptions",
+        "reasoning",
+        "insufficient_context_explanation"
+      ],
+      "title": "EvalAnswer",
+      "type": "object"
+    }
+  },
+  "golden_sha256": "e609fd1c3cc16c03b8a48d34e10d07c8996f2d788631aa374fce952c3fe86cb5",
+  "judge_model": "gpt-4o-mini",
+  "embedding_model": "text-embedding-3-small",
+  "versions": {
+    "ragas": "0.4.3",
+    "datasets": "4.8.5",
+    "langchain-openai": "0.3.35"
+  },
+  "configuration": {
+    "reformulation_model": "gpt-5-mini",
+    "generation_model": "gpt-5",
+    "generation_api": "openai_responses",
+    "generation_client": "litellm.responses",
+    "generation_reasoning_effort": "high",
+    "generation_max_tokens": 64000,
+    "retrieval_embedding_model": "text-embedding-3-small",
+    "search_mode": "hybrid",
+    "rerank": true,
+    "reranker_model": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+    "distance_threshold": 1.2,
+    "top_k": 10,
+    "recall_k": 50,
+    "rerank_top_n": 5,
+    "rrf_k": 60,
+    "max_context_tokens": 16384,
+    "chunk_types": [
+      "budget_component"
+    ],
+    "citation_policy": "single generation, audit only; no HTTP repair loop"
+  },
+  "per_query": [
+    {
+      "id": "Q1",
+      "faithfulness": 0.3,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.99999999998,
+      "context_recall": 0.0,
+      "ragas_answer": "{\"total_engineer_days\":60,\"duration_weeks\":null,\"confidence\":\"low\",\"modules\":[{\"name\":\"Authentication & Access Backend (OAuth 2.0)\",\"tasks\":[{\"name\":\"OAuth 2.0 authorization code flow\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"OAuth 2.0 refresh token flow\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"JWT-based session management\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Multi-tenant token isolation\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Per-client rate limiting\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"SCA for login (policy and step-up challenge screens)\",\"engineer_days\":null,\"grounded\":false}]},{\"name\":\"PSD2 Open Banking Connectivity\",\"tasks\":[{\"name\":\"Account information endpoints (AIS)\",\"engineer_days\":6,\"grounded\":true},{\"name\":\"Payment initiation endpoints (PIS)\",\"engineer_days\":6,\"grounded\":true},{\"name\":\"Strong Customer Authentication (SCA) integration\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Consent management\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"PSD2/Berlin Group compliance alignment\",\"engineer_days\":2,\"grounded\":true}]},{\"name\":\"Transaction Ledger Service\",\"tasks\":[{\"name\":\"Double-entry ledger core (schema and posting engine)\",\"engineer_days\":6,\"grounded\":true},{\"name\":\"Idempotent writes for postings\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Daily reconciliation jobs\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Audit trail of every balance change\",\"engineer_days\":4,\"grounded\":true}]},{\"name\":\"Notifications (Push and Email)\",\"tasks\":[{\"name\":\"Event-driven notification triggers\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"APNs (iOS) integration\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"FCM (Android) integration\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Transactional email\",\"engineer_days\":1,\"grounded\":true}]},{\"name\":\"Mobile App (React Native) - Customer Facing\",\"tasks\":[{\"name\":\"Onboarding & login screens (OAuth 2.0 + SCA)\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Accounts overview & transaction list/search\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Payment initiation UI with SCA\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Push handling & in-app notifications\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Settings & consent management UI\",\"engineer_days\":null,\"grounded\":false}]},{\"name\":\"Infrastructure & DevOps\",\"tasks\":[{\"name\":\"Cloud environment setup\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"CI/CD pipelines\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Secrets and configuration management\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Monitoring and logging\",\"engineer_days\":null,\"grounded\":false}]},{\"name\":\"Security & Compliance\",\"tasks\":[{\"name\":\"PSD2 compliance documentation & audit readiness\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Login SCA policy & risk-based triggers\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"GDPR data retention & consent logging\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Penetration test remediation & threat modeling\",\"engineer_days\":null,\"grounded\":false}]},{\"name\":\"QA & Testing\",\"tasks\":[{\"name\":\"Automated API tests for OAuth2 and PSD2\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Ledger reconciliation test harness\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Mobile E2E/regression suite\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Performance and rate-limit tests\",\"engineer_days\":null,\"grounded\":false}]},{\"name\":\"Project Management\",\"tasks\":[{\"name\":\"Requirements, backlog, and roadmap\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Sprint planning and ceremonies\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Stakeholder demos and reporting\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Risk and dependency management\",\"engineer_days\":null,\"grounded\":false}]}],\"assumptions\":[\"Engineer-day conversion uses 8 hours per day.\",\"Per-component totals are decomposed across finer tasks without adding scope beyond the source.\",\"React Native mobile app delivery is out of scope for numeric estimation here.\",\"Infrastructure/DevOps, monitoring, and environment setup are not estimated.\",\"Security & compliance activities beyond PSD2 connector scope (e.g., audit readiness, GDPR, penetration testing) are not estimated.\",\"Dedicated QA/testing, performance, and UAT are not separately budgeted.\",\"Technology mismatch (sources in Ruby/Java; target in Python/React Native) may affect effort.\",\"Unknown scale (user volumes, number of bank connectors, locales) could materially change effort.\"],\"reasoning\":\"The estimate maps four sourced components directly to this neobank scope: OAuth 2.0 backend (120h), PSD2 connectors (160h), transaction ledger (140h), and notifications (60h). Hours were converted to engineer-days at 8h/day and distributed across granular tasks that reflect the exact capabilities named in each source. Where 0.5-day conversions arose, rounding yielded 17 days (ledger) and 8 days (notifications), preserving the total at 60 engineer-days across the four modules (480h total). Major parts of the brief\\u0014notably the React Native customer app, infra/DevOps, and broader compliance/QA\\u0014lack matching historical components and were therefore listed without numeric days. Because a substantial share of scope has no sourced hours and the tech stack differs from the historical projects, confidence is low.\",\"insufficient_context_explanation\":null}",
+      "citation_report": {
+        "total_lines": 40,
+        "grounded_lines": 18,
+        "dangling_lines": 0,
+        "insufficient_lines": 22,
+        "verified_citations": 59,
+        "dangling_citations": [],
+        "lines": [
+          {
+            "module": "Authentication & Access Backend (OAuth 2.0)",
+            "component": "OAuth 2.0 authorization code flow",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "1",
+              "1",
+              "1"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Authentication & Access Backend (OAuth 2.0)",
+            "component": "OAuth 2.0 refresh token flow",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "1",
+              "1",
+              "1"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Authentication & Access Backend (OAuth 2.0)",
+            "component": "JWT-based session management",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "1",
+              "1",
+              "1"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Authentication & Access Backend (OAuth 2.0)",
+            "component": "Multi-tenant token isolation",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "1",
+              "1",
+              "1"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Authentication & Access Backend (OAuth 2.0)",
+            "component": "Per-client rate limiting",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "1",
+              "1",
+              "1"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Authentication & Access Backend (OAuth 2.0)",
+            "component": "SCA for login (policy and step-up challenge screens)",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "PSD2 Open Banking Connectivity",
+            "component": "Account information endpoints (AIS)",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "2",
+              "2",
+              "2"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "PSD2 Open Banking Connectivity",
+            "component": "Payment initiation endpoints (PIS)",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "2",
+              "2",
+              "2"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "PSD2 Open Banking Connectivity",
+            "component": "Strong Customer Authentication (SCA) integration",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "2",
+              "2",
+              "2"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "PSD2 Open Banking Connectivity",
+            "component": "Consent management",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "2",
+              "2",
+              "2"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "PSD2 Open Banking Connectivity",
+            "component": "PSD2/Berlin Group compliance alignment",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "2",
+              "2",
+              "2"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Transaction Ledger Service",
+            "component": "Double-entry ledger core (schema and posting engine)",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "3",
+              "3",
+              "3"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Transaction Ledger Service",
+            "component": "Idempotent writes for postings",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "3",
+              "3",
+              "3"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Transaction Ledger Service",
+            "component": "Daily reconciliation jobs",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "3",
+              "3",
+              "3"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Transaction Ledger Service",
+            "component": "Audit trail of every balance change",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "3",
+              "3",
+              "3"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Notifications (Push and Email)",
+            "component": "Event-driven notification triggers",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "4",
+              "4",
+              "4"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Notifications (Push and Email)",
+            "component": "APNs (iOS) integration",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "4",
+              "4",
+              "4"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Notifications (Push and Email)",
+            "component": "FCM (Android) integration",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "4",
+              "4",
+              "4"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Notifications (Push and Email)",
+            "component": "Transactional email",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "4",
+              "4",
+              "4"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Mobile App (React Native) - Customer Facing",
+            "component": "Onboarding & login screens (OAuth 2.0 + SCA)",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Mobile App (React Native) - Customer Facing",
+            "component": "Accounts overview & transaction list/search",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Mobile App (React Native) - Customer Facing",
+            "component": "Payment initiation UI with SCA",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Mobile App (React Native) - Customer Facing",
+            "component": "Push handling & in-app notifications",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Mobile App (React Native) - Customer Facing",
+            "component": "Settings & consent management UI",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Infrastructure & DevOps",
+            "component": "Cloud environment setup",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Infrastructure & DevOps",
+            "component": "CI/CD pipelines",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Infrastructure & DevOps",
+            "component": "Secrets and configuration management",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Infrastructure & DevOps",
+            "component": "Monitoring and logging",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Security & Compliance",
+            "component": "PSD2 compliance documentation & audit readiness",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Security & Compliance",
+            "component": "Login SCA policy & risk-based triggers",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Security & Compliance",
+            "component": "GDPR data retention & consent logging",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Security & Compliance",
+            "component": "Penetration test remediation & threat modeling",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "QA & Testing",
+            "component": "Automated API tests for OAuth2 and PSD2",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "QA & Testing",
+            "component": "Ledger reconciliation test harness",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "QA & Testing",
+            "component": "Mobile E2E/regression suite",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "QA & Testing",
+            "component": "Performance and rate-limit tests",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Project Management",
+            "component": "Requirements, backlog, and roadmap",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Project Management",
+            "component": "Sprint planning and ceremonies",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Project Management",
+            "component": "Stakeholder demos and reporting",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Project Management",
+            "component": "Risk and dependency management",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "Q2",
+      "faithfulness": 0.42857142857142855,
+      "answer_relevancy": 0.08505735751550482,
+      "context_precision": 0.99999999998,
+      "context_recall": 0.0,
+      "ragas_answer": "{\"total_engineer_days\":59,\"duration_weeks\":null,\"confidence\":\"high\",\"modules\":[{\"name\":\"Product Catalog API (Node + GraphQL)\",\"tasks\":[{\"name\":\"GraphQL schema and API contract design\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Product listing and detail resolvers\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Faceted search integration (Elasticsearch)\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Inventory availability\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Multi-currency pricing\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"API testing and hardening\",\"engineer_days\":1,\"grounded\":true}]},{\"name\":\"Cart & Checkout Service (Node, Redis, PostgreSQL)\",\"tasks\":[{\"name\":\"Cart service endpoints and state (Redis)\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Promotion engine\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Tax calculation integration\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Checkout orchestration + payment provider\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Order persistence (PostgreSQL)\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Cart/checkout testing and hardening\",\"engineer_days\":1,\"grounded\":true}]},{\"name\":\"Personalized Recommendations (Node + Redis + Feature Store)\",\"tasks\":[{\"name\":\"Feature store schema and ingestion\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Collaborative-filtering job/pipeline\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Low-latency recommendations API\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Caching and TTL/invalidation (Redis)\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Response schema and integration contract\",\"engineer_days\":2,\"grounded\":true}]},{\"name\":\"Storefront PWA (React + Next.js SSR)\",\"tasks\":[{\"name\":\"SSR, routing, PWA manifest, SEO basics\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Product listing page (PLP) + filters UI\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Product detail page (PDP) + recommendations placement\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Cart page UI integration\",\"engineer_days\":1,\"grounded\":true},{\"name\":\"Checkout flow UI integration\",\"engineer_days\":1,\"grounded\":true}]}],\"assumptions\":[\"Conversion of hours to engineer-days uses 8 hours per engineer-day; figures rounded to whole days.\",\"Single-seller headless e-commerce; no marketplace or multi-vendor payouts.\",\"Scope excludes infrastructure/devops, environments, security reviews, analytics, and formal QA/PM overhead.\",\"Payment provider integration covers one provider and standard card flows; alternative payment methods are out of scope.\"],\"reasoning\":\"The brief aligns closely with BUD-2024-005, which contains four components that map 1:1 to the requested deliverables (catalog API, cart/checkout, recommendations, storefront PWA). We used the component hour totals from that project as baselines and decomposed each into concrete engineering tasks, converting hours to engineer-days at 8h/day and rounding to integers. Distribution across tasks preserves the relative scope implied by each component. BUD-2024-017’s checkout hours were referenced only as a supporting cross-check and not used in the allocations.\",\"insufficient_context_explanation\":null}",
+      "citation_report": {
+        "total_lines": 22,
+        "grounded_lines": 22,
+        "dangling_lines": 0,
+        "insufficient_lines": 0,
+        "verified_citations": 27,
+        "dangling_citations": [],
+        "lines": [
+          {
+            "module": "Product Catalog API (Node + GraphQL)",
+            "component": "GraphQL schema and API contract design",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "16"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Product Catalog API (Node + GraphQL)",
+            "component": "Product listing and detail resolvers",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "16"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Product Catalog API (Node + GraphQL)",
+            "component": "Faceted search integration (Elasticsearch)",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "16"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Product Catalog API (Node + GraphQL)",
+            "component": "Inventory availability",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "16"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Product Catalog API (Node + GraphQL)",
+            "component": "Multi-currency pricing",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "16"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Product Catalog API (Node + GraphQL)",
+            "component": "API testing and hardening",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "16"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Cart & Checkout Service (Node, Redis, PostgreSQL)",
+            "component": "Cart service endpoints and state (Redis)",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "17"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Cart & Checkout Service (Node, Redis, PostgreSQL)",
+            "component": "Promotion engine",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "17"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Cart & Checkout Service (Node, Redis, PostgreSQL)",
+            "component": "Tax calculation integration",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "17"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Cart & Checkout Service (Node, Redis, PostgreSQL)",
+            "component": "Checkout orchestration + payment provider",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "17"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Cart & Checkout Service (Node, Redis, PostgreSQL)",
+            "component": "Order persistence (PostgreSQL)",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "17"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Cart & Checkout Service (Node, Redis, PostgreSQL)",
+            "component": "Cart/checkout testing and hardening",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "17"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Personalized Recommendations (Node + Redis + Feature Store)",
+            "component": "Feature store schema and ingestion",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "18"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Personalized Recommendations (Node + Redis + Feature Store)",
+            "component": "Collaborative-filtering job/pipeline",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "18"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Personalized Recommendations (Node + Redis + Feature Store)",
+            "component": "Low-latency recommendations API",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "18"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Personalized Recommendations (Node + Redis + Feature Store)",
+            "component": "Caching and TTL/invalidation (Redis)",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "18"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Personalized Recommendations (Node + Redis + Feature Store)",
+            "component": "Response schema and integration contract",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "18"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Storefront PWA (React + Next.js SSR)",
+            "component": "SSR, routing, PWA manifest, SEO basics",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "19"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Storefront PWA (React + Next.js SSR)",
+            "component": "Product listing page (PLP) + filters UI",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "19"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Storefront PWA (React + Next.js SSR)",
+            "component": "Product detail page (PDP) + recommendations placement",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "19"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Storefront PWA (React + Next.js SSR)",
+            "component": "Cart page UI integration",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "19"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Storefront PWA (React + Next.js SSR)",
+            "component": "Checkout flow UI integration",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "19"
+            ],
+            "dangling_chunk_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "Q3",
+      "faithfulness": 0.37209302325581395,
+      "answer_relevancy": 0.16174344750716313,
+      "context_precision": 0.999999999975,
+      "context_recall": 0.0,
+      "ragas_answer": "{\"total_engineer_days\":71,\"duration_weeks\":null,\"confidence\":\"high\",\"modules\":[{\"name\":\"Video Consultations\",\"tasks\":[{\"name\":\"WebRTC signaling and session lifecycle in Django\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Waiting room and clinician triage flow\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"In-call notes UI and persistence\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Secure recording consent handling and enforcement\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Media devices and connectivity\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Access control and session permissions\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Cross-browser/device QA and fixes for video sessions\",\"engineer_days\":3,\"grounded\":true}]},{\"name\":\"Appointment Scheduling\",\"tasks\":[{\"name\":\"Clinician availability and calendar models\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Booking/rescheduling/cancellation flows\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Reminders and notifications via Celery\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Waitlist and auto-fill from cancellations\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Resource booking (rooms/equipment) and conflicts\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Patient/clinician scheduling UI and time zones\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Admin dashboards for slot management and reporting\",\"engineer_days\":2,\"grounded\":true}]},{\"name\":\"HL7/FHIR Integration\",\"tasks\":[{\"name\":\"Map internal patient records to FHIR R4 Patient\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Map encounter records to FHIR R4 Encounter\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"EHR integration flows (create/update/query) using FHIR R4\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Terminology mapping service\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Audit logging for integration events\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Error handling, retries and idempotency\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"End-to-end integration testing with hospital sandbox\",\"engineer_days\":4,\"grounded\":true}]},{\"name\":\"Consent & Audit Logging\",\"tasks\":[{\"name\":\"Consent capture flows and versioning\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Immutable audit trail for PHI access\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Admin tools for consent and audit queries\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Reporting and compliance exports\",\"engineer_days\":2,\"grounded\":true}]}],\"assumptions\":[\"Conversion used: 1 engineer-day = 8 hours. Component hours from sources were allocated across finer tasks and rounded to whole days.\",\"No separate budget lines included for Infrastructure/DevOps, formal QA cycles, or Project Management.\",\"Clinical records storage is assumed to be handled via integration with the hospital EHR (FHIR layer), not a standalone EHR build.\",\"E-signature integration is excluded from scope.\"],\"reasoning\":\"The estimate is directly grounded in BUD-2024-009 (healthcare, Python/Django) components that match the requested platform: video sessions (160h), appointment scheduling (150h), FHIR integration (190h), and consent/audit (60h). Hours were converted to engineer-days at 8h/day and distributed across concrete implementation tasks that reflect each component’s description. No unrelated components (e.g., finance e-signature) were included. Missing cross-cutting areas (DevOps/QA/PM or a standalone clinical records build) are explicitly called out in assumptions and excluded from totals.\",\"insufficient_context_explanation\":null}",
+      "citation_report": {
+        "total_lines": 25,
+        "grounded_lines": 25,
+        "dangling_lines": 0,
+        "insufficient_lines": 0,
+        "verified_citations": 38,
+        "dangling_citations": [],
+        "lines": [
+          {
+            "module": "Video Consultations",
+            "component": "WebRTC signaling and session lifecycle in Django",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "32",
+              "32"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Video Consultations",
+            "component": "Waiting room and clinician triage flow",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "32",
+              "32"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Video Consultations",
+            "component": "In-call notes UI and persistence",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "32",
+              "32"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Video Consultations",
+            "component": "Secure recording consent handling and enforcement",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "32",
+              "32"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Video Consultations",
+            "component": "Media devices and connectivity",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "32"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Video Consultations",
+            "component": "Access control and session permissions",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "32"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Video Consultations",
+            "component": "Cross-browser/device QA and fixes for video sessions",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "32"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Appointment Scheduling",
+            "component": "Clinician availability and calendar models",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "31",
+              "31"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Appointment Scheduling",
+            "component": "Booking/rescheduling/cancellation flows",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "31"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Appointment Scheduling",
+            "component": "Reminders and notifications via Celery",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "31",
+              "31"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Appointment Scheduling",
+            "component": "Waitlist and auto-fill from cancellations",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "31"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Appointment Scheduling",
+            "component": "Resource booking (rooms/equipment) and conflicts",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "31"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Appointment Scheduling",
+            "component": "Patient/clinician scheduling UI and time zones",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "31"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Appointment Scheduling",
+            "component": "Admin dashboards for slot management and reporting",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "31"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "HL7/FHIR Integration",
+            "component": "Map internal patient records to FHIR R4 Patient",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "30",
+              "30"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "HL7/FHIR Integration",
+            "component": "Map encounter records to FHIR R4 Encounter",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "30",
+              "30"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "HL7/FHIR Integration",
+            "component": "EHR integration flows (create/update/query) using FHIR R4",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "30"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "HL7/FHIR Integration",
+            "component": "Terminology mapping service",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "30"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "HL7/FHIR Integration",
+            "component": "Audit logging for integration events",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "30"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "HL7/FHIR Integration",
+            "component": "Error handling, retries and idempotency",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "30"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "HL7/FHIR Integration",
+            "component": "End-to-end integration testing with hospital sandbox",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "30"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Consent & Audit Logging",
+            "component": "Consent capture flows and versioning",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "33",
+              "33"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Consent & Audit Logging",
+            "component": "Immutable audit trail for PHI access",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "33"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Consent & Audit Logging",
+            "component": "Admin tools for consent and audit queries",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "33"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Consent & Audit Logging",
+            "component": "Reporting and compliance exports",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "33"
+            ],
+            "dangling_chunk_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "Q4",
+      "faithfulness": 0.6101694915254238,
+      "answer_relevancy": 0.25140286899437236,
+      "context_precision": 0.9999999999666667,
+      "context_recall": 0.6666666666666666,
+      "ragas_answer": "{\"total_engineer_days\":87,\"duration_weeks\":null,\"confidence\":\"medium\",\"modules\":[{\"name\":\"Data & Telemetry Ingestion\",\"tasks\":[{\"name\":\"MQTT ingestion service and broker integration\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Time-series database schema and write path\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Edge buffering and offline queue\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Out-of-order event handling\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Device payload parsing and basic validation\",\"engineer_days\":3,\"grounded\":true}]},{\"name\":\"SCADA Integration & Dashboards\",\"tasks\":[{\"name\":\"SCADA read-only connector and data adapter\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Equipment/tag mapping and ID reconciliation\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Predictive alert overlay implementation\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Access control and operator roles\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Integration testing on plant SCADA network\",\"engineer_days\":2,\"grounded\":true}]},{\"name\":\"Predictive Maintenance Models\",\"tasks\":[{\"name\":\"Feature engineering and dataset preparation\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Anomaly detection model development and tuning\",\"engineer_days\":6,\"grounded\":true},{\"name\":\"Remaining Useful Life (RUL) model development\",\"engineer_days\":6,\"grounded\":true},{\"name\":\"Model serving API (FastAPI) for inference\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Alert threshold calibration and scheduling rules\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Model monitoring and drift detection\",\"engineer_days\":2,\"grounded\":true}]},{\"name\":\"High-Volume Data Pipeline & Quality\",\"tasks\":[{\"name\":\"Scale-ready ingestion and validation framework\",\"engineer_days\":6,\"grounded\":true},{\"name\":\"Gap filling and backfill jobs\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Unit normalization and transformation rules\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Data quality checks and schema validation\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Performance tuning and storage partitioning\",\"engineer_days\":4,\"grounded\":true}]},{\"name\":\"Real-time Stream Processing & Alerting\",\"tasks\":[{\"name\":\"Real-time stream processing for derived metrics\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Real-time alert pipeline and SLA enforcement\",\"engineer_days\":null,\"grounded\":false}]},{\"name\":\"Hybrid On-Prem & Cloud Deployment\",\"tasks\":[{\"name\":\"On-premises deployment automation and packaging\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Cloud provisioning and networking\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Edge agent packaging and updates\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Site-to-cloud secure connectivity\",\"engineer_days\":null,\"grounded\":false}]},{\"name\":\"Security & Access Control\",\"tasks\":[{\"name\":\"TLS and certificate management\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"RBAC and audit logging\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Penetration testing and hardening\",\"engineer_days\":null,\"grounded\":false}]},{\"name\":\"QA & Project Management\",\"tasks\":[{\"name\":\"End-to-end test plan and test cases\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Sprint planning and stakeholder reviews\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"UAT support in plant environment\",\"engineer_days\":null,\"grounded\":false}]}],\"assumptions\":[\"Conversion used: 1 engineer-day = 8 hours. Component hours were converted to days and rounded to the nearest whole day.\",\"SCADA integration is read-only with overlay of predictive alerts; no control/write-back is in scope.\",\"High-volume data quality/normalization work is required due to large telemetry volumes.\",\"Scope intentionally excludes un-sourced areas (real-time stream processing beyond overlay, hybrid deployment automation, security hardening, QA/PM) from the numeric total.\",\"Predictive maintenance scope is limited to anomaly detection and remaining useful life (RUL) models; no deep learning or on-device inference assumed.\",\"Schedule (duration_weeks) depends on team size and parallelization and is not inferred here.\"],\"reasoning\":\"The estimate decomposes four closely related historical components into finer delivery tasks. The core match is the factory IoT ingestion (170 h), SCADA dashboard integration (130 h), and predictive maintenance models (200 h) from BUD-2024-013, which directly align to the project brief. To reflect high-volume data requirements, we included a data quality/normalization pipeline grounded in the smart meter data pipeline (200 h) from BUD-2024-015 as an analogous precedent for large-scale validation, gap filling, and normalization. Hours were converted to engineer-days using 1 day = 8 hours and rounded to whole days; totals per module were distributed across granular tasks that collectively sum to the converted component totals (rounded). The numeric total (87 engineer-days) is the sum of grounded task lines only; areas like hybrid deployment, real-time stream processing beyond SCADA overlay, security, QA, and PM are listed but left unquantified due to lack of direct source support.\",\"insufficient_context_explanation\":null}",
+      "citation_report": {
+        "total_lines": 33,
+        "grounded_lines": 21,
+        "dangling_lines": 0,
+        "insufficient_lines": 12,
+        "verified_citations": 25,
+        "dangling_citations": [],
+        "lines": [
+          {
+            "module": "Data & Telemetry Ingestion",
+            "component": "MQTT ingestion service and broker integration",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "43"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Data & Telemetry Ingestion",
+            "component": "Time-series database schema and write path",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "43"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Data & Telemetry Ingestion",
+            "component": "Edge buffering and offline queue",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "43"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Data & Telemetry Ingestion",
+            "component": "Out-of-order event handling",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "43"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Data & Telemetry Ingestion",
+            "component": "Device payload parsing and basic validation",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "43"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "SCADA Integration & Dashboards",
+            "component": "SCADA read-only connector and data adapter",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "45"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "SCADA Integration & Dashboards",
+            "component": "Equipment/tag mapping and ID reconciliation",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "45"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "SCADA Integration & Dashboards",
+            "component": "Predictive alert overlay implementation",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "45"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "SCADA Integration & Dashboards",
+            "component": "Access control and operator roles",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "45"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "SCADA Integration & Dashboards",
+            "component": "Integration testing on plant SCADA network",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "45"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Predictive Maintenance Models",
+            "component": "Feature engineering and dataset preparation",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "44"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Predictive Maintenance Models",
+            "component": "Anomaly detection model development and tuning",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "44"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Predictive Maintenance Models",
+            "component": "Remaining Useful Life (RUL) model development",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "44"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Predictive Maintenance Models",
+            "component": "Model serving API (FastAPI) for inference",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "44"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Predictive Maintenance Models",
+            "component": "Alert threshold calibration and scheduling rules",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "44"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Predictive Maintenance Models",
+            "component": "Model monitoring and drift detection",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "44"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "High-Volume Data Pipeline & Quality",
+            "component": "Scale-ready ingestion and validation framework",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "50"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "High-Volume Data Pipeline & Quality",
+            "component": "Gap filling and backfill jobs",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "50"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "High-Volume Data Pipeline & Quality",
+            "component": "Unit normalization and transformation rules",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "50"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "High-Volume Data Pipeline & Quality",
+            "component": "Data quality checks and schema validation",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "50"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "High-Volume Data Pipeline & Quality",
+            "component": "Performance tuning and storage partitioning",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "50"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Real-time Stream Processing & Alerting",
+            "component": "Real-time stream processing for derived metrics",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Real-time Stream Processing & Alerting",
+            "component": "Real-time alert pipeline and SLA enforcement",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Hybrid On-Prem & Cloud Deployment",
+            "component": "On-premises deployment automation and packaging",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Hybrid On-Prem & Cloud Deployment",
+            "component": "Cloud provisioning and networking",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Hybrid On-Prem & Cloud Deployment",
+            "component": "Edge agent packaging and updates",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Hybrid On-Prem & Cloud Deployment",
+            "component": "Site-to-cloud secure connectivity",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Security & Access Control",
+            "component": "TLS and certificate management",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Security & Access Control",
+            "component": "RBAC and audit logging",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Security & Access Control",
+            "component": "Penetration testing and hardening",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "QA & Project Management",
+            "component": "End-to-end test plan and test cases",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "QA & Project Management",
+            "component": "Sprint planning and stakeholder reviews",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "QA & Project Management",
+            "component": "UAT support in plant environment",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "Q5",
+      "faithfulness": 0.5802469135802469,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.99999999998,
+      "context_recall": 0.7142857142857143,
+      "ragas_answer": "{\"total_engineer_days\":140,\"duration_weeks\":null,\"confidence\":\"low\",\"modules\":[{\"name\":\"Payment Gateway Core\",\"tasks\":[{\"name\":\"API design & idempotency keys\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Authorization & capture orchestration\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Retry semantics & error handling\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Acquirer adapter framework & base adapter\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Kafka integration & eventing\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"PostgreSQL schema & persistence\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Performance tuning & load tests\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Observability & tracing/metrics\",\"engineer_days\":2,\"grounded\":true}]},{\"name\":\"Real-time Fraud Detection\",\"tasks\":[{\"name\":\"Streaming ingestion & schema\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Velocity rules engine\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Model serving (GBM)\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Feature cache (Redis) for low-latency features\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Authorization path integration & decisioning\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Latency/performance tuning (<50ms)\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Monitoring & fraud analytics dashboards\",\"engineer_days\":2,\"grounded\":true}]},{\"name\":\"Settlement & Reconciliation\",\"tasks\":[{\"name\":\"Settlement file ingestion\",\"engineer_days\":4,\"grounded\":true},{\"name\":\"Three-way reconciliation logic\",\"engineer_days\":6,\"grounded\":true},{\"name\":\"Exception queues & ops tooling\",\"engineer_days\":3,\"grounded\":true},{\"name\":\"Scheduling & daily jobs\",\"engineer_days\":1,\"grounded\":true},{\"name\":\"Reporting & audit logs\",\"engineer_days\":1,\"grounded\":true}]},{\"name\":\"Double-entry Ledger\",\"tasks\":[{\"name\":\"Chart of accounts & posting engine\",\"engineer_days\":10,\"grounded\":true},{\"name\":\"Event schema & evolution policy\",\"engineer_days\":6,\"grounded\":true},{\"name\":\"Idempotency boundary & dedup keys\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Balances & read model projections\",\"engineer_days\":8,\"grounded\":true},{\"name\":\"Interest accrual and fee logic scaffolding\",\"engineer_days\":6,\"grounded\":true},{\"name\":\"Audit logging, maker-checker, encryption\",\"engineer_days\":8,\"grounded\":true},{\"name\":\"Reconciliation dashboard for finance ops\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Performance harness for EOD & peak day\",\"engineer_days\":7,\"grounded\":true},{\"name\":\"Observability & business metrics\",\"engineer_days\":5,\"grounded\":true},{\"name\":\"Data migration plan & historical balances import\",\"engineer_days\":5,\"grounded\":true}]},{\"name\":\"Merchant Dashboard\",\"tasks\":[{\"name\":\"Transaction search view + APIs\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Refunds flow\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Payout tracking page\",\"engineer_days\":2,\"grounded\":true},{\"name\":\"Merchant authz & roles in UI\",\"engineer_days\":1,\"grounded\":true}]},{\"name\":\"Infrastructure & DevOps\",\"tasks\":[{\"name\":\"CI/CD pipelines and environment setup\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Secrets management and key rotation\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Centralized logging and metrics stack\",\"engineer_days\":null,\"grounded\":false}]},{\"name\":\"Security & Compliance\",\"tasks\":[{\"name\":\"PCI/PSD2 scoping and controls\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"GDPR data retention & deletion\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Penetration testing & remediation\",\"engineer_days\":null,\"grounded\":false}]},{\"name\":\"QA & Testing\",\"tasks\":[{\"name\":\"End-to-end test scenarios\",\"engineer_days\":null,\"grounded\":false},{\"name\":\"Performance and resilience testing\",\"engineer_days\":null,\"grounded\":false}]}],\"assumptions\":[\"Conversion: 1 engineer-day = 8 hours. The provided components total 1120 hours, converted to 140 engineer-days. To keep the overall total exact, fractional .5 days were reconciled across modules (gateway rounded up; dashboard rounded down).\",\"Tech stack difference: sources reference java_spring whereas the project requests a Python backend.\",\"Ledger scope alignment: the cited ledger source includes legacy reverse-engineering, strangler migration, dual-writes, parallel-run sign-offs and decommissioning which may exceed a greenfield double-entry ledger for a payments gateway.\",\"Regulatory/compliance scope (PCI DSS, PSD2/SCA, AML, GDPR) is not quantified by provided sources and is excluded from totals.\",\"Throughput/scale unspecified (TPS, peak/day). Performance-tuning effort could vary materially with load targets.\",\"Acquirer/bank-rail certifications and scheme-specific compliance are not budgeted beyond the 'pluggable adapters' capability.\",\"Duration in weeks is not provided because team size, parallelization and change-window constraints are unknown.\"],\"reasoning\":\"We mapped each provided budget component to a functional module and decomposed it into concrete engineering tasks. Quantities are grounded in the cited sources’ Estimated hours figures: Payment gateway core (220h), Real-time fraud detection (200h), Settlement reconciliation (120h), Merchant dashboard (60h), and Core banking ledger extraction/migration (520h). We converted total hours (1120) to 140 engineer-days at 8h/day and distributed those days across tasks; to keep the overall total exact, we reconciled .5-day fractions by rounding the gateway up and the dashboard down. The ledger source is a close functional match (double-entry, idempotency, auditability) but includes migration-specific activities that may not apply to a greenfield build, so the ledger effort could be overstated. Additionally, sources use Java/Spring while the project requests Python; functional scope still holds, but stack differences introduce variance. Compliance/infra/QA items are listed as placeholders without hours because no matching budgets were provided. Given these mismatches (especially the ledger migration vs greenfield and tech-stack differences), confidence is set to low.\",\"insufficient_context_explanation\":null}",
+      "citation_report": {
+        "total_lines": 42,
+        "grounded_lines": 34,
+        "dangling_lines": 0,
+        "insufficient_lines": 8,
+        "verified_citations": 49,
+        "dangling_citations": [],
+        "lines": [
+          {
+            "module": "Payment Gateway Core",
+            "component": "API design & idempotency keys",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "9"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Payment Gateway Core",
+            "component": "Authorization & capture orchestration",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "9"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Payment Gateway Core",
+            "component": "Retry semantics & error handling",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "9"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Payment Gateway Core",
+            "component": "Acquirer adapter framework & base adapter",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "9"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Payment Gateway Core",
+            "component": "Kafka integration & eventing",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "9"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Payment Gateway Core",
+            "component": "PostgreSQL schema & persistence",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "9"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Payment Gateway Core",
+            "component": "Performance tuning & load tests",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "9"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Payment Gateway Core",
+            "component": "Observability & tracing/metrics",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "9"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Real-time Fraud Detection",
+            "component": "Streaming ingestion & schema",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "10"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Real-time Fraud Detection",
+            "component": "Velocity rules engine",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "10"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Real-time Fraud Detection",
+            "component": "Model serving (GBM)",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "10"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Real-time Fraud Detection",
+            "component": "Feature cache (Redis) for low-latency features",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "10"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Real-time Fraud Detection",
+            "component": "Authorization path integration & decisioning",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "10"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Real-time Fraud Detection",
+            "component": "Latency/performance tuning (<50ms)",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "10"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Real-time Fraud Detection",
+            "component": "Monitoring & fraud analytics dashboards",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "10"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Settlement & Reconciliation",
+            "component": "Settlement file ingestion",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "11"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Settlement & Reconciliation",
+            "component": "Three-way reconciliation logic",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "11"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Settlement & Reconciliation",
+            "component": "Exception queues & ops tooling",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "11"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Settlement & Reconciliation",
+            "component": "Scheduling & daily jobs",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "11"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Settlement & Reconciliation",
+            "component": "Reporting & audit logs",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "11"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Double-entry Ledger",
+            "component": "Chart of accounts & posting engine",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "53",
+              "53"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Double-entry Ledger",
+            "component": "Event schema & evolution policy",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "53",
+              "53"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Double-entry Ledger",
+            "component": "Idempotency boundary & dedup keys",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "53",
+              "53"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Double-entry Ledger",
+            "component": "Balances & read model projections",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "53",
+              "53"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Double-entry Ledger",
+            "component": "Interest accrual and fee logic scaffolding",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "53",
+              "53"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Double-entry Ledger",
+            "component": "Audit logging, maker-checker, encryption",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "53",
+              "53"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Double-entry Ledger",
+            "component": "Reconciliation dashboard for finance ops",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "53",
+              "53"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Double-entry Ledger",
+            "component": "Performance harness for EOD & peak day",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "53",
+              "53"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Double-entry Ledger",
+            "component": "Observability & business metrics",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "53",
+              "53"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Double-entry Ledger",
+            "component": "Data migration plan & historical balances import",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "53",
+              "53"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Merchant Dashboard",
+            "component": "Transaction search view + APIs",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "12"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Merchant Dashboard",
+            "component": "Refunds flow",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "12"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Merchant Dashboard",
+            "component": "Payout tracking page",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "12"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Merchant Dashboard",
+            "component": "Merchant authz & roles in UI",
+            "status": "grounded",
+            "cited_chunk_ids": [
+              "12"
+            ],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Infrastructure & DevOps",
+            "component": "CI/CD pipelines and environment setup",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Infrastructure & DevOps",
+            "component": "Secrets management and key rotation",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Infrastructure & DevOps",
+            "component": "Centralized logging and metrics stack",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Security & Compliance",
+            "component": "PCI/PSD2 scoping and controls",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Security & Compliance",
+            "component": "GDPR data retention & deletion",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "Security & Compliance",
+            "component": "Penetration testing & remediation",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "QA & Testing",
+            "component": "End-to-end test scenarios",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          },
+          {
+            "module": "QA & Testing",
+            "component": "Performance and resilience testing",
+            "status": "insufficient",
+            "cited_chunk_ids": [],
+            "dangling_chunk_ids": []
+          }
+        ]
+      }
+    }
+  ],
+  "average": {
+    "faithfulness": 0.4582161713865826,
+    "answer_relevancy": 0.09964073480340806,
+    "context_precision": 0.9999999999763333,
+    "context_recall": 0.2761904761904762
+  },
+  "table_markdown": "| query | faithfulness | answer_relevancy | context_precision | context_recall |\n| --- | ---: | ---: | ---: | ---: |\n| Q1 | 0.300 | 0.000 | 1.000 | 0.000 |\n| Q2 | 0.429 | 0.085 | 1.000 | 0.000 |\n| Q3 | 0.372 | 0.162 | 1.000 | 0.000 |\n| Q4 | 0.610 | 0.251 | 1.000 | 0.667 |\n| Q5 | 0.580 | 0.000 | 1.000 | 0.714 |\n| **average** | 0.458 | 0.100 | 1.000 | 0.276 |"
+}
