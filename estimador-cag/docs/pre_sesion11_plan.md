@@ -357,8 +357,8 @@ Entregables:
 
 1. [x] Schema, prompt y función verificadora. Evidencia: pasos 2-4 y tests.
 2. [x] Golden de generación Q1-Q5 con respuestas de referencia. Evidencia: paso 6.
-3. [ ] Script de evaluación, muestras trazables y tabla de cinco filas más promedio.
-4. [ ] Nota propia de 2-3 frases sobre los resultados reales.
+3. [x] Script de evaluación, muestras trazables y tabla de cinco filas más promedio.
+4. [x] Nota propia de 2-3 frases sobre los resultados reales.
 
 No dar por terminado el apartado de métricas hasta tener las cuatro métricas
 numéricas para las cinco consultas y sus promedios.
@@ -867,7 +867,7 @@ Implementación de `scripts/eval_ragas_s11.py`, adaptada de la referencia:
 
 ### Paso 8. Configurar RAGAS sin copiar hacks por defecto
 
-- [ ] **Paso 8 completado y comprobado.**
+- [x] **Paso 8 completado y comprobado.**
 
 En [score_ragas_s11.py](../scripts/score_ragas_s11.py), manifiesto PEP 723:
 
@@ -919,10 +919,10 @@ Cálculo:
    Evidencia: golden y construcción de `ChatOpenAI` en `score_samples`.
 2. [x] Configurar embeddings `text-embedding-3-small`.
    Evidencia: golden y construcción de `OpenAIEmbeddings`.
-3. [ ] Comprobar con RAGAS real la adaptación de los cuatro nombres de entrada.
+3. [x] Comprobar con RAGAS real la adaptación de los cuatro nombres de entrada.
    El código está escrito en `score_samples`; su compatibilidad aún no se ha
    probado en el entorno del scorer.
-4. [ ] Ejecutar el cálculo real de las cuatro métricas por consulta.
+4. [x] Ejecutar el cálculo real de las cuatro métricas por consulta.
    La llamada está implementada; no hay resultados reales todavía.
 5. [x] Validar que hay exactamente Q1-Q5, sin duplicados, con métricas finitas.
 6. [x] Una métrica ausente/NaN no es un cero: error explícito y baseline incompleta.
@@ -1036,43 +1036,43 @@ ejecución, no la escritura de la guía. Sigue las instrucciones del apartado
 
 Lista de ejecución manual, todavía pendiente:
 
-1. [ ] Leer qué se va a probar y qué llamadas/coste implica.
-2. [ ] Usar el montaje aprobado en la decisión 16: Compose para API, PostgreSQL
+1. [x] Leer qué se va a probar y qué llamadas/coste implica.
+2. [x] Usar el montaje aprobado en la decisión 16: Compose para API, PostgreSQL
    y Redis, y Streamlit en host. Comprobar su estado sin cambiar de instancia.
    Seguir los comandos de arranque del README, sin sustituirlos por una receta
    propia; ver sección 4.6 y la corrección solicitada por el usuario.
-3. [ ] Comprobar salud de API y configuración de acceso sin revelar claves,
+3. [x] Comprobar salud de API y configuración de acceso sin revelar claves,
    con comandos, respuestas esperadas y acciones ante fallos documentados.
-4. [ ] Verificar conexión a PostgreSQL y el corpus presupuestario cargado mediante
+4. [x] Verificar conexión a PostgreSQL y el corpus presupuestario cargado mediante
    consultas de solo lectura. No deducirlo de que el JSON existe en disco.
-5. [ ] Si falta corpus, ejecutar la ingesta idempotente documentada con
+5. [x] Si falta corpus, ejecutar la ingesta idempotente documentada con
    [query_examples.py](../scripts/query_examples.py) o el helper existente
    apropiado. Avisar de que también ejecuta búsquedas de smoke; no borrar nada.
-6. [ ] No cargar las tareas sintéticas del Wizard como sustituto del corpus
+6. [x] No cargar las tareas sintéticas del Wizard como sustituto del corpus
    presupuestario Q1-Q5.
-7. [ ] Tener presente que el evaluador directo usa la configuración de proceso y la
+7. [x] Tener presente que el evaluador directo usa la configuración de proceso y la
    BD del host; no basta con que el contenedor tenga acceso a su hostname.
-8. [ ] La configuración de Compose inspeccionada publica PostgreSQL en 5432,
+8. [x] La configuración de Compose inspeccionada publica PostgreSQL en 5432,
    API en 8000, Redis en 6379 y Streamlit se ejecuta en host. No copiar el
    puerto 5433 de las notas del instructor como si fuera el nuestro.
-9. [ ] Las migraciones ya se ejecutan en el arranque de Compose. No proponer
+9. [x] Las migraciones ya se ejecutan en el arranque de Compose. No proponer
    recrear servicios ni aplicar migraciones como paso inocuo sin revisar.
 10. [ ] Consultar la evidencia de la demo ya ejecutada en fase 1 y la
     explicación documentada de los tres estados. Repetirla solo si quedó
     bloqueada o cambió el código, indicando el motivo.
-11. [ ] Ejecutar el panel de Streamlit con una transcripción y correlacionar el
+11. [x] Ejecutar el panel de Streamlit con una transcripción y correlacionar el
     `X-Request-ID` con los logs del backend.
-12. [ ] Ejecutar recolección de Q1-Q5 y revisar una muestra completa, especialmente
+12. [x] Ejecutar recolección de Q1-Q5 y revisar una muestra completa, especialmente
     IDs, evidencia, unidades y contextos.
-13. [ ] Ejecutar scoring de ese mismo archivo, sin regenerar respuestas.
-14. [ ] Revisar las cinco filas, promedios y errores. Si hay NaN, no declarar éxito.
-    - [ ] Q1: comprobar las cuatro métricas finitas y su muestra.
-    - [ ] Q2: comprobar las cuatro métricas finitas y su muestra.
-    - [ ] Q3: comprobar las cuatro métricas finitas y su muestra.
-    - [ ] Q4: comprobar las cuatro métricas finitas y su muestra.
-    - [ ] Q5: comprobar las cuatro métricas finitas y su muestra.
-    - [ ] Promedio: comprobar las cuatro medias sobre las cinco consultas.
-15. [ ] Guardar los resultados propios y completar la nota de hallazgos siguiendo
+13. [x] Ejecutar scoring de ese mismo archivo, sin regenerar respuestas.
+14. [x] Revisar las cinco filas, promedios y errores. Si hay NaN, no declarar éxito.
+    - [x] Q1: comprobar las cuatro métricas finitas y su muestra.
+    - [x] Q2: comprobar las cuatro métricas finitas y su muestra.
+    - [x] Q3: comprobar las cuatro métricas finitas y su muestra.
+    - [x] Q4: comprobar las cuatro métricas finitas y su muestra.
+    - [x] Q5: comprobar las cuatro métricas finitas y su muestra.
+    - [x] Promedio: comprobar las cuatro medias sobre las cinco consultas.
+15. [x] Guardar los resultados propios y completar la nota de hallazgos siguiendo
     una plantilla preparada en fase 1, con instrucciones para interpretar los
     números sin IA y sin inventar conclusiones.
 
@@ -1504,14 +1504,14 @@ no borres volúmenes, corpus ni claves de Redis.
 2. [ ] Completar `evals/RAGAS_BASELINE_S11.md` con:
    - [x] configuración y procedencia del golden; documento creado sin números ficticios;
    - [ ] comandos reales utilizados;
-   - [ ] tabla propia Q1-Q5 más promedio;
+   - [x] tabla propia Q1-Q5 más promedio;
    - [ ] resumen de informes de citas;
-   - [ ] nota de 2-3 frases basada en nuestros números;
+   - [x] nota de 2-3 frases basada en nuestros números;
    - [x] uso de Responses API, diferencia respecto a `client.responses.parse`
      y diferencia respecto al rechazo estricto;
    - [x] diferencias efectivas respecto a la referencia, si las hay.
    Evidencia de lo preparado: apartados de configuración, bloqueo y límites.
-3. [ ] Guardar muestras e informe JSON en las rutas documentadas, sin secretos.
+3. [x] Guardar muestras e informe JSON en las rutas documentadas, sin secretos.
    Revisar su contenido antes de proponer incluirlos en Git.
 4. [x] No generar una tabla ficticia si el usuario aún no ha ejecutado el scorer.
    Dejar estado explícitamente pendiente.
