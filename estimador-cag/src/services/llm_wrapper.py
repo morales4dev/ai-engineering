@@ -300,6 +300,81 @@ class LLMWrapper:
             )
             raise
 
+    @staticmethod
+    def prepare_agent_input(system_prompt: str, transcript: str) -> tuple[str, str]:
+        """Bound the transcript once so the same instructions can be reused."""
+        return apply_untrusted_boundary(system_prompt, transcript)
+
+    def agent_response(
+        self,
+        *,
+        instructions: str,
+        input_items: Any,
+        tools: list[dict[str, Any]],
+        response_model: type[T],
+        model: str,
+        reasoning_effort: ReasoningEffort,
+        previous_response_id: str | None = None,
+        max_tokens: int = 64000,
+    ) -> ResponsesAPIResponse:
+        """Make one Responses turn; the caller owns the tool loop and its state."""
+        target_model = _normalise_model_name(model)
+        if _provider_from_model(target_model) != "openai":
+            raise ValueError("Agent Responses calls require an OpenAI model.")
+        if not self.openai_api_key:
+            raise ValueError("Agent Responses calls require OPENAI_API_KEY.")
+        started = time.perf_counter()
+        try:
+            response = litellm.responses(
+                model=target_model,
+                custom_llm_provider="openai",
+                use_chat_completions_api=False,
+                drop_params=False,
+                stream=False,
+                api_key=self.openai_api_key,
+                timeout=self.timeout,
+                instructions=instructions,
+                input=input_items,
+                previous_response_id=previous_response_id,
+                tools=tools,
+                text_format=response_model,
+                max_output_tokens=max_tokens,
+                reasoning={"effort": reasoning_effort, "summary": "auto"},
+                store=True,
+            )
+            if not isinstance(response, ResponsesAPIResponse):
+                raise TypeError("Agent Responses call returned an unexpected response type.")
+            if response.status != "completed":
+                raise ValueError(
+                    f"Agent Responses output is {response.status}: "
+                    f"{response.incomplete_details or response.error}."
+                )
+            for item in response.output:
+                body = item if isinstance(item, dict) else item.model_dump()
+                if body.get("type") == "message":
+                    message = ResponseOutputMessage.model_validate(body)
+                    if any(part.type == "refusal" for part in message.content):
+                        raise ValueError("Agent Responses output was refused.")
+            if response.usage is None:
+                raise ValueError("Agent Responses output has no usage metadata.")
+            meta = _call_meta(
+                target_model=target_model,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                tokens_in=response.usage.input_tokens,
+                tokens_out=response.usage.output_tokens,
+            )
+            log.info("llm_agent_response_completed", **meta)
+            return response
+        except Exception as exc:
+            log.error(
+                "llm_agent_response_failed",
+                model=target_model,
+                error_type=type(exc).__name__,
+                error=str(exc),
+                latency_ms=int((time.perf_counter() - started) * 1000),
+            )
+            raise
+
     def complete_structured_chat(
         self,
         *,

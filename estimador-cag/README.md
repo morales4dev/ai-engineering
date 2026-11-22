@@ -1191,3 +1191,28 @@ The endpoint is in [`retrieval_advanced.py`](src/routers/retrieval_advanced.py);
 coordinates its stages, and [`search_pipeline.py`](src/generation/rag/retrieval/search_pipeline.py)
 performs the collection searches.
 
+## Session 12 pre-work
+
+The manual estimation agent runs separately from the existing API and
+Streamlit flows. It uses Responses through `LLMWrapper`, searches the existing
+hybrid retrieval pipeline with reranking, calculates hours deterministically
+(median plus 15% contingency), and validates the result. Unreferenced
+components are flagged, not assigned invented hours. Validation warnings and
+missing model reasoning summaries are reported explicitly. A run with
+validation issues exits with a non-zero status while retaining its estimate
+and trace for review.
+
+With the required services, OpenAI access and historical data available, run:
+
+```bash
+uv run --no-sync python scripts/run_agent_s12.py exercises/session-12/sample_transcript_complex.txt --model gpt-5 --effort medium --out session12-trace-complex.txt
+```
+
+The output file must not already exist. For loop debugging only, add `--stub`
+to use the exercise's fictional retrieval data; this still calls OpenAI and
+does not validate the real retriever. The command reports unsuccessful runs
+and preserves their trace when `--out` is provided. Review sources, scope,
+validation warnings and missing reasoning summaries before accepting the
+result. The [manual plan](docs/pre-sesion12-plan.md) covers setup, checks and
+troubleshooting.
+

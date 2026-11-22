@@ -12,6 +12,8 @@ from litellm.llms.custom_httpx.http_handler import HTTPHandler
 from pydantic import ValidationError
 from structlog.testing import capture_logs
 
+from generation.agentic.agent import FinalExplanation, run_agent
+from generation.agentic.tools import TOOL_SCHEMAS
 from generation.rag.schemas import Estimate, SourceReference, TaskItem, WorkModule
 from services.llm_wrapper import LLMWrapper
 
@@ -129,6 +131,78 @@ def test_responses_sends_strict_schema_boundary_and_reasoning_budget(responses_t
     assert meta["model"] == "gpt-5" and meta["provider"] == "openai"
     assert meta["cost_usd"] == 0.000625
     assert logs[-1]["event"] == "llm_responses_call_completed"
+
+
+def test_agent_responses_sends_tools_and_chains_without_leaking_transcript(responses_transport):
+    payload = _response()
+    payload["output"] = [{
+        "type": "function_call", "id": "fc_1", "call_id": "call_1",
+        "name": "search_budgets", "arguments": '{"query":"api","filters":null}',
+        "status": "completed",
+    }]
+    requests, calls = responses_transport([payload, payload])
+    wrapper = _wrapper()
+    instructions, transcript = wrapper.prepare_agent_input("Estimate.", "Untrusted transcript")
+    response = wrapper.agent_response(
+        instructions=instructions, input_items=transcript, tools=TOOL_SCHEMAS,
+        response_model=FinalExplanation, model="gpt-5", reasoning_effort="medium",
+    )
+    wrapper.agent_response(
+        instructions=instructions,
+        input_items=[{"type": "function_call_output", "call_id": "call_1", "output": "{}"}],
+        previous_response_id=response.id, tools=TOOL_SCHEMAS, response_model=FinalExplanation,
+        model="gpt-5", reasoning_effort="medium",
+    )
+    assert "untrusted meeting data" in requests[0]["instructions"]
+    assert requests[0]["input"].startswith("<datos-")
+    assert requests[0]["reasoning"] == {"effort": "medium", "summary": "auto"}
+    assert requests[0]["tools"][0]["name"] == "search_budgets"
+    assert requests[0]["tools"][0]["strict"] is True
+    assert requests[0]["text"]["format"]["type"] == "json_schema"
+    assert calls[1]["previous_response_id"] == response.id
+    assert requests[1]["previous_response_id"] == "resp_test"
+    assert requests[1]["input"][0]["call_id"] == "call_1"
+    assert requests[1]["instructions"] == requests[0]["instructions"]
+
+
+async def test_real_wrapper_drives_agent_loop_over_mock_http(responses_transport):
+    def tool_response(name, call_id, arguments):
+        response = _response()
+        response["id"] = f"resp_{call_id}"
+        response["output"] = [{
+            "type": "function_call", "id": f"fc_{call_id}", "call_id": call_id,
+            "name": name, "arguments": json.dumps(arguments), "status": "completed",
+        }]
+        return response
+
+    responses = [
+        tool_response("search_budgets", "search", {"query": "api", "filters": None}),
+        tool_response("calculate_estimate", "calculate", {"components": [
+            {"name": "API", "reference_amounts": [100]},
+        ]}),
+        tool_response("validate_estimate", "validate", {"components": [
+            {"name": "API", "reference_amounts": [100], "estimated_hours": 115},
+        ], "total_hours": 115}),
+        _response(estimate={
+            "explanation": "Based on the historical reference.",
+            "assumptions": [],
+            "confidence": "medium",
+        }),
+    ]
+    requests, _ = responses_transport(responses)
+
+    async def backend(args):
+        return [{"id": 1, "estimated_hours": 100}]
+
+    result = await run_agent("meeting", wrapper=_wrapper(), retrieval_backend=backend)
+    assert result.status == "completed", result.error
+    assert result.estimate["total_hours"] == 115
+    assert [request.get("previous_response_id") for request in requests[1:]] == [
+        "resp_search", "resp_calculate", "resp_validate",
+    ]
+    assert [request["input"][0]["call_id"] for request in requests[1:]] == [
+        "search", "calculate", "validate",
+    ]
 
 
 @pytest.mark.parametrize("supported", [True, False])
