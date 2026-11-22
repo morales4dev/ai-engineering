@@ -347,8 +347,6 @@ class CitationReport(BaseModel):
         return bool(self.dangling_citations)
 
 
-<<<<<<< HEAD
-=======
 class LineGate(BaseModel):
     module: str
     component: str
@@ -368,7 +366,6 @@ class GroundedEstimate(Estimate):
     hallucination_report: HallucinationReport | None = None
 
 
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
 # ---- HTTP request models for the Session 9 routers ------------------------
 # Named ``RetrievalRequest``/``EstimateRequest`` (not ``SearchRequest``) to
 # avoid colliding with the Session 8 ``SearchRequest`` above.

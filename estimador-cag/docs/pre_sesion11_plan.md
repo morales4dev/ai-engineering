@@ -830,12 +830,6 @@ locales; no crear un cliente genérico ni un nuevo framework de interfaz.
 ### Paso 7. Implementar el harness de recolección
 
 - [x] **Paso 7 implementado y comprobado offline.** Evidencia:
-<<<<<<< HEAD
-  `scripts/eval_ragas_s11.py` y `tests/test_eval_ragas_s11.py`, incluyendo contexto
-  retenido, integridad de muestras y persistencia de resultados válidos.
-  No se ha ejecutado recolección real.
-
-=======
   `scripts/eval_ragas_s11.py` y `tests/test_ragas_evaluation.py`, incluyendo contexto
   retenido, integridad de muestras y persistencia de resultados válidos.
   No se ha ejecutado recolección real.
@@ -843,7 +837,6 @@ locales; no crear un cliente genérico ni un nuevo framework de interfaz.
   El test se renombró desde `test_eval_ragas_s11.py`; los comandos históricos
   conservan el nombre que tenía cuando se ejecutaron.
 
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
 Implementación de `scripts/eval_ragas_s11.py`, adaptada de la referencia:
 
 1. [x] Resolver imports de nuestro layout `src`; no usar `app.*`.
@@ -873,11 +866,7 @@ Implementación de `scripts/eval_ragas_s11.py`, adaptada de la referencia:
     informe. Se omite `--limit`: la entrega exige las cinco consultas.
     Evidencia de 1-12: `collect_samples`, `EvaluationSample._traceability`,
     `load_samples`, `render_estimate_text`, modos CLI comprobados con `--help`
-<<<<<<< HEAD
-    y pruebas de `test_eval_ragas_s11.py`.
-=======
     y pruebas de `test_ragas_evaluation.py`.
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
 
 ### Paso 8. Configurar RAGAS sin copiar hacks por defecto
 
@@ -1001,11 +990,7 @@ Casos cubiertos por las pruebas:
 - [x] Regresión: el Wizard mantiene la edición humana y no permite confirmar horas
   ausentes; ya hay pruebas en
   [test_wizard_ui.py](../tests/test_wizard_ui.py).
-<<<<<<< HEAD
-  Evidencia del bloque: `test_eval_ragas_s11.py`, AppTest en `test_wizard_ui.py`,
-=======
   Evidencia del bloque: `test_ragas_evaluation.py`, AppTest en `test_wizard_ui.py`,
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
   `test_rag_runs.py` y pruebas de horas.
 
 - [x] Añadir una demo offline equivalente a
