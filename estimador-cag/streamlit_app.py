@@ -16,6 +16,10 @@ import httpx  # noqa: E402
 import streamlit as st  # noqa: E402
 
 from config import get_settings  # noqa: E402
+<<<<<<< HEAD
+=======
+from corpus_ui import render_corpus  # noqa: E402
+>>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
 from schemas.estimation import (  # noqa: E402
     OUT_OF_SCOPE_PREFIX,
     DetailLevel,
@@ -158,6 +162,11 @@ _MODEL_KNOB_CATALOG = (
         "key": "CONTEXTUAL_CHUNKER_MODEL",
         "label": "Contextual chunker",
         "description": "Claude situates each chunk inside the parent budget (Chunking Lab).",
+    },
+    {
+        "key": "HALLUCINATION_JUDGE_MODEL",
+        "label": "Evidence judge",
+        "description": "Checks whether the cited sources support the estimate.",
     },
 )
 
@@ -552,10 +561,13 @@ st.caption(
     "One-shot form, a conversational session, a saved estimation, the chunking lab, or Ajustes."
 )
 
-new_tab, conv_tab, history_tab, lab_tab, rag_tab, ajustes_tab = st.tabs(
-    ["New estimation", "Conversational", "Recent", "Chunking Lab", "RAG Wizard", "Ajustes"],
+new_tab, conv_tab, history_tab, lab_tab, rag_tab, corpus_tab, ajustes_tab = st.tabs(
+    ["New estimation", "Conversational", "Recent", "Chunking Lab", "RAG Wizard", "Corpus", "Ajustes"],
     on_change="rerun",
 )
+
+with corpus_tab:
+    render_corpus(API_BASE_URL, settings.ESTIMATE_API_KEY)
 
 with new_tab:
     with st.form("estimation_form", clear_on_submit=False):
@@ -1051,6 +1063,9 @@ with ajustes_tab:
             ("routing_enabled", "RETRIEVAL_ROUTING_ENABLED", "Routing"),
             ("query_transform_enabled", "QUERY_TRANSFORM_ENABLED", "Query expansion / decomposition"),
             ("temporal_decay_enabled", "TEMPORAL_DECAY_ENABLED", "Temporal decay"),
+            ("hallucination_gate_enabled", "HALLUCINATION_GATE_ENABLED", "Evidence check"),
+            ("augmentation_enabled", "AUGMENTATION_ENABLED", "Context augmentation"),
+            ("synthesis_enabled", "SYNTHESIS_ENABLED", "Conflicting-source ranges"),
         )
         mode = retrieval.get("RETRIEVAL_SEARCH_MODE") or {}
         mode_default = mode.get("default", "vector")

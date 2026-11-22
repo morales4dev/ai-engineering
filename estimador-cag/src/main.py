@@ -18,6 +18,7 @@ from routers.retrieval import router as retrieval_router
 from routers.retrieval_advanced import router as retrieval_advanced_router
 from routers.rag_estimate import router as rag_estimate_router
 from routers.rag_runs import router as rag_runs_router
+from routers.corpus_index import router as corpus_index_router
 from services.history import init_db
 
 
@@ -124,6 +125,7 @@ app.include_router(retrieval_router)
 app.include_router(retrieval_advanced_router)
 app.include_router(rag_estimate_router)
 app.include_router(rag_runs_router)
+app.include_router(corpus_index_router)
 
 
 @app.get("/health")

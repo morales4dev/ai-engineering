@@ -91,6 +91,26 @@ class IngestionJobRow(Base):
     )
 
 
+class CorpusIndexRunRow(Base):
+    __tablename__ = "corpus_index_runs"
+
+    job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    chunk_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    total: Mapped[int] = mapped_column(Integer, nullable=False)
+    processed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    indexed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    chunks_created: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    before_stats: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    after_stats: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class ChunkingComparisonRow(Base):
     __tablename__ = "chunking_comparisons"
     __table_args__ = (Index("idx_chunking_comparisons_created_at", "created_at"),)

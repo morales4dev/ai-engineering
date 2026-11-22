@@ -18,7 +18,7 @@ import time
 
 import structlog
 
-from generation.rag.schemas import Estimate
+from generation.rag.schemas import Estimate, GroundedEstimate
 
 log = structlog.get_logger()
 
@@ -53,13 +53,13 @@ class IdempotencyStore:
                 redis_client = None
         return cls(redis_client=redis_client, ttl=settings.IDEMPOTENCY_TTL)
 
-    def get(self, key: str) -> Estimate | None:
+    def get(self, key: str) -> GroundedEstimate | None:
         """Return the cached estimate for ``key``, or ``None`` on a miss."""
         raw = self._get_raw(key)
         if raw is None:
             return None
         try:
-            return Estimate.model_validate_json(raw)
+            return GroundedEstimate.model_validate_json(raw)
         except Exception:  # noqa: BLE001 — a corrupt entry is a miss.
             self.delete(key)
             return None

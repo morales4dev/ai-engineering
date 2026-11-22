@@ -860,8 +860,13 @@ def _resolve_base_url(client: httpx.Client) -> str:
     raise SystemExit(1)
 
 
-def ingest_corpus(corpus: list[dict], base_url: str | None = None) -> None:
+def ingest_corpus(
+    corpus: list[dict], base_url: str | None = None, *, source_path: Path = OUT_PATH,
+) -> None:
     """One document per project; 409 means already ingested (idempotent)."""
+    source_path = source_path.resolve()
+    if source_path.is_relative_to(ROOT.resolve()):
+        source_path = source_path.relative_to(ROOT.resolve())
     with httpx.Client(timeout=120.0) as client:
         base_url = base_url or _resolve_base_url(client)
         created, skipped = 0, 0
@@ -869,7 +874,7 @@ def ingest_corpus(corpus: list[dict], base_url: str | None = None) -> None:
             response = client.post(
                 f"{base_url}/embeddings/ingest",
                 json={
-                    "source_path": f"data/task_corpus_s10.json::{project['budget_id']}",
+                    "source_path": f"{source_path}::{project['budget_id']}",
                     "document_type": DOCUMENT_TYPE,
                     "chunk_type": CHUNK_TYPE,
                     "content": project,
@@ -917,7 +922,7 @@ def main() -> None:
     if args.generate_only:
         return
     if args.ingest or args.ingest_only:
-        ingest_corpus(corpus, base_url=args.base_url)
+        ingest_corpus(corpus, base_url=args.base_url, source_path=args.out)
     else:
         print("(generation only; pass --ingest to load into pgvector)")
 

@@ -51,6 +51,9 @@ class RetrievalUpdateRequest(BaseModel):
     routing_enabled: bool | None = None
     query_transform_enabled: bool | None = None
     temporal_decay_enabled: bool | None = None
+    hallucination_gate_enabled: bool | None = None
+    augmentation_enabled: bool | None = None
+    synthesis_enabled: bool | None = None
     task_hours_top_k: int | None = Field(default=None, ge=1, le=30)
     task_hours_distance_threshold: float | None = Field(default=None, ge=0, le=2)
 
@@ -157,6 +160,9 @@ def update_retrieval_config(
         "routing_enabled": runtime_config.set_routing,
         "query_transform_enabled": runtime_config.set_query_transform,
         "temporal_decay_enabled": runtime_config.set_temporal_decay,
+        "hallucination_gate_enabled": runtime_config.set_hallucination_gate,
+        "augmentation_enabled": runtime_config.set_augmentation,
+        "synthesis_enabled": runtime_config.set_synthesis,
         "task_hours_top_k": runtime_config.set_task_hours_top_k,
         "task_hours_distance_threshold": runtime_config.set_task_hours_distance_threshold,
     }

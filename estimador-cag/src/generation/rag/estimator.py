@@ -22,9 +22,14 @@ from generation.rag.context_assembler import build_context_block, truncate_to_to
 from generation.rag.errors import GenerationError, MalformedEstimateError
 from generation.rag.observability import log_stage
 from generation.rag.prompt_builder import build_system_prompt, build_user_message
+from generation.rag.quality import augment_chunks, gate_estimate
 from generation.rag.query_reformulator import compose_search_text, reformulate_query
 from generation.rag.retriever import search_chunks
+<<<<<<< HEAD
 from generation.rag.schemas import Estimate, EstimationQuery
+=======
+from generation.rag.schemas import Estimate, EstimationQuery, GroundedEstimate
+>>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
 from generation.rag.validation import check_coherence, verify_citations
 
 log = structlog.get_logger()
@@ -93,9 +98,9 @@ async def _generate(
         raise GenerationError("Grounded estimate generation failed.") from exc
 
 
-def _insufficient(explanation: str) -> Estimate:
+def _insufficient(explanation: str) -> GroundedEstimate:
     """Build the canonical insufficient-context estimate (no numbers)."""
-    return Estimate(
+    return GroundedEstimate(
         total_engineer_days=None,
         duration_weeks=None,
         confidence="insufficient",
@@ -113,7 +118,7 @@ def _current_request_id() -> str:
 async def estimate_from_transcript(
     transcript: str,
     idempotency_key: str | None = None,
-) -> Estimate:
+) -> GroundedEstimate:
     """Run the full transcript → grounded estimate pipeline.
 
     Steps: (optional) idempotency lookup → reformulate → embed → filtered
@@ -142,6 +147,7 @@ async def estimate_from_transcript(
     from dependencies import (
         get_embedder,
         get_idempotency_store,
+        get_runtime_config,
         get_runtime_retrieval_config,
         get_token_encoder,
     )
@@ -197,6 +203,8 @@ async def estimate_from_transcript(
     # 4. Truncate to the token budget (whole chunks only) + assemble context.
     encoder = get_token_encoder()
     kept = truncate_to_token_budget(retrieval.chunks, settings.MAX_CONTEXT_TOKENS, encoder)
+    if runtime_retrieval.effective_augmentation():
+        kept = augment_chunks(kept)
     context_block = build_context_block(kept)
 
     # 5. Generate the grounded estimate.
@@ -240,8 +248,26 @@ async def estimate_from_transcript(
         )
         estimate = estimate.model_copy(update={"confidence": "low"})
 
+<<<<<<< HEAD
+=======
+    gate = None
+    if runtime_retrieval.effective_hallucination_gate():
+        with log_stage("hallucination_gate", request_id):
+            gate = await gate_estimate(
+                estimate, kept, tolerance=settings.HALLUCINATION_NUMERIC_TOLERANCE,
+                model=get_runtime_config().effective("HALLUCINATION_JUDGE_MODEL"),
+            )
+        if estimate.confidence in ("high", "medium") and any(
+            line.status in ("degraded", "unverified") for line in gate.lines
+        ):
+            estimate = estimate.model_copy(update={"confidence": "low"})
+    result = GroundedEstimate(
+        **estimate.model_dump(), citation_report=report, hallucination_report=gate,
+    )
+
+>>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
     # 8. Persist for idempotent retries.
     if idempotency_key:
-        await asyncio.to_thread(store.set, idempotency_key, estimate)
+        await asyncio.to_thread(store.set, idempotency_key, result)
 
-    return estimate
+    return result

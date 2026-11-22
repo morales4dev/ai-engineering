@@ -34,6 +34,7 @@ MODEL_KEYS: tuple[str, ...] = (
     "COMPRESSION_MODEL",
     "PROPOSITIONAL_CHUNKER_MODEL",
     "CONTEXTUAL_CHUNKER_MODEL",
+    "HALLUCINATION_JUDGE_MODEL",
 )
 
 HASH_KEY = "estimator:runtime_config"
@@ -47,6 +48,9 @@ RETRIEVAL_KEYS: tuple[str, ...] = (
     "TEMPORAL_DECAY_ENABLED",
     "TASK_HOURS_TOP_K",
     "TASK_HOURS_DISTANCE_THRESHOLD",
+    "HALLUCINATION_GATE_ENABLED",
+    "AUGMENTATION_ENABLED",
+    "SYNTHESIS_ENABLED",
 )
 
 
@@ -173,6 +177,15 @@ class RuntimeRetrievalConfig:
     def effective_temporal_decay(self) -> bool:
         return self._effective_bool("TEMPORAL_DECAY_ENABLED")
 
+    def effective_hallucination_gate(self) -> bool:
+        return self._effective_bool("HALLUCINATION_GATE_ENABLED")
+
+    def effective_augmentation(self) -> bool:
+        return self._effective_bool("AUGMENTATION_ENABLED")
+
+    def effective_synthesis(self) -> bool:
+        return self._effective_bool("SYNTHESIS_ENABLED")
+
     def _effective_bool(self, key: str) -> bool:
         value = self._effective(key).strip().lower()
         if value in ("true", "1", "yes"):
@@ -215,6 +228,15 @@ class RuntimeRetrievalConfig:
 
     def set_temporal_decay(self, value: bool | None) -> None:
         self._set("TEMPORAL_DECAY_ENABLED", None if value is None else str(value).lower())
+
+    def set_hallucination_gate(self, value: bool | None) -> None:
+        self._set("HALLUCINATION_GATE_ENABLED", None if value is None else str(value).lower())
+
+    def set_augmentation(self, value: bool | None) -> None:
+        self._set("AUGMENTATION_ENABLED", None if value is None else str(value).lower())
+
+    def set_synthesis(self, value: bool | None) -> None:
+        self._set("SYNTHESIS_ENABLED", None if value is None else str(value).lower())
 
     def set_task_hours_top_k(self, value: int | None) -> None:
         if value is not None and not 1 <= value <= 30:
