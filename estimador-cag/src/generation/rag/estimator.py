@@ -25,11 +25,7 @@ from generation.rag.prompt_builder import build_system_prompt, build_user_messag
 from generation.rag.quality import augment_chunks, gate_estimate
 from generation.rag.query_reformulator import compose_search_text, reformulate_query
 from generation.rag.retriever import search_chunks
-<<<<<<< HEAD
-from generation.rag.schemas import Estimate, EstimationQuery
-=======
 from generation.rag.schemas import Estimate, EstimationQuery, GroundedEstimate
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
 from generation.rag.validation import check_coherence, verify_citations
 
 log = structlog.get_logger()
@@ -248,8 +244,6 @@ async def estimate_from_transcript(
         )
         estimate = estimate.model_copy(update={"confidence": "low"})
 
-<<<<<<< HEAD
-=======
     gate = None
     if runtime_retrieval.effective_hallucination_gate():
         with log_stage("hallucination_gate", request_id):
@@ -265,7 +259,6 @@ async def estimate_from_transcript(
         **estimate.model_dump(), citation_report=report, hallucination_report=gate,
     )
 
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
     # 8. Persist for idempotent retries.
     if idempotency_key:
         await asyncio.to_thread(store.set, idempotency_key, result)

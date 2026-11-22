@@ -28,10 +28,7 @@ from generation.rag.context_assembler import (  # noqa: E402
 from generation.rag.schemas import (  # noqa: E402
     CitationReport,
     Estimate,
-<<<<<<< HEAD
-=======
     HallucinationReport,
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
     RetrievedChunk,
 )
 from generation.rag.validation import verify_citations  # noqa: E402
@@ -55,10 +52,7 @@ class EvaluationSample(BaseModel):
     kept_chunks: list[RetrievedChunk] = Field(min_length=1)
     context_block: str = Field(min_length=1)
     citation_report: CitationReport
-<<<<<<< HEAD
-=======
     hallucination_report: HallucinationReport | None = None
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
     structured_query: dict
     search_text: str
 
@@ -87,12 +81,6 @@ def write_json(path: Path, payload: dict) -> None:
     )
 
 
-<<<<<<< HEAD
-async def collect_sample(item: dict, embedder) -> EvaluationSample:
-    from config import get_settings
-    from dependencies import get_token_encoder
-    from generation.rag.estimator import generate_estimate
-=======
 async def collect_sample(
     item: dict, embedder, *, augment: bool = False, gate: bool = False,
 ) -> EvaluationSample:
@@ -100,7 +88,6 @@ async def collect_sample(
     from dependencies import get_token_encoder
     from generation.rag.estimator import generate_estimate
     from generation.rag.quality import augment_chunks, gate_estimate
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
     from generation.rag.query_reformulator import compose_search_text, reformulate_query
     from generation.rag.retrieval.search_pipeline import retrieve
 
@@ -120,11 +107,6 @@ async def collect_sample(
     )
     if not kept:
         raise RuntimeError(f"{item['id']}: no usable context; collection is incomplete.")
-<<<<<<< HEAD
-    context = build_context_block(kept)
-    estimate = await generate_estimate(context, structured_query=query)
-    report = verify_citations(estimate, {str(chunk.id) for chunk in kept})
-=======
     if augment:
         kept = augment_chunks(kept)
     context = build_context_block(kept)
@@ -140,7 +122,6 @@ async def collect_sample(
             line.status in ("degraded", "unverified") for line in semantic.lines
         ):
             estimate = estimate.model_copy(update={"confidence": "low"})
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
     import structlog
 
     request_id = structlog.contextvars.get_contextvars()["request_id"]
@@ -156,19 +137,12 @@ async def collect_sample(
         answer=render_estimate_text(estimate), contexts=[chunk.content for chunk in kept],
         ground_truth=item["ground_truth"], estimate=estimate, kept_chunks=kept,
         context_block=context, citation_report=report,
-<<<<<<< HEAD
-=======
         hallucination_report=semantic,
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
         structured_query=query.model_dump(), search_text=search_text,
     )
 
 
-<<<<<<< HEAD
-async def collect_samples(path: Path) -> None:
-=======
 async def collect_samples(path: Path, *, augment: bool = False, gate: bool = False) -> None:
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
     import structlog
 
     from config import get_settings
@@ -209,10 +183,7 @@ async def collect_samples(path: Path, *, augment: bool = False, gate: bool = Fal
             "max_context_tokens": settings.MAX_CONTEXT_TOKENS,
             "chunk_types": ["budget_component"],
             "citation_policy": "single generation, audit only; no HTTP repair loop",
-<<<<<<< HEAD
-=======
             "augmentation_enabled": augment, "hallucination_gate_enabled": gate,
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
         },
         "samples": [],
     }
@@ -220,11 +191,7 @@ async def collect_samples(path: Path, *, augment: bool = False, gate: bool = Fal
     for item in golden["queries"]:
         print(f"Collecting {item['id']} (paid reformulation, embedding and generation)...", flush=True)
         with structlog.contextvars.bound_contextvars(request_id=str(uuid4())):
-<<<<<<< HEAD
-            sample = await collect_sample(item, embedder)
-=======
             sample = await collect_sample(item, embedder, augment=augment, gate=gate)
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
         payload["samples"].append(sample.model_dump(mode="json"))
         write_json(path, payload)
     payload["complete"] = True
@@ -362,11 +329,8 @@ def main() -> None:
     mode.add_argument("--inspect-samples", type=Path, metavar="PATH")
     mode.add_argument("--check-deps", action="store_true")
     parser.add_argument("--out", type=Path, default=ROOT / "evals/ragas_baseline_s11.json")
-<<<<<<< HEAD
-=======
     parser.add_argument("--augment", action="store_true", help="Apply context augmentation.")
     parser.add_argument("--gate", action="store_true", help="Run the paid semantic judge.")
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
     args = parser.parse_args()
     if args.check_deps:
         check_dependencies()
@@ -381,11 +345,7 @@ def main() -> None:
             )
         print("PASS: five complete, traceable samples. Inspect their content before scoring.")
     elif args.collect_only:
-<<<<<<< HEAD
-        asyncio.run(collect_samples(args.collect_only))
-=======
         asyncio.run(collect_samples(args.collect_only, augment=args.augment, gate=args.gate))
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
     else:
         score_samples(args.score_file, args.out)
 

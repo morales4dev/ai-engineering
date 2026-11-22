@@ -16,10 +16,7 @@ import httpx  # noqa: E402
 import streamlit as st  # noqa: E402
 
 from config import get_settings  # noqa: E402
-<<<<<<< HEAD
-=======
 from corpus_ui import render_corpus  # noqa: E402
->>>>>>> 028ade7 (Merge branch 'sesion_11_forense')
 from schemas.estimation import (  # noqa: E402
     OUT_OF_SCOPE_PREFIX,
     DetailLevel,
